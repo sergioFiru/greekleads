@@ -37,12 +37,12 @@ BOTS = [
 ]
 # ---------------------------------------------------------------------------
 
-_supabase = _db.get_client()
+_conn = _db.get_conn()
 
 
 def make_job(bot):
     def job():
-        bot.run(_supabase, _gemi)
+        bot.run(_conn, _gemi)
     return job
 
 

@@ -2,20 +2,20 @@
 new_firms_watcher.py
 
 Runs every 10 minutes. Checks for companies registered in ΓΕΜΗ since our
-last seen arGemi and inserts them into Supabase.
-
-This is the bot that keeps the database perpetually up to date after
-the one-time bulk_load is done.
+last seen arGemi and inserts them into the DB.
 """
 
 import logging
-import time
 from datetime import datetime, timezone
+
+import psycopg2.extras
+
+from db import upsert_companies
 
 log = logging.getLogger(__name__)
 
-NAME     = "new_firms_watcher"
-INTERVAL = 10   # minutes between runs
+NAME       = "new_firms_watcher"
+INTERVAL   = 10   # minutes between runs
 FETCH_SIZE = 200
 
 
@@ -25,8 +25,10 @@ def run(db, gemi):
 
     try:
         # 1. Get the highest arGemi we currently have in DB
-        result = db.table("companies").select("ar_gemi").order("ar_gemi", desc=True).limit(1).execute()
-        max_ar_gemi = result.data[0]["ar_gemi"] if result.data else 0
+        with db.cursor() as cur:
+            cur.execute("SELECT MAX(ar_gemi) FROM companies")
+            row = cur.fetchone()
+        max_ar_gemi = row[0] or 0
         log.info(f"[{NAME}] Current max arGemi in DB: {max_ar_gemi}")
 
         # 2. Fetch the newest companies from ΓΕΜΗ
@@ -43,24 +45,28 @@ def run(db, gemi):
         # 4. Insert them
         from one_time.bulk_load import map_company
         records = [map_company(c) for c in new_companies]
-        db.table("companies").upsert(records, on_conflict="ar_gemi").execute()
+        upsert_companies(db, records)
 
         elapsed = (datetime.now(timezone.utc) - start).seconds
         log.info(f"[{NAME}] Added {len(new_companies)} new firm(s) in {elapsed}s")
 
         # 5. Log to sync_log
-        db.table("sync_log").insert({
-            "script_name":    NAME,
-            "status":         "completed",
-            "records_added":  len(new_companies),
-            "finished_at":    datetime.now(timezone.utc).isoformat(),
-        }).execute()
+        with db.cursor() as cur:
+            cur.execute("""
+                INSERT INTO sync_log (script_name, status, records_added, finished_at)
+                VALUES (%s, 'completed', %s, %s)
+            """, (NAME, len(new_companies), datetime.now(timezone.utc)))
+        db.commit()
 
     except Exception as exc:
         log.error(f"[{NAME}] Error: {exc}")
-        db.table("sync_log").insert({
-            "script_name":   NAME,
-            "status":        "failed",
-            "error_message": str(exc),
-            "finished_at":   datetime.now(timezone.utc).isoformat(),
-        }).execute()
+        try:
+            db.rollback()
+            with db.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO sync_log (script_name, status, error_message, finished_at)
+                    VALUES (%s, 'failed', %s, %s)
+                """, (NAME, str(exc), datetime.now(timezone.utc)))
+            db.commit()
+        except Exception:
+            pass

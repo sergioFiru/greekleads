@@ -1,9 +1,9 @@
 """
 bulk_load.py
 
-One-time script — run it overnight to load all ~1.6M ΓΕΜΗ companies into Supabase.
+One-time script — run it overnight to load all ~1.6M ΓΕΜΗ companies into the DB.
 
-Estimated runtime: ~18 hours (rate limit: 8 req/min → 8s sleep between requests)
+Estimated runtime: ~18 hours (rate limit: 8 req/min → 12s sleep between requests)
 Resume:           automatically resumes from last saved position if interrupted
 Run:              python bulk_load.py
 Stop safely:      Ctrl-C  (progress is saved, just re-run to continue)
@@ -16,12 +16,13 @@ import logging
 from datetime import datetime, timezone
 from requests.exceptions import ConnectionError, Timeout
 
+import psycopg2.extras
 from dotenv import load_dotenv
 
 # allow imports from scripts/
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from gemi import fetch_companies
-from db import get_client
+from db import get_conn, upsert_companies
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
@@ -96,41 +97,46 @@ def map_company(c: dict) -> dict:
 # Sync log helpers
 # ---------------------------------------------------------------------------
 
-def get_or_create_run(db):
+def get_or_create_run(conn):
     """Return (log_id, resume_offset, already_added). Resumes if a paused run exists."""
-    result = (
-        db.table("sync_log")
-        .select("*")
-        .eq("script_name", "bulk_load")
-        .in_("status", ["running", "paused", "failed"])
-        .order("started_at", desc=True)
-        .limit(1)
-        .execute()
-    )
-    if result.data:
-        entry = result.data[0]
-        log.info(f"Resuming from offset {entry['last_offset']:,}  (sync_log id={entry['id']})")
-        return entry["id"], entry["last_offset"], entry["records_added"]
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute("""
+            SELECT * FROM sync_log
+            WHERE script_name = 'bulk_load'
+              AND status IN ('running', 'paused', 'failed')
+            ORDER BY started_at DESC
+            LIMIT 1
+        """)
+        row = cur.fetchone()
+        if row:
+            log.info(f"Resuming from offset {row['last_offset']:,}  (sync_log id={row['id']})")
+            return row["id"], row["last_offset"], row["records_added"]
 
-    entry = db.table("sync_log").insert({
-        "script_name":  "bulk_load",
-        "status":       "running",
-        "last_offset":  0,
-        "records_added": 0,
-    }).execute().data[0]
-    log.info(f"Fresh run started  (sync_log id={entry['id']})")
-    return entry["id"], 0, 0
+        cur.execute("""
+            INSERT INTO sync_log (script_name, status, last_offset, records_added)
+            VALUES ('bulk_load', 'running', 0, 0)
+            RETURNING *
+        """)
+        row = cur.fetchone()
+    conn.commit()
+    log.info(f"Fresh run started  (sync_log id={row['id']})")
+    return row["id"], 0, 0
 
 
-def save_progress(db, log_id, offset, added, status="running", error=None):
-    db.table("sync_log").update({
-        "last_offset":        offset,
-        "records_processed":  offset,
-        "records_added":      added,
-        "status":             status,
-        "error_message":      error,
-        "finished_at":        datetime.now(timezone.utc).isoformat() if status in ("completed", "failed") else None,
-    }).eq("id", log_id).execute()
+def save_progress(conn, log_id, offset, added, status="running", error=None):
+    finished = datetime.now(timezone.utc) if status in ("completed", "failed") else None
+    with conn.cursor() as cur:
+        cur.execute("""
+            UPDATE sync_log SET
+                last_offset       = %s,
+                records_processed = %s,
+                records_added     = %s,
+                status            = %s,
+                error_message     = %s,
+                finished_at       = %s
+            WHERE id = %s
+        """, (offset, offset, added, status, error, finished, log_id))
+    conn.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -138,7 +144,7 @@ def save_progress(db, log_id, offset, added, status="running", error=None):
 # ---------------------------------------------------------------------------
 
 def run():
-    db = get_client()
+    db = get_conn()
     log_id, offset, total_added = get_or_create_run(db)
     batch_num = 0
 
@@ -172,7 +178,7 @@ def run():
                 break
 
             records = [map_company(c) for c in companies]
-            db.table("companies").upsert(records, on_conflict="ar_gemi").execute()
+            upsert_companies(db, records)
 
             total_added += len(records)
             offset      += len(companies)
