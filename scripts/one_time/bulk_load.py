@@ -147,20 +147,22 @@ def run():
 
     try:
         while True:
-            # Retry up to 5 times on network errors with exponential backoff
+            # Retry forever — 5 quick attempts, then 5-minute pause, repeat
             data = None
-            for attempt in range(1, 6):
-                try:
-                    data = fetch_companies(sort="+arGemi", size=BATCH_SIZE, offset=offset)
-                    break
-                except (ConnectionError, Timeout, Exception) as e:
-                    wait = 30 * attempt
-                    if attempt == 5:
-                        log.error(f"API unreachable after 5 attempts. Saving progress and exiting.")
-                        save_progress(db, log_id, offset, total_added, status="paused")
-                        return
-                    log.warning(f"Network error (attempt {attempt}/5): {e}. Retrying in {wait}s...")
-                    time.sleep(wait)
+            round_num = 0
+            while data is None:
+                round_num += 1
+                for attempt in range(1, 6):
+                    try:
+                        data = fetch_companies(sort="+arGemi", size=BATCH_SIZE, offset=offset)
+                        break
+                    except (ConnectionError, Timeout, Exception) as e:
+                        wait = 30 * attempt
+                        log.warning(f"Network error (round {round_num}, attempt {attempt}/5): {e}. Retrying in {wait}s...")
+                        time.sleep(wait)
+                if data is None:
+                    log.warning(f"API still unreachable after 5 attempts. Waiting 5 min before next round...")
+                    time.sleep(300)
 
             companies = data.get("searchResults", [])
 
