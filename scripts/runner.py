@@ -47,7 +47,12 @@ def make_job(bot):
 
 
 def main():
-    log.info("Runner starting...")
+    log.info("")
+    log.info("=" * 56)
+    log.info("  LIVE UPDATER STARTING")
+    log.info("  Bulk load done — switching to continuous mode.")
+    log.info("=" * 56)
+    log.info("")
 
     for bot in BOTS:
         job = make_job(bot)

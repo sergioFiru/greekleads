@@ -155,25 +155,33 @@ def run():
         while True:
             # Retry forever — 5 quick attempts, then 5-minute pause, repeat
             data = None
-            round_num = 0
+            api_was_down = False
             while data is None:
-                round_num += 1
                 for attempt in range(1, 6):
                     try:
                         data = fetch_companies(sort="+arGemi", size=BATCH_SIZE, offset=offset)
+                        if api_was_down:
+                            log.info("API recovered — resuming.")
                         break
                     except (ConnectionError, Timeout, Exception) as e:
-                        wait = 30 * attempt
-                        log.warning(f"Network error (round {round_num}, attempt {attempt}/5): {e}. Retrying in {wait}s...")
-                        time.sleep(wait)
+                        if attempt == 1:
+                            log.warning(f"API unreachable: {e}")
+                        api_was_down = True
+                        time.sleep(30 * attempt)
                 if data is None:
-                    log.warning(f"API still unreachable after 5 attempts. Waiting 5 min before next round...")
+                    log.warning("Still unreachable after 5 attempts — waiting 5 min before retrying...")
                     time.sleep(300)
 
             companies = data.get("searchResults", [])
 
             if not companies:
-                log.info("No more results — bulk load complete!")
+                log.info("")
+                log.info("=" * 56)
+                log.info("  BULK LOAD COMPLETE")
+                log.info(f"  {total_added:,} companies loaded into the database.")
+                log.info("  Handing off to live updater (runner.py)...")
+                log.info("=" * 56)
+                log.info("")
                 save_progress(db, log_id, offset, total_added, status="completed")
                 break
 
