@@ -125,6 +125,10 @@ def get_or_create_run(conn):
 
 def save_progress(conn, log_id, offset, added, status="running", error=None):
     finished = datetime.now(timezone.utc) if status in ("completed", "failed") else None
+    try:
+        conn.rollback()  # clear any aborted transaction before writing
+    except Exception:
+        pass
     with conn.cursor() as cur:
         cur.execute("""
             UPDATE sync_log SET
