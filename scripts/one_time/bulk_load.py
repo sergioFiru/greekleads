@@ -98,8 +98,20 @@ def map_company(c: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 def get_or_create_run(conn):
-    """Return (log_id, resume_offset, already_added). Resumes if a paused run exists."""
+    """Return (log_id, resume_offset, already_added), or (None, None, None) if already done."""
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        # If a completed run exists, nothing to do
+        cur.execute("""
+            SELECT finished_at FROM sync_log
+            WHERE script_name = 'bulk_load' AND status = 'completed'
+            LIMIT 1
+        """)
+        row = cur.fetchone()
+        if row:
+            log.info(f"Bulk load already completed on {row['finished_at']}. Skipping to live updater.")
+            return None, None, None
+
+        # Resume an interrupted run
         cur.execute("""
             SELECT * FROM sync_log
             WHERE script_name = 'bulk_load'
@@ -150,6 +162,8 @@ def save_progress(conn, log_id, offset, added, status="running", error=None):
 def run():
     db = get_conn()
     log_id, offset, total_added = get_or_create_run(db)
+    if log_id is None:
+        return  # already completed — hand off to runner.py via &&
     batch_num = 0
 
     log.info(f"BATCH_SIZE={BATCH_SIZE}  SLEEP={SLEEP_BETWEEN_REQUESTS}s  ~18h total runtime")
