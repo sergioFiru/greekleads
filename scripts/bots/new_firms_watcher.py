@@ -36,7 +36,7 @@ def run(db, gemi):
         companies = data.get("searchResults", [])
 
         # 3. Keep only those we haven't seen yet
-        new_companies = [c for c in companies if c["arGemi"] > max_ar_gemi]
+        new_companies = [c for c in companies if int(c["arGemi"]) > max_ar_gemi]
 
         if not new_companies:
             log.info(f"[{NAME}] No new firms.")
