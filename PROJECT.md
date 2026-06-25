@@ -1,172 +1,200 @@
-# GreekLeads / AGORA — Project Tracker
+# GreekLeads — Project Tracker
 
 ## The Vision
-A **Greek B2B lead marketplace + CRM** (working name: AGORA).
-Phase 1: validate the idea with a simple paid data access tool.
-Phase 2: live enrichment (LinkedIn profiles, Greek directories like XO, etc.).
-Phase 3: warm lead signals (LinkedIn post scanning, new company alerts per industry).
-Phase 4: full CRM features.
+A **Greek B2B lead intelligence platform**. Phase 1: validated data access tool — search, filter, and export every Greek company from the GEMI registry. Phase 2+: enrichment (emails, phones, websites verified), sector intelligence, CRM features.
 
-## Monetization Model (Phase 1)
-- **Free (no account):** browse search results, but only 2 pages (100 records) visible. No export.
-- **€5/month plan:** full search access, unlimited browsing. No export.
-- **Export:** fixed price per export (TBD — e.g. €X per 1,000 records or per download).
-- Distribution: affiliate partnership with a Greek influencer (marketing/business niche).
+## Phases
+- **Phase 1 (current):** Search + filter + export. Paywall after 2 pages. Deployed.
+- **Phase 2:** Live contact enrichment (email SMTP verify, phone carrier check, website scraping).
+- **Phase 3:** Warm signals (new company alerts per industry, status change tracking).
+- **Phase 4:** Full CRM + saved lists + team features.
 
-## Data We Have Now (from GEMI)
-All data comes from the Greek General Commercial Registry (GEMI).
-Fields per company:
-- ar_gemi, afm, co_name_el (Greek name), co_names_en (English names)
-- co_titles_el/en (trade names)
-- objective (company purpose)
-- municipality, prefecture, city, street, zip
-- email, phone, fax, url (website)
-- legal_type (ΑΕ, ΙΚΕ, ΕΠΕ, ΑΤΟΜΙΚΗ, ΟΕ, ΕΕ...)
-- status (Ενεργή, Λύση, Διαγραφή...)
-- is_branch, auto_registered
-- incorporation_date, last_status_change
-- activities (JSONB array — primary KAD + secondary KADs)
-- persons (JSONB — directors/shareholders)
-- capital, stocks, branches
+---
 
-## Pages / Structure (MVP)
+## Tech Stack
 
-### 1. Landing Page (Home)
-- Hero with live counter of companies in DB (animated, connects to Python live updater)
-- Short pitch — what AGORA is
-- 2-3 key data highlights (e.g. "850,000+ active firms", "all 56 prefectures", etc.)
-- CTA to Explore or Sign Up
-- KEEP SIMPLE — no massive feature lists
+| Layer | Technology | Hosting |
+|---|---|---|
+| Frontend + API routes | Next.js (App Router, TypeScript) | Vercel |
+| Python workers (bots) | Python 3, psycopg2 | Railway |
+| Database | PostgreSQL | Railway |
+| Auth | Clerk (configured, placeholder keys for now) | — |
+| Payments | Stripe (configured, placeholder keys for now) | — |
+| Domain | greekleads.gr (custom domain on Vercel) | — |
 
-### 2. Explore (Search & Filter)
-- Filters: name, status, prefecture, municipality, legal type, activity/KAD, has_email, has_phone, has_website, year range, company type (HQ/branch)
-- Results table: company name, prefecture, legal type, status, KAD, phone, email, website icon
-- **Gate:** logged-out users see max 2 pages (100 records). After that → paywall prompt.
-- Export button → triggers payment flow if not on paid plan
-- Click company → detail panel/modal
+---
 
-### 3. Pricing
-- Free tier (limited browsing)
-- €5/month (full access, no export)
-- Export pricing (per download or per record batch)
-- Simple, 2-3 column layout
+## Database
 
-### 4. Login / Register
-- Simple email + password (or magic link?)
-- After login → check subscription status
+- **~1.67M companies** from the GEMI registry
+- Hosted on Railway PostgreSQL
+- Connection: `DATABASE_URL` env var (Railway internal + Vercel env var)
+- Indexes: GIN on `activities`, trigram on `co_name_el` + `municipality_descr`, B-tree on `status_descr`, `prefecture_descr`, `legal_type_descr`, `incorporation_date`
 
-### 5. Dashboard (logged in)
-- Saved searches / lists
-- Export history
-- Account/billing info
+### Key Fields Per Company
+`ar_gemi`, `afm`, `co_name_el`, `co_names_en`, `co_titles_el/en`, `objective`, `municipality_descr`, `prefecture_descr`, `city`, `street`, `zip_code`, `email`, `phone`, `fax`, `url`, `legal_type_descr`, `status_descr`, `is_branch`, `incorporation_date`, `last_status_change`, `activities` (JSONB — KAD codes), `persons` (JSONB — directors), `capital`, `gemi_fetched_at`
 
-## Tech Stack (decided)
-- **Backend:** Python / Flask (already have leads.py as foundation)
-- **DB:** PostgreSQL on Railway (existing)
-- **Auth:** TBD (see open questions)
-- **Payments:** TBD (see open questions)
-- **Frontend:** Embedded HTML/CSS/JS in Flask (current pattern) OR separate frontend
+---
 
-## Infrastructure Already Built
-- [x] PostgreSQL DB on Railway with ~850K+ companies from GEMI
-- [x] `scripts/bots/new_firms_watcher.py` — live updater bot (adds new GEMI companies)
-- [x] `scripts/one_time/bulk_load.py` — initial bulk loader
-- [x] `tools/leads.py` — internal lead explorer (Flask, filters, CSV export, pagination)
-- [x] DB indexes: GIN on activities, trigram on co_name_el + municipality, B-tree on status/prefecture/legal_type/incorporation_date
-- [x] File-based filter cache (`.filter_cache.json`) — all filter options pre-loaded
-- [x] `tools/market_analysis.py` — generates industry market report
-- [x] `tools/yacht_analysis.py` — yacht market niche report
+## Monetization (Phase 1)
+- **Free (no account):** browse up to 2 pages (100 records). No export.
+- **Pro ~€49/mo:** full search access, 1,000 export credits/month.
+- **Enterprise:** custom pricing, bulk credits, API access.
+- Export: credit-based (per record or per download batch).
+- Gate is enforced in `/api/search` — returns 403 after page 2 for unauthenticated users.
+- `NEXT_PUBLIC_DISABLE_GATE=true` bypasses the gate for development.
 
-## Open Questions (need answers before building)
-1. **Auth system** — roll our own (email+password in DB) or use a service (Supabase Auth, Clerk, Auth0)?
-2. **Payments** — Stripe? Viva Wallet (Greek)? Other? Who handles subscriptions + one-off exports?
-3. **Domain** — greekleads.gr is mentioned. Do we host under that domain from day 1?
-4. **Live counter in hero** — should it show total companies, or only "active" companies, or companies added today/this week?
-5. **Export pricing** — flat fee per download? Per record? Tiers?
-6. **Email for magic link / notifications** — do we have an email provider set up? (Mailgun, Resend, SendGrid?)
-7. **Hosting** — Flask app deployed where? Railway (already have it)? Separate server?
-8. **Design reference** — need user to describe the key sections from AGORA HTML design (file is unreadable by tools)
+---
 
-## Checklist — Phase 1 MVP
+## Project Structure
 
-### Foundation
-- [ ] Decide auth approach
-- [ ] Decide payments approach
-- [ ] Set up Flask app structure (routes, blueprints, sessions)
-- [ ] Set up user table in PostgreSQL
+```
+greekleads/
+├── web/                        ← Next.js app (Vercel)
+│   ├── app/
+│   │   ├── page.tsx            ← Home page (AGORA design)
+│   │   ├── search/page.tsx     ← Search page wrapper
+│   │   ├── pricing/page.tsx    ← Pricing page
+│   │   ├── globals.css         ← Design system (AGORA tokens + sp-* + hp-*)
+│   │   └── api/
+│   │       ├── search/         ← POST — filter + paginate companies
+│   │       ├── filters/        ← GET — all filter options
+│   │       ├── stream/         ← GET — live GEMI stream for LiveExhibit
+│   │       └── company/[ar_gemi]/ ← GET — single company detail
+│   ├── components/
+│   │   ├── SearchPage.tsx      ← Full search UI (filters, table, pagination, export)
+│   │   ├── CompanyPanel.tsx    ← Slide-in company detail panel
+│   │   ├── LiveExhibit.tsx     ← Live GEMI stream widget (hero right side)
+│   │   ├── LiveTicker.tsx      ← Scrolling ticker strip
+│   │   ├── HeroSearchBar.tsx   ← Interactive hero search with suggestions
+│   │   ├── TopNav.tsx          ← Navigation bar
+│   │   ├── Footer.tsx          ← Site footer
+│   │   ├── Paywall.tsx         ← Gate overlay for free users
+│   │   └── Icon.tsx            ← SVG icon system
+│   └── lib/
+│       └── db.ts               ← PostgreSQL query helpers (pg pool)
+├── scripts/                    ← Python workers (Railway)
+│   ├── bots/
+│   │   └── new_firms_watcher.py ← Polls GEMI every 10min for new companies
+│   ├── one_time/
+│   │   └── bulk_load.py        ← Initial 1.67M company load (done, don't re-run)
+│   ├── runner.py               ← Railway entry point
+│   ├── gemi.py                 ← GEMI API client
+│   └── db.py                   ← PostgreSQL client for scripts
+└── tools/                      ← Internal analysis scripts (local only)
+    ├── leads.py                ← Internal lead explorer (Flask)
+    ├── market_analysis.py      ← Industry breakdown report
+    └── stats.py                ← DB statistics
+```
 
-### Pages
-- [ ] Landing page (hero + live counter + pitch + CTA)
-- [ ] Explore page (full filter/search, gated at 2 pages)
-- [ ] Pricing page
-- [ ] Login / Register page
-- [ ] Dashboard (basic — saved searches, billing status)
+---
 
-### Features
-- [ ] Session/auth middleware (protect routes, check plan)
-- [ ] Paywall gate on search results (2 page limit for free/unauth)
-- [ ] Export flow (check subscription → charge → deliver CSV)
-- [ ] Live counter widget connected to `new_firms_watcher.py`
-- [ ] Company detail modal/panel
+## Design System (AGORA)
 
-### Launch
-- [ ] Deploy to Railway (or other)
-- [ ] Set up domain
-- [ ] Set up affiliate tracking link for influencer
-- [ ] Soft launch
+The web app follows the AGORA design system exactly:
+- **Fonts:** IBM Plex Sans (UI) + IBM Plex Mono (numbers/code)
+- **Palette:** warm off-white page bg (`#F7F6F3`), warm gray sidebar (`#F2F1ED`), blue accent (`#2563A8`), warm gray borders (`#DDDBD5`)
+- **Borders:** `0.5px` throughout — characteristic thin borders
+- **Cards:** white surface, `border-radius: 8px`, `border: 0.5px solid var(--border)`
+- **CSS prefixes:** `sp-*` = search page, `hp-*` = home page
 
-## Design Notes (from AGORA HTML — extracted from HL.zip source files)
-- Color scheme: dark navy (#1A2332) + blue accent (#2563A8) + light text (#E8EDF5), light page bg (#FAFAF7/#fff)
-- Brand name: AGORA | Logo: two offset squares (geometric, institutional)
-- Headline: "The Greek business registry, prospect-ready."
-- Sub: "AGORA fuses the entire ΓΕΜΗ registry with LinkedIn profiles, verified work emails, and three years of financial filings — so your team stops scraping and starts selling."
-- Nav pages: Home | Search | Lists | Sectors | Pricing  (+  Sign in / Start free)
-- Nav shows live counter: "1,284,940 companies indexed" + green dot "ΓΕΜΗ sync"
+---
 
-### Home page sections (design has 9 — MVP will slim down):
-  1. Hero — headline + search bar (left) + LiveExhibit widget (right) ← KEEP
-  2. RegistryStrip — stats bar ← maybe keep (simple)
-  3. ProductPreview — screenshot of search UI ← skip for MVP
-  4. DataSources — where data comes from ← slim version (1 paragraph)
-  5. UseCases — who uses it ← skip or 2 bullet points
-  6. SectorsTeaser — ← skip
-  7. CustomersStrip — testimonials ← skip (no customers yet)
-  8. PricingTeaser — ← keep (link to pricing page)
-  9. BottomCTA + Footer ← keep
+## Pages Built
 
-### LiveExhibit widget (the one the user likes):
-  - Dark header bar: "LIVE · ΓΕΜΗ STREAM" + green pulsing dot
-  - Counter: total companies indexed (big number, increments every ~2s)
-  - "Last 24h: +1,284 records" (right side)
-  - 6 rotating stream rows: [time] [TAG] company name + action
-  - Tags in design: FILING, LINKEDIN, CONTACT, FINANCIALS, EVENT
-  - MVP tags (what we actually have): FILING (new GEMI registration), STATUS CHANGE
-  - Source footer: "business.gov.gr/gemi · 14 events/min"
-  - Counter + stream data comes from new_firms_watcher.py
+### Home Page (`/`)
+Sections: Hero (dotted grid backdrop + LiveExhibit with crop marks) → RegistryStrip (4 stats) → ProductPreview (browser chrome mockup) → DataSources (3 cards) → UseCases (3 cards) → SectorsTeaser (table) → CustomersStrip → PricingTeaser → BottomCTA (dark card with geometric SVG) → Footer
 
-### Search page:
-  - Left sidebar: filters (sector, location, employee range, enrichment type, revenue range)
-  - Right: results table with company rows
-  - Active filter pills at top
-  - Bulk actions: Export CSV, Save as List
+### Search Page (`/search`)
+- Left sidebar (190px): filters — Data enrichment (open), Location, Κατάσταση (closed), Νομική Μορφή (closed), Κλάδος ΚΑΔ (open), Founded (open), Δήμος (open)
+- Search bar with "More filters" + "Save search" buttons + active filter pills
+- Results card: sort dropdown, icon buttons, company table with logo initials (warm palette), GEMI badge, enrichment icons
+- Row checkboxes + bulk CSV export
+- Numbered pagination
+- Card footer: selection info + pagination + Export button
+- Paywall overlay after page 2 (gate enforced server-side)
 
-### Pricing (design — heavy, 4 tiers + credit packs + FAQ):
-  - Free: €0, 25 credits, 100 companies/month
-  - Starter: €49/mo, 500 credits
-  - Business: €149/mo, 2,500 credits (highlighted)
-  - Enterprise: custom
-  MVP simplification: Free (2 pages) | €5/mo (full browse) | Export (fixed price)
+### Pricing Page (`/pricing`)
+- 3 tiers: Free / Pro / Enterprise
 
-### Pages NOT building for MVP:
-  - Lists (saved lead lists) — later
-  - Sectors (sector analysis view) — later (we have market_analysis.py output for this)
-  - Company detail page — simplified modal/panel
+---
+
+## Search Filters Available
+| Filter | Type | Notes |
+|---|---|---|
+| Name | Text search | Trigram index on co_name_el |
+| Κατάσταση | Multi-checkbox | Ενεργή, Λύση, etc. |
+| Τοποθεσία (Prefecture) | Multi-checkbox + search | 56 prefectures, Attica shortcut |
+| Νομική Μορφή | Multi-checkbox | ΑΕ, ΙΚΕ, ΕΠΕ, etc. |
+| Κλάδος ΚΑΔ | Search + add chips | Primary KAD only |
+| Data enrichment | Checkboxes | has_email, has_phone, has_website |
+| Founded | Year range | year_from / year_to |
+| Δήμος | Text search | municipality_descr |
+
+---
+
+## Environment Variables
+
+### Vercel (web app)
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | Railway PostgreSQL connection string |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk auth (placeholder for now) |
+| `CLERK_SECRET_KEY` | Clerk auth (placeholder for now) |
+| `NEXT_PUBLIC_DISABLE_GATE` | Set `true` to bypass paywall in dev |
+
+### Railway (scripts)
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string (auto-linked) |
+| `GEMI_API_KEY` | GEMI API key |
+
+---
+
+## What's Done
+
+- [x] PostgreSQL on Railway with 1.67M companies
+- [x] DB indexes for fast filtered search
+- [x] `new_firms_watcher.py` — live bot adding new GEMI registrations every 10 min
+- [x] Next.js web app with AGORA design system
+- [x] Home page (full marketing page, 9 sections)
+- [x] Search page (full filter sidebar, results table, company panel, paywall)
+- [x] `/api/search` — filtered + paginated search
+- [x] `/api/filters` — all filter options
+- [x] `/api/stream` — live GEMI stream data
+- [x] `/api/company/[ar_gemi]` — company detail
+- [x] LiveExhibit widget (real data from DB, polls every 4s)
+- [x] Row selection + CSV export
+- [x] Paywall gate (2-page free limit, server-enforced)
+- [x] Company detail panel (slide-in)
+- [x] Deployed to Vercel (web) + Railway (scripts)
+- [x] Custom domain greekleads.gr on Vercel
+
+## What's Next
+
+- [ ] Activate Clerk auth (replace placeholder keys with real ones)
+- [ ] Activate Stripe payments (replace placeholder keys, wire up export flow)
+- [ ] Email provider (Resend / SendGrid) for auth emails
+- [ ] Sector mapping — group KAD codes into ~12 broader sectors for the ΚΛΑΔΟΣ column
+- [ ] Affiliate tracking link for influencer marketing
+- [ ] LinkedIn enrichment bot (Phase 2)
+- [ ] Contact verification bot — SMTP email check, carrier phone lookup (Phase 2)
+
+---
 
 ## Session Log
-- 2026-06-05: Built internal lead explorer (`tools/leads.py`) — Flask app with filters, search, CSV export
-- 2026-06-05: Added DB indexes (GIN, trigram) for fast search
-- 2026-06-05: Added file-based filter cache — zero DB queries on startup
-- 2026-06-05: Activity filter now uses primary KAD only (type='Κύρια')
-- 2026-06-17: Built `tools/market_analysis.py` — industry breakdown report
-- 2026-06-17: Built `tools/yacht_analysis.py` — yacht market niche report
+- 2026-06-05: Built internal lead explorer (`tools/leads.py`) — Flask, filters, CSV export
+- 2026-06-05: Added DB indexes (GIN, trigram, B-tree)
+- 2026-06-05: Activity filter uses primary KAD only (type='Κύρια')
+- 2026-06-17: Built `tools/market_analysis.py` and `tools/yacht_analysis.py`
 - 2026-06-17: Started planning AGORA public MVP app
+- 2026-06-22: Built Next.js web app — full AGORA design system implementation
+- 2026-06-22: Home page: hero, live exhibit, stats, features, sectors, CTA
+- 2026-06-22: Search page: sidebar filters, results table, company panel, paywall
+- 2026-06-22: All API routes: search, filters, stream, company detail
+- 2026-06-24: Redesigned home page to match AGORA home.jsx exactly (light theme, dotted grid hero, RegistryStrip, ProductPreview, DataSources, UseCases, SectorsTeaser, PricingTeaser, BottomCTA)
+- 2026-06-24: Redesigned search page to match AGORA search.jsx exactly (sp-* design tokens, warm logo colors, GEMI badge, crop marks, filter pills)
+- 2026-06-25: Deployed to Vercel, connected Railway PostgreSQL via DATABASE_URL
+- 2026-06-25: Fixed Next.js 15/16 async params API in route handler
+- 2026-06-25: Fixed LiveExhibit width stability (long names no longer resize widget)
+- 2026-06-25: Reordered sidebar filters: Data enrichment first (open), KAD open, Founded open, Δήμος open, Κατάσταση closed
