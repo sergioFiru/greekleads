@@ -1,0 +1,150 @@
+======================================================================
+GREEK BUSINESS REGISTRY — MARKET ANALYSIS
+Generated: 2026-06-06  |  Source: GEMI (greekleads.gr database)
+======================================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 1 — OVERALL ACTIVE FIRMS SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Total active firms:           1,043,325
+  Have email address:             651,457  (62.4%)
+  Have phone number:              665,742  (63.8%)
+  Have website URL:                79,956  (7.7%)
+  Oldest incorporation:        1800-01-01
+  Newest incorporation:        9011-12-09
+
+  Founding decade distribution (active firms only):
+    1900s     5,445  
+    1910s        16  
+    1920s        50  
+    1930s       103  
+    1940s        77  
+    1950s       441  
+    1960s     1,936  
+    1970s     8,571  
+    1980s    43,624  ████
+    1990s   121,773  █████████████
+    2000s   223,314  ████████████████████████
+    2010s   269,487  █████████████████████████████
+    2020s   364,087  ████████████████████████████████████████
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 2 — FIRMS BY INDUSTRY SECTOR (Primary KAD)
+  Note: each firm is counted once by its primary registered activity.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Sector                                                Firms   Email%   Phone%     Web%  Median Yr
+  -----------------------------------------------------------------------------------------------
+  Other / Unclassified                                654,195    68.5%    67.2%     7.5%       2018
+  Retail Trade (Shops, Non-food)                      288,802    57.9%    61.4%     3.3%       2012
+  Construction & Real Estate                          153,130    67.5%    69.4%    11.3%       2012
+  Food & Beverage (Restaurants, Cafes, Catering)      148,385    53.9%    58.1%     4.1%       2013
+  Wholesale & Import/Export                           145,471    65.3%    71.6%    13.8%       2011
+  Professional Services (Legal, Accounting, Consult   131,175    76.0%    74.3%     9.4%       2018
+  Manufacturing & Industry                            116,935    71.2%    74.4%    13.5%       2015
+  Transport & Logistics                                67,090    70.1%    66.5%     8.5%       2014
+  IT & Technology                                      33,069    83.8%    79.9%    14.9%       2021
+  Health & Medical                                     24,901    85.9%    87.0%    16.3%       2021
+  Education & Training                                 21,469    57.2%    55.9%     1.8%       2013
+  Beauty & Personal Care                               20,553    63.5%    59.0%     1.7%       2017
+  Tourism & Accommodation                              19,425    89.1%    91.6%    32.6%       2014
+  Agriculture, Fishing & Forestry                      18,110    35.2%    42.0%     3.6%       2007
+  Media, Arts & Entertainment                          13,317    69.6%    62.3%     4.5%       2018
+  Cleaning & Facilities                                11,953    61.0%    59.2%     4.4%       2015
+  Auto & Vehicles                                      11,421    58.4%    63.0%     3.3%       2009
+  Financial Services & Insurance                        9,715    67.6%    67.4%    10.7%       2008
+  Utilities & Energy                                        1     0.0%     0.0%     0.0%       1999
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 3 — DIGITAL FOOTPRINT GAPS BY SECTOR
+  Sectors ranked by lowest website presence (opportunity score)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Sector                                                Firms  No Website   No Email
+  -------------------------------------------------------------------------------------
+  Beauty & Personal Care                               20,553    20,202 (98%)    7,501
+  Education & Training                                 21,469    21,083 (98%)    9,198
+  Auto & Vehicles                                      11,421    11,048 (97%)    4,751
+  Retail Trade (Shops, Non-food)                      288,802   279,215 (97%)  121,730
+  Agriculture, Fishing & Forestry                      18,110    17,450 (96%)   11,731
+  Food & Beverage (Restaurants, Cafes, Catering)      148,385   142,279 (96%)   68,381
+  Cleaning & Facilities                                11,953    11,424 (96%)    4,660
+  Media, Arts & Entertainment                          13,317    12,713 (95%)    4,049
+  Other / Unclassified                                654,195   605,221 (93%)  205,955
+  Transport & Logistics                                67,090    61,375 (91%)   20,035
+  Professional Services (Legal, Accounting, Consult   131,175   118,896 (91%)   31,490
+  Financial Services & Insurance                        9,715     8,680 (89%)    3,147
+  Construction & Real Estate                          153,130   135,865 (89%)   49,726
+  Manufacturing & Industry                            116,935   101,155 (87%)   33,627
+  Wholesale & Import/Export                           145,471   125,331 (86%)   50,547
+  IT & Technology                                      33,069    28,139 (85%)    5,354
+  Health & Medical                                     24,901    20,846 (84%)    3,518
+  Tourism & Accommodation                              19,425    13,099 (67%)    2,127
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 4 — TOP 15 PREFECTURES BY ACTIVE FIRM COUNT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   1. ΑΤΤΙΚΗΣ                              350,455  ███████████████████████████████████
+   2. ΘΕΣΣΑΛΟΝΙΚΗΣ                         100,349  ██████████
+   3. ΗΡΑΚΛΕΙΟΥ                             32,365  ███
+   4. ΚΥΚΛΑΔΩΝ                              31,766  ███
+   5. ΔΩΔΕΚΑΝΗΣΟΥ                           30,359  ███
+   6. ΑΧΑΙΑΣ                                26,790  ██
+   7. ΧΑΝΙΩΝ                                22,325  ██
+   8. ΛΑΡΙΣΑΣ                               20,557  ██
+   9. ΜΑΓΝΗΣΙΑΣ                             20,100  ██
+  10. ΕΥΒΟΙΑΣ                               18,037  █
+  11. ΑΙΤΩΛΟΑΚΑΡΝΑΝΙΑΣ                      15,831  █
+  12. ΧΑΛΚΙΔΙΚΗΣ                            15,771  █
+  13. ΜΕΣΣΗΝΙΑΣ                             14,031  █
+  14. ΠΙΕΡΙΑΣ                               13,429  █
+  15. ΚΕΡΚΥΡΑΣ                              13,227  █
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 5 — LEGAL STRUCTURE BREAKDOWN (Active Firms)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ΑΤΟΜΙΚΗ                                        657,515  (63.0%)  ██████████████████████
+  ΙΚΕ                                            113,022  (10.8%)  ███
+  ΟΕ                                              93,601  (9.0%)  ███
+  ΕΕ                                              88,821  (8.5%)  ██
+  ΑΕ                                              54,298  (5.2%)  █
+  ΕΠΕ                                             19,120  (1.8%)  
+  ΑΣΤΙΚΗ ΕΤΑΙΡΕΙΑ 784 Α.Κ.                         5,335  (0.5%)  
+  Υποκατάστημα Αλλοδαπής                           3,598  (0.3%)  
+  Ενεργειακή Κοινότητα                             2,419  (0.2%)  
+  Κοινοπραξία                                      2,016  (0.2%)  
+  Κοιν.Σ.Επ.                                       1,816  (0.2%)  
+  ΣυνΠΕ                                              660  (0.1%)  
+  ΛΟΙΠΩΝ ΥΠΟΧΡΕΩΝ                                    497  (0.0%)  
+  ΚΟΙΝΩΝΙΑ                                           244  (0.0%)  
+  Συνεταιρισμός                                      179  (0.0%)  
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 6 — KEY OBSERVATIONS FOR MARKET ANALYSIS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  DATA SOURCE:
+  - Greek General Commercial Registry (GEMI) — official government data
+  - Covers all legally registered active businesses in Greece
+  - Primary KAD (Κύρια Δραστηριότητα) used for sector classification
+
+  DIGITAL GAP:
+  - 92% of active Greek firms have NO website (963,369 businesses)
+  - 38% have NO registered email (391,868 businesses)
+  - Traditional sectors (food, retail, construction) show lowest digital adoption
+
+  SECTOR CONCENTRATION:
+  - Other / Unclassified: 654,195 firms (62.7% of all active businesses)
+  - Retail Trade (Shops, Non-food): 288,802 firms (27.7% of all active businesses)
+  - Construction & Real Estate: 153,130 firms (14.7% of all active businesses)
+
+  FIRM AGE:
+  - 48.6% of active firms were founded in 2015 or later
+  - Significant wave of incorporations post-2010 despite economic crisis
+
+======================================================================
+END OF REPORT
+======================================================================

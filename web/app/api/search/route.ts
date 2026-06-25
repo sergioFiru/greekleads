@@ -1,0 +1,144 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { query, queryOne } from '@/lib/db'
+import { getAuth, FREE_PAGE_LIMIT, PAGE_SIZE } from '@/lib/auth'
+
+interface SearchFilters {
+  name?: string
+  statuses?: string[]
+  prefectures?: string[]
+  municipality?: string
+  legal_types?: string[]
+  activities?: string[]
+  has_email?: boolean
+  has_phone?: boolean
+  has_website?: boolean
+  year_from?: string
+  year_to?: string
+}
+
+
+function buildWhere(f: SearchFilters): { sql: string; params: unknown[] } {
+  const conds: string[] = []
+  const params: unknown[] = []
+  let i = 1
+
+  if (f.name?.trim()) {
+    conds.push(`(c.co_name_el ILIKE $${i} OR c.email ILIKE $${i} OR c.phone ILIKE $${i} OR c.url ILIKE $${i} OR c.afm ILIKE $${i})`)
+    i++
+    params.push(`%${f.name.trim()}%`)
+  }
+  if (f.statuses?.length) {
+    const ph = f.statuses.map(() => `$${i++}`).join(', ')
+    conds.push(`c.status_descr IN (${ph})`)
+    params.push(...f.statuses)
+  }
+  if (f.prefectures?.length) {
+    const ph = f.prefectures.map(() => `$${i++}`).join(', ')
+    conds.push(`c.prefecture_descr IN (${ph})`)
+    params.push(...f.prefectures)
+  }
+  if (f.municipality?.trim()) {
+    conds.push(`c.municipality_descr ILIKE $${i++}`)
+    params.push(`%${f.municipality.trim()}%`)
+  }
+  if (f.legal_types?.length) {
+    const ph = f.legal_types.map(() => `$${i++}`).join(', ')
+    conds.push(`c.legal_type_descr IN (${ph})`)
+    params.push(...f.legal_types)
+  }
+  if (f.activities?.length) {
+    const ph = f.activities.map(() => `$${i++}`).join(', ')
+    conds.push(`c.primary_kad IN (${ph})`)
+    params.push(...f.activities)
+  }
+  if (f.has_email)   conds.push(`(c.email IS NOT NULL AND c.email != '')`)
+  if (f.has_phone)   conds.push(`(c.phone IS NOT NULL AND c.phone != '')`)
+  if (f.has_website) conds.push(`(c.url IS NOT NULL AND c.url != '')`)
+  if (f.year_from) {
+    const yr = parseInt(f.year_from, 10)
+    if (!isNaN(yr)) { conds.push(`EXTRACT(YEAR FROM c.incorporation_date) >= $${i++}`); params.push(yr) }
+  }
+  if (f.year_to) {
+    const yr = parseInt(f.year_to, 10)
+    if (!isNaN(yr)) { conds.push(`EXTRACT(YEAR FROM c.incorporation_date) <= $${i++}`); params.push(yr) }
+  }
+
+  return {
+    sql: conds.length ? `WHERE ${conds.join(' AND ')}` : '',
+    params,
+  }
+}
+
+function hasActiveFilter(f: SearchFilters): boolean {
+  return !!(
+    f.name?.trim() || f.municipality?.trim() ||
+    f.has_email || f.has_phone || f.has_website ||
+    f.statuses?.length || f.prefectures?.length || f.legal_types?.length ||
+    f.activities?.length || f.year_from || f.year_to
+  )
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const filters: SearchFilters = body.filters ?? {}
+    const page: number = Math.max(1, parseInt(String(body.page ?? '1'), 10))
+
+    // Require at least one filter (match leads.py behaviour)
+    if (!hasActiveFilter(filters)) {
+      return NextResponse.json({ results: [], total: null, page, noFilter: true })
+    }
+
+    // Gate check
+    const gateDisabled = process.env.NEXT_PUBLIC_DISABLE_GATE === 'true'
+    if (!gateDisabled && page > FREE_PAGE_LIMIT) {
+      const { isPaid } = await getAuth()
+      if (!isPaid) return NextResponse.json({ gated: true }, { status: 403 })
+    }
+
+    const { sql: where, params } = buildWhere(filters)
+    const offset = (page - 1) * PAGE_SIZE
+
+    const [rows, countRow] = await Promise.all([
+      query<{
+        ar_gemi: string
+        co_name_el: string
+        legal_type_descr: string
+        prefecture_descr: string
+        municipality_descr: string
+        status_descr: string
+        year_founded: number | null
+        email: string | null
+        phone: string | null
+        url: string | null
+      }>(
+        `SELECT
+           c.ar_gemi,
+           c.co_name_el,
+           c.legal_type_descr,
+           c.prefecture_descr,
+           c.municipality_descr,
+           c.status_descr,
+           EXTRACT(YEAR FROM c.incorporation_date)::int AS year_founded,
+           NULLIF(c.email, '') AS email,
+           NULLIF(c.phone, '') AS phone,
+           NULLIF(c.url,   '') AS url
+         FROM companies c
+         ${where}
+         ORDER BY c.ar_gemi
+         LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
+        params
+      ),
+      queryOne<{ cnt: string }>(
+        `SELECT COUNT(*) AS cnt FROM companies c ${where}`,
+        params
+      ),
+    ])
+
+    const total = parseInt(countRow?.cnt ?? '0', 10)
+    return NextResponse.json({ results: rows, total, page })
+  } catch (err) {
+    console.error('[/api/search] Error:', err)
+    return NextResponse.json({ error: String(err) }, { status: 500 })
+  }
+}
