@@ -5,7 +5,8 @@ import BrandMark from './BrandMark'
 
 const links = [
   { href: '/',        label: 'Home' },
-  { href: '/search',  label: 'Search' },
+  { href: '/search',  label: 'Companies' },
+  { href: '/people',  label: 'People' },
   { href: '/pricing', label: 'Pricing' },
 ]
 

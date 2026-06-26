@@ -1163,8 +1163,27 @@ input, select, textarea { font-family: inherit; }
 }
 
 /* Crop marks around the live exhibit */
-.hp-crop-wrap { position: relative; min-width: 0; overflow: hidden; }
+.hp-crop-wrap { position: relative; min-width: 0; overflow: visible; }
 .hp-crop-mark { position: absolute; width: 14px; height: 14px; }
+
+@keyframes hp-float {
+  0%, 100% { transform: translateY(0px) rotate(var(--fr, 0deg)); }
+  50%       { transform: translateY(-8px) rotate(var(--fr, 0deg)); }
+}
+.hp-social-icon {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.13), 0 0 0 0.5px rgba(0,0,0,0.07);
+  animation: hp-float var(--fd, 3.6s) ease-in-out infinite;
+  animation-delay: var(--dl, 0s);
+  z-index: 4;
+  flex-shrink: 0;
+}
 .hp-crop-tl { top: -18px; left: -18px; border-top: 0.5px solid var(--border-strong); border-left:  0.5px solid var(--border-strong); }
 .hp-crop-tr { top: -18px; right: -18px; border-top: 0.5px solid var(--border-strong); border-right: 0.5px solid var(--border-strong); }
 .hp-crop-bl { bottom: -18px; left: -18px; border-bottom: 0.5px solid var(--border-strong); border-left:  0.5px solid var(--border-strong); }
