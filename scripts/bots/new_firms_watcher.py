@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 import psycopg2.extras
 
-from db import upsert_companies
+from db import upsert_companies, sync_persons
 
 log = logging.getLogger(__name__)
 
@@ -46,6 +46,7 @@ def run(db, gemi):
         from one_time.bulk_load import map_company
         records = [map_company(c) for c in new_companies]
         upsert_companies(db, records)
+        sync_persons(db, records)
 
         elapsed = (datetime.now(timezone.utc) - start).seconds
         log.info(f"[{NAME}] Added {len(new_companies)} new firm(s) in {elapsed}s")

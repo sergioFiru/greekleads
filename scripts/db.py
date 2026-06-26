@@ -40,6 +40,48 @@ def get_conn():
         return _conn
 
 
+def sync_persons(conn, records):
+    """Sync company_persons rows for a batch of company records.
+    Deletes existing rows for each ar_gemi, then re-inserts from persons field.
+    Called after upsert_companies to keep the flat table in sync.
+    """
+    ar_gemis = [r["ar_gemi"] for r in records]
+
+    rows = []
+    for r in records:
+        for p in r.get("persons") or []:
+            name = (p.get("personName") or "").strip()
+            if not name or name.lower().startswith("nolastname"):
+                continue
+            rows.append((
+                r["ar_gemi"],
+                name,
+                p.get("role"),
+                p.get("category"),
+                p.get("dtFrom") or None,
+                p.get("dtTo") or None,
+                p.get("percentage"),
+                (p.get("businessName") or "").strip() or None,
+                p.get("isRepresentativeAlone"),
+                p.get("isRepresentativeInCommon"),
+            ))
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM company_persons WHERE ar_gemi = ANY(%s)",
+            (ar_gemis,)
+        )
+        if rows:
+            psycopg2.extras.execute_values(cur, """
+                INSERT INTO company_persons (
+                    ar_gemi, person_name, role, category,
+                    dt_from, dt_to, percentage, business_name,
+                    is_rep_alone, is_rep_in_common
+                ) VALUES %s
+            """, rows)
+    conn.commit()
+
+
 def upsert_companies(conn, records):
     """Bulk upsert a list of company dicts (output of map_company)."""
     def to_tuple(r):
