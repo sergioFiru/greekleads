@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Icon from './Icon'
 import Paywall from './Paywall'
 import CompanyPanel from './CompanyPanel'
+import { ScoutPanel, ScoutPromptBar, ScoutSummaryBar, type ScoutRecipe } from './Scout'
 
 interface Company {
   ar_gemi: string
@@ -34,6 +35,7 @@ interface SearchState {
   has_email: boolean
   has_phone: boolean
   has_website: boolean
+  has_no_website: boolean
   year_from: string
   year_to: string
 }
@@ -43,7 +45,7 @@ const ATTICA = ['ΑΤΤΙΚΗΣ', 'ΑΘΗΝΩΝ', 'ΠΕΙΡΑΙΑ', 'ΑΝΑΤΟ�
 const EMPTY: SearchState = {
   name: '', statuses: ['Ενεργή'], prefectures: [], municipality: '',
   legal_types: [], activities: [],
-  has_email: false, has_phone: false, has_website: false,
+  has_email: false, has_phone: false, has_website: false, has_no_website: false,
   year_from: '', year_to: '',
 }
 
@@ -179,6 +181,8 @@ export default function SearchPage() {
   const [legalShowAll, setLegalShowAll] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [sortBy, setSortBy]     = useState('-name')
+  const [scoutOpen, setScoutOpen]       = useState(false)
+  const [scoutSummary, setScoutSummary] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/filters')
@@ -326,17 +330,36 @@ export default function SearchPage() {
     ...filters.prefectures.map(k => ({ id: `loc-${k}`, key: 'Τοποθεσία', value: k, remove: () => removePrefecture(k) })),
     ...filters.statuses.map(k => ({ id: `st-${k}`, key: 'Κατάσταση', value: k, remove: () => toggleStatus(k) })),
     ...filters.legal_types.map(k => ({ id: `lt-${k}`, key: 'Τύπος', value: k, remove: () => toggleLegal(k) })),
-    ...filters.activities.map(k => ({ id: `act-${k}`, key: 'ΚΑΔ', value: k.length > 40 ? k.slice(0, 40) + '…' : k, remove: () => removeActivity(k) })),
-    filters.has_email   ? { id: 'email', key: 'Επαφές', value: 'Email',     remove: () => setFilters(f => ({ ...f, has_email:   false })) } : null,
-    filters.has_phone   ? { id: 'phone', key: 'Επαφές', value: 'Τηλέφωνο', remove: () => setFilters(f => ({ ...f, has_phone:   false })) } : null,
-    filters.has_website ? { id: 'web',   key: 'Επαφές', value: 'Website',   remove: () => setFilters(f => ({ ...f, has_website: false })) } : null,
+    ...(filters.activities.length > 3
+      ? [{ id: 'act-all', key: 'ΚΑΔ', value: `${filters.activities.length} κλάδοι`, remove: () => setFilters(f => ({ ...f, activities: [] })) }]
+      : filters.activities.map(k => ({ id: `act-${k}`, key: 'ΚΑΔ', value: k.length > 40 ? k.slice(0, 40) + '…' : k, remove: () => removeActivity(k) }))
+    ),
+    filters.has_email      ? { id: 'email',  key: 'Επαφές', value: 'Email',          remove: () => setFilters(f => ({ ...f, has_email:      false })) } : null,
+    filters.has_phone      ? { id: 'phone',  key: 'Επαφές', value: 'Τηλέφωνο',      remove: () => setFilters(f => ({ ...f, has_phone:      false })) } : null,
+    filters.has_website    ? { id: 'web',    key: 'Επαφές', value: 'Website',        remove: () => setFilters(f => ({ ...f, has_website:    false })) } : null,
+    filters.has_no_website ? { id: 'noweb',  key: 'Επαφές', value: 'Χωρίς website', remove: () => setFilters(f => ({ ...f, has_no_website: false })) } : null,
     filters.municipality ? { id: 'mun', key: 'Δήμος', value: filters.municipality, remove: () => setFilters(f => ({ ...f, municipality: '' })) } : null,
     filters.year_from    ? { id: 'yf',  key: 'Από',   value: filters.year_from,    remove: () => setFilters(f => ({ ...f, year_from: '' })) } : null,
     filters.year_to      ? { id: 'yt',  key: 'Έως',   value: filters.year_to,      remove: () => setFilters(f => ({ ...f, year_to:   '' })) } : null,
   ].filter(Boolean) as Array<{ id: string; key: string; value: string; remove: () => void }>
 
   const removePill = (id: string) => { const p = pills.find(x => x.id === id); if (p) p.remove() }
-  const clearAll   = () => setFilters(EMPTY)
+  const clearAll   = () => { setFilters(EMPTY); setScoutSummary(null) }
+
+  const applyScoutRecipe = useCallback((recipe: ScoutRecipe) => {
+    setFilters(prev => ({
+      ...prev,
+      prefectures:   recipe.filters.prefectures,
+      legal_types:   recipe.filters.legal_types,
+      has_email:     recipe.filters.has_email,
+      has_phone:     recipe.filters.has_phone,
+      has_website:   recipe.filters.has_website,
+      has_no_website: recipe.filters.has_no_website,
+      statuses:      recipe.filters.statuses.length ? recipe.filters.statuses : ['Ενεργή'],
+      activities:    recipe.filters.activities,
+    }))
+    setScoutSummary(recipe.summary)
+  }, [])
 
   const TOP_PREF  = 7
   const TOP_LEGAL = 7
@@ -372,10 +395,11 @@ export default function SearchPage() {
           )}
         </div>
 
-        <FilterGroup title="Data enrichment" defaultOpen active={filters.has_email || filters.has_phone || filters.has_website}>
-          <CheckRow label="Verified email"  checked={filters.has_email}   onChange={() => setFilters(f => ({ ...f, has_email:   !f.has_email }))} />
-          <CheckRow label="Phone number"    checked={filters.has_phone}   onChange={() => setFilters(f => ({ ...f, has_phone:   !f.has_phone }))} />
-          <CheckRow label="Website"         checked={filters.has_website} onChange={() => setFilters(f => ({ ...f, has_website: !f.has_website }))} />
+        <FilterGroup title="Data enrichment" defaultOpen active={filters.has_email || filters.has_phone || filters.has_website || filters.has_no_website}>
+          <CheckRow label="Verified email"  checked={filters.has_email}      onChange={() => setFilters(f => ({ ...f, has_email:      !f.has_email }))} />
+          <CheckRow label="Phone number"    checked={filters.has_phone}      onChange={() => setFilters(f => ({ ...f, has_phone:      !f.has_phone }))} />
+          <CheckRow label="Website"         checked={filters.has_website}    onChange={() => setFilters(f => ({ ...f, has_website:    !f.has_website,    has_no_website: false }))} />
+          <CheckRow label="No website"      checked={filters.has_no_website} onChange={() => setFilters(f => ({ ...f, has_no_website: !f.has_no_website, has_website:    false }))} />
         </FilterGroup>
 
         <FilterGroup title="Location" defaultOpen active={filters.prefectures.length > 0}>
@@ -420,14 +444,21 @@ export default function SearchPage() {
         </FilterGroup>
 
         <FilterGroup title="Κλάδος (ΚΑΔ)" defaultOpen active={filters.activities.length > 0}>
-          {filters.activities.map(a => (
-            <div key={a} className="sp-kad-chip">
-              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }} title={a}>
-                {a.length > 38 ? a.slice(0, 38) + '…' : a}
-              </span>
-              <button className="sp-kad-rm" onMouseDown={e => { e.preventDefault(); removeActivity(a) }}>×</button>
+          {filters.activities.length > 5 ? (
+            <div className="sp-kad-chip">
+              <span style={{ flex: 1 }}>{filters.activities.length} ΚΑΔ επιλεγμένοι</span>
+              <button className="sp-kad-rm" onMouseDown={e => { e.preventDefault(); setFilters(f => ({ ...f, activities: [] })) }}>×</button>
             </div>
-          ))}
+          ) : (
+            filters.activities.map(a => (
+              <div key={a} className="sp-kad-chip">
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }} title={a}>
+                  {a.length > 38 ? a.slice(0, 38) + '…' : a}
+                </span>
+                <button className="sp-kad-rm" onMouseDown={e => { e.preventDefault(); removeActivity(a) }}>×</button>
+              </div>
+            ))
+          )}
           <input
             ref={kadInputRef}
             className="sp-filter-input"
@@ -502,6 +533,17 @@ export default function SearchPage() {
 
         {/* Search bar row */}
         <div className="sp-topbar">
+          {/* Scout prompt / summary bar */}
+          {scoutSummary ? (
+            <ScoutSummaryBar
+              summary={scoutSummary}
+              onRefine={() => setScoutOpen(true)}
+              onClear={() => { setScoutSummary(null); setFilters(EMPTY) }}
+            />
+          ) : (
+            <ScoutPromptBar onClick={() => setScoutOpen(true)} />
+          )}
+
           <div className="sp-topbar-row1">
             <div className="sp-search-wrap">
               <span className="sp-search-icon"><Icon name="search" size={14} /></span>
@@ -756,6 +798,12 @@ export default function SearchPage() {
         </div>
 
       </main>
+
+      <ScoutPanel
+        open={scoutOpen}
+        onClose={() => setScoutOpen(false)}
+        onApply={applyScoutRecipe}
+      />
     </div>
   )
 }

@@ -52,7 +52,12 @@ export async function GET(req: NextRequest) {
         MAX(word_similarity($1, cp.person_name))                                           AS sim
       FROM company_persons cp
       JOIN companies c ON c.ar_gemi = cp.ar_gemi::bigint
-      WHERE ($1 <% cp.person_name OR cp.person_name ILIKE '%' || $1 || '%')
+      WHERE (
+        $1 <% cp.person_name
+        OR cp.person_name ILIKE '%' || $1 || '%'
+        OR c.email ILIKE '%' || $1 || '%'
+        OR c.phone ILIKE '%' || $1 || '%'
+      )
         ${areaJoin}
         ${statusFilter}
       GROUP BY cp.person_name

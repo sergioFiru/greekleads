@@ -1156,7 +1156,7 @@ input, select, textarea { font-family: inherit; }
 .hp-hero-grid {
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
-  gap: 56px;
+  gap: 140px;
   align-items: center;
   position: relative;
   z-index: 1;
@@ -1425,3 +1425,212 @@ input, select, textarea { font-family: inherit; }
 .sp-page-btn:disabled { opacity: .4; cursor: not-allowed; }
 .sp-page-btn[data-active="true"] { background: #fff; color: var(--text-primary); border-color: var(--border-strong); font-weight: 500; }
 .sp-page-dots { padding: 0 4px; color: var(--text-muted); font-size: 12px; }
+
+/* ── Scout AI Agent ──────────────────────────────────────── */
+
+.scout-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-light);
+  border: 0.5px solid rgba(37,99,168,0.22);
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.scout-prompt-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--accent-light);
+  border: 0.5px solid rgba(37,99,168,0.22);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s;
+  user-select: none;
+}
+.scout-prompt-bar:hover { background: #E4EFFF; }
+
+.scout-summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--accent-light);
+  border: 0.5px solid rgba(37,99,168,0.22);
+  border-radius: 8px;
+}
+
+.scout-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 149;
+  background: rgba(26,35,50,0.10);
+}
+
+.scout-panel {
+  position: fixed;
+  top: 52px;
+  right: 0;
+  bottom: 0;
+  width: 408px;
+  background: var(--card-bg);
+  border-left: 0.5px solid var(--border-strong);
+  display: flex;
+  flex-direction: column;
+  z-index: 150;
+  box-shadow: -6px 0 32px rgba(26,35,50,0.10);
+  transform: translateX(100%);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.scout-panel[data-open="true"] { transform: translateX(0); }
+
+.scout-header {
+  padding: 14px 16px;
+  border-bottom: 0.5px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-shrink: 0;
+  background: #FAFBFF;
+}
+.scout-title    { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.scout-subtitle { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+.scout-close {
+  background: none;
+  border: 0.5px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+}
+.scout-close:hover { background: #ECEAE4; color: var(--text-primary); }
+
+.scout-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.scout-msg { display: flex; gap: 10px; align-items: flex-start; }
+.scout-msg-user { flex-direction: row-reverse; }
+
+.scout-bubble-user {
+  background: var(--accent);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 12px 12px 3px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 82%;
+}
+.scout-bubble-scout {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  min-width: 0;
+}
+
+.scout-typing { display: flex; align-items: center; gap: 4px; padding: 8px 4px; }
+.scout-dot {
+  width: 6px; height: 6px;
+  border-radius: 3px;
+  background: var(--text-muted);
+  display: inline-block;
+  animation: scout-bounce 1.2s ease-in-out infinite;
+}
+@keyframes scout-bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30%            { transform: translateY(-5px); }
+}
+
+.scout-recipe-card {
+  margin-top: 10px;
+  background: var(--accent-light);
+  border: 0.5px solid rgba(37,99,168,0.2);
+  border-radius: 8px;
+  padding: 12px;
+}
+.scout-recipe-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+}
+.scout-recipe-title {
+  font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--accent);
+}
+.scout-recipe-count { font-size: 12px; font-weight: 500; color: var(--text-secondary); font-family: var(--font-mono); }
+.scout-recipe-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.scout-recipe-chip {
+  display: inline-flex; align-items: center;
+  height: 22px; padding: 0 8px;
+  background: rgba(37,99,168,0.08);
+  border: 0.5px solid rgba(37,99,168,0.18);
+  border-radius: 4px;
+  font-size: 11.5px; color: var(--accent);
+}
+.scout-recipe-rationale { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+
+.scout-suggestions { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 34px; }
+.scout-suggestion {
+  background: #fff;
+  border: 0.5px solid var(--border-strong);
+  border-radius: 14px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.scout-suggestion:hover {
+  background: var(--accent-light);
+  color: var(--accent);
+  border-color: rgba(37,99,168,0.3);
+}
+
+.scout-apply-bar {
+  padding: 10px 16px;
+  border-top: 0.5px solid var(--border);
+  background: var(--accent-light);
+  display: flex;
+  flex-shrink: 0;
+}
+
+.scout-input-area {
+  padding: 12px 16px;
+  border-top: 0.5px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+  background: #FAFAF7;
+}
+.scout-textarea {
+  width: 100%;
+  border: 0.5px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+  background: #fff;
+  resize: none;
+  outline: none;
+  line-height: 1.5;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.scout-textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(37,99,168,0.12);
+}
+.scout-textarea::placeholder { color: var(--text-muted); }
+.scout-send-btn { align-self: flex-end; }

@@ -65,7 +65,9 @@ export default function PeopleSearch({ areas }: { areas: string[] }) {
     }
     setLoading(true)
     try {
-      const p = new URLSearchParams({ q: query.trim().toUpperCase() })
+      const raw = query.trim()
+      const isEmailOrPhone = raw.includes('@') || /^[+\d][\d\s()+-]{4,}$/.test(raw)
+      const p = new URLSearchParams({ q: isEmailOrPhone ? raw : raw.toUpperCase() })
       if (area)   p.set('area', area)
       if (count)  p.set('count', count)
       if (status) p.set('status', status)
@@ -116,7 +118,7 @@ export default function PeopleSearch({ areas }: { areas: string[] }) {
               type="text"
               value={q}
               onChange={e => setQ(e.target.value)}
-              placeholder="Αναζήτηση ονόματος..."
+              placeholder="Όνομα, email ή τηλέφωνο..."
               autoFocus
               style={{
                 width: '100%',

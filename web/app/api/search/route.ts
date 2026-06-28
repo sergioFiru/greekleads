@@ -12,6 +12,7 @@ interface SearchFilters {
   has_email?: boolean
   has_phone?: boolean
   has_website?: boolean
+  has_no_website?: boolean
   year_from?: string
   year_to?: string
 }
@@ -51,9 +52,10 @@ function buildWhere(f: SearchFilters): { sql: string; params: unknown[] } {
     conds.push(`c.primary_kad IN (${ph})`)
     params.push(...f.activities)
   }
-  if (f.has_email)   conds.push(`(c.email IS NOT NULL AND c.email != '')`)
-  if (f.has_phone)   conds.push(`(c.phone IS NOT NULL AND c.phone != '')`)
-  if (f.has_website) conds.push(`(c.url IS NOT NULL AND c.url != '')`)
+  if (f.has_email)      conds.push(`(c.email IS NOT NULL AND c.email != '')`)
+  if (f.has_phone)      conds.push(`(c.phone IS NOT NULL AND c.phone != '')`)
+  if (f.has_website)    conds.push(`(c.url IS NOT NULL AND c.url != '')`)
+  if (f.has_no_website) conds.push(`(c.url IS NULL OR c.url = '')`)
   if (f.year_from) {
     const yr = parseInt(f.year_from, 10)
     if (!isNaN(yr)) { conds.push(`EXTRACT(YEAR FROM c.incorporation_date) >= $${i++}`); params.push(yr) }
@@ -72,7 +74,7 @@ function buildWhere(f: SearchFilters): { sql: string; params: unknown[] } {
 function hasActiveFilter(f: SearchFilters): boolean {
   return !!(
     f.name?.trim() || f.municipality?.trim() ||
-    f.has_email || f.has_phone || f.has_website ||
+    f.has_email || f.has_phone || f.has_website || f.has_no_website ||
     f.statuses?.length || f.prefectures?.length || f.legal_types?.length ||
     f.activities?.length || f.year_from || f.year_to
   )
