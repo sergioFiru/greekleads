@@ -255,7 +255,7 @@ function ConnectionRow({ c }: { c: CompanyRow }) {
               {c.co_name_el}
             </div>
             <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
-              {[c.legal_type_descr, c.city ?? c.municipality_descr ?? c.prefecture_descr].filter(Boolean).join(' · ')}
+              {[c.legal_type_descr, c.municipality_descr ?? c.prefecture_descr].filter(Boolean).join(' · ')}
             </div>
           </div>
         </Link>
