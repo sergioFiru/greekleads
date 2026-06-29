@@ -1,8 +1,9 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import Icon from './Icon'
 import Paywall from './Paywall'
-import CompanyPanel from './CompanyPanel'
 import { ScoutPanel, ScoutPromptBar, ScoutSummaryBar, type ScoutRecipe } from './Scout'
 
 interface Company {
@@ -52,6 +53,29 @@ const EMPTY: SearchState = {
 const GATE_DISABLED = process.env.NEXT_PUBLIC_DISABLE_GATE === 'true'
 const FREE_PAGE_LIMIT = 2
 
+function useAnimatedCount(target: number | null, duration = 700) {
+  const [display, setDisplay] = useState(0)
+  const prevRef = useRef(0)
+  const rafRef  = useRef<number>()
+  useEffect(() => {
+    if (target === null) return
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    const from = prevRef.current
+    const to   = target
+    const t0   = performance.now()
+    const tick = (now: number) => {
+      const t    = Math.min((now - t0) / duration, 1)
+      const ease = 1 - Math.pow(1 - t, 3)
+      setDisplay(Math.round(from + (to - from) * ease))
+      if (t < 1) rafRef.current = requestAnimationFrame(tick)
+      else prevRef.current = to
+    }
+    rafRef.current = requestAnimationFrame(tick)
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [target, duration])
+  return display
+}
+
 // Warm institutional palette matching design system
 const LOGO_COLORS = [
   { bg: '#EEF4FF', fg: '#1A4A8A', border: '#C0D0E8' },
@@ -72,6 +96,43 @@ function logoColor(id: string) {
   let h = 0
   for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0
   return LOGO_COLORS[h % LOGO_COLORS.length]
+}
+
+// URL ↔ filter state helpers
+function parseParams(p: URLSearchParams): SearchState {
+  return {
+    name:         p.get('name') ?? '',
+    statuses:     p.getAll('status').length > 0 ? p.getAll('status') : ['Ενεργή'],
+    prefectures:  p.getAll('prefecture'),
+    municipality: p.get('municipality') ?? '',
+    legal_types:  p.getAll('legal_type'),
+    activities:   p.getAll('kad'),
+    has_email:      p.has('email'),
+    has_phone:      p.has('phone'),
+    has_website:    p.has('website'),
+    has_no_website: p.has('no_website'),
+    year_from: p.get('year_from') ?? '',
+    year_to:   p.get('year_to')   ?? '',
+  }
+}
+
+function buildParams(f: SearchState, page: number, sort: string): URLSearchParams {
+  const p = new URLSearchParams()
+  if (f.name)          p.set('name', f.name)
+  f.statuses.forEach(s    => p.append('status',     s))
+  f.prefectures.forEach(s => p.append('prefecture', s))
+  f.legal_types.forEach(s => p.append('legal_type', s))
+  f.activities.forEach(s  => p.append('kad',        s))
+  if (f.municipality)   p.set('municipality', f.municipality)
+  if (f.has_email)      p.set('email',    '1')
+  if (f.has_phone)      p.set('phone',    '1')
+  if (f.has_website)    p.set('website',  '1')
+  if (f.has_no_website) p.set('no_website', '1')
+  if (f.year_from)      p.set('year_from', f.year_from)
+  if (f.year_to)        p.set('year_to',   f.year_to)
+  if (page > 1)         p.set('page', String(page))
+  if (sort !== '-name') p.set('sort', sort)
+  return p
 }
 
 // Sidebar filter group with chevron-left toggle
@@ -159,14 +220,16 @@ function FilterPills({
 }
 
 export default function SearchPage() {
-  const [filters, setFilters] = useState<SearchState>(EMPTY)
+  const searchParams = useSearchParams()
+  const router       = useRouter()
+
+  const [filters, setFilters] = useState<SearchState>(() => parseParams(searchParams))
   const [results, setResults] = useState<Company[]>([])
   const [total, setTotal]     = useState<number | null>(null)
-  const [page, setPage]       = useState(1)
+  const [page, setPage]       = useState(() => parseInt(searchParams.get('page') ?? '1', 10))
   const [loading, setLoading] = useState(false)
   const [gated, setGated]     = useState(false)
-  const [selectedArGemi, setSelectedArGemi] = useState<string | null>(null)
-  const [filterOptions, setFilterOptions]   = useState<FilterOptions>({ statuses: [], prefectures: [], legal_types: [], activities: [] })
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({ statuses: [], prefectures: [], legal_types: [], activities: [] })
   const [activitySearch, setActivitySearch] = useState('')
   const [kadOpen, setKadOpen] = useState(false)
   const [kadPos, setKadPos]   = useState({ top: 0, left: 0 })
@@ -180,9 +243,10 @@ export default function SearchPage() {
   const sidebarRef   = useRef<HTMLElement>(null)
   const [legalShowAll, setLegalShowAll] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [sortBy, setSortBy]     = useState('-name')
+  const [sortBy, setSortBy]     = useState(() => searchParams.get('sort') ?? '-name')
   const [scoutOpen, setScoutOpen]       = useState(false)
   const [scoutSummary, setScoutSummary] = useState<string | null>(null)
+  const [resultsKey, setResultsKey]     = useState(0)
 
   useEffect(() => {
     fetch('/api/filters')
@@ -204,6 +268,7 @@ export default function SearchPage() {
       if (data.error) console.error('[SearchPage] API error:', data.error)
       setResults(data.results ?? [])
       setTotal(data.total ?? null)
+      setResultsKey(k => k + 1)
     } catch (err) {
       console.error('[SearchPage] Fetch error:', err)
     }
@@ -221,6 +286,18 @@ export default function SearchPage() {
     if (page === 1) return
     search(filters, page)
   }, [page])
+
+  // Sync filter state → URL (debounced for text input)
+  const urlSyncRef = useRef<ReturnType<typeof setTimeout>>()
+  useEffect(() => {
+    clearTimeout(urlSyncRef.current)
+    const delay = filters.name ? 300 : 0
+    urlSyncRef.current = setTimeout(() => {
+      const params = buildParams(filters, page, sortBy)
+      router.replace(`/search?${params.toString()}`, { scroll: false })
+    }, delay)
+    return () => clearTimeout(urlSyncRef.current)
+  }, [filters, page, sortBy, router])
 
   const totalPages         = total != null ? Math.ceil(total / 50) : null
   const effectiveTotalPages = totalPages
@@ -380,6 +457,7 @@ export default function SearchPage() {
     return pages
   }
 
+  const animatedTotal = useAnimatedCount(total)
   const startRow = total != null && total > 0 ? (page - 1) * 50 + 1 : 0
   const endRow   = total != null ? Math.min(page * 50, total) : 0
 
@@ -491,11 +569,6 @@ export default function SearchPage() {
         </FilterGroup>
       </aside>
 
-      {/* ── DETAIL PANEL ── */}
-      {selectedArGemi && (
-        <CompanyPanel arGemi={selectedArGemi} onClose={() => setSelectedArGemi(null)} />
-      )}
-
       {/* ── FLOATING KAD DROPDOWN ── */}
       {kadOpen && filteredActivities.length > 0 && (
         <div ref={kadDropRef} className="kad-dropdown" style={{ top: kadPos.top, left: kadPos.left }}>
@@ -564,7 +637,7 @@ export default function SearchPage() {
             </button>
             {total != null && (
               <span className="sp-match-count">
-                <strong>{total.toLocaleString('el-GR')}</strong>
+                <strong>{animatedTotal.toLocaleString('el-GR')}</strong>
                 {' companies match'}
                 {selected.size > 0 && <> · <strong>{selected.size}</strong> selected</>}
               </span>
@@ -639,8 +712,26 @@ export default function SearchPage() {
                       <th className="sp-th-actions">Actions</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {sortedRows.length === 0 && !loading && (
+                  <tbody key={resultsKey}>
+                    {loading && Array.from({ length: 8 }).map((_, i) => (
+                      <tr key={i} className="sp-skel-row">
+                        <td className="sp-td-check">
+                          <div className="sp-skel" style={{ width: 14, height: 14, borderRadius: 3 }} />
+                        </td>
+                        <td>
+                          <div className="sp-company-cell">
+                            <div className="sp-skel sp-skel-logo" />
+                            <div style={{ flex: 1 }}>
+                              <div className="sp-skel sp-skel-name" />
+                              <div className="sp-skel sp-skel-meta" />
+                            </div>
+                          </div>
+                        </td>
+                        <td><div className="sp-skel sp-skel-badges" /></td>
+                        <td className="sp-td-actions"><div className="sp-skel sp-skel-actions" /></td>
+                      </tr>
+                    ))}
+                    {!loading && sortedRows.length === 0 && (
                       <tr>
                         <td colSpan={4}>
                           <div className="sp-empty">
@@ -652,9 +743,8 @@ export default function SearchPage() {
                         </td>
                       </tr>
                     )}
-                    {sortedRows.map(c => {
+                    {!loading && sortedRows.map((c, idx) => {
                       const isSel    = selected.has(c.ar_gemi)
-                      const isOpen   = selectedArGemi === c.ar_gemi
                       const col      = logoColor(c.ar_gemi)
                       const initials = getInitials(c.co_name_el)
                       const isActive = c.status_descr?.toLowerCase().includes('ενεργ')
@@ -667,8 +757,10 @@ export default function SearchPage() {
                       return (
                         <tr
                           key={c.ar_gemi}
-                          data-selected={isSel || isOpen ? 'true' : 'false'}
-                          onClick={() => setSelectedArGemi(c.ar_gemi)}
+                          className="sp-row-enter"
+                          style={{ animationDelay: `${idx * 18}ms`, cursor: 'pointer' }}
+                          data-selected={isSel ? 'true' : 'false'}
+                          onClick={() => router.push(`/etaireies/${c.ar_gemi}`)}
                         >
                           <td className="sp-td-check" onClick={e => toggleOne(c.ar_gemi, e)}>
                             <span className="sp-chk" data-checked={isSel ? 'true' : 'false'} />
@@ -724,9 +816,9 @@ export default function SearchPage() {
                           </td>
 
                           <td className="sp-td-actions" onClick={e => e.stopPropagation()}>
-                            <button className="sp-action-btn" title="Open profile" onClick={() => setSelectedArGemi(c.ar_gemi)}>
+                            <Link href={`/etaireies/${c.ar_gemi}`} className="sp-action-btn" title="Open profile" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                               <Icon name="eye" size={14} />
-                            </button>
+                            </Link>
                             <button className="sp-action-btn" title="Export" onClick={() => { setSelected(prev => { const s = new Set(prev); s.add(c.ar_gemi); return s }) }}>
                               <Icon name="download" size={14} />
                             </button>

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { notFound } from 'next/navigation'
 import TopNav from '@/components/TopNav'
 import PersonProfile from '@/components/PersonProfile'

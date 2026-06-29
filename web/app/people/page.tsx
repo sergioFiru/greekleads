@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import TopNav from '@/components/TopNav'
 import PeopleSearch from '@/components/PeopleSearch'
 import { query } from '@/lib/db'

@@ -10,7 +10,7 @@ export async function GET() {
     const now = Date.now()
 
     if (now > cacheExpiry) {
-      const row = await queryOne<{ total: string }>('SELECT COUNT(*) AS total FROM companies')
+      const row = await queryOne<{ total: string }>('SELECT reltuples::bigint AS total FROM pg_class WHERE relname = \'companies\'')
       cachedTotal = parseInt(row?.total ?? '0', 10)
       cacheExpiry = now + 30_000
     }
