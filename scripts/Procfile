@@ -1,1 +1,1 @@
-worker: python one_time/bulk_load.py && python runner.py
+worker: python runner.py
