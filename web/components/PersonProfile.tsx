@@ -226,8 +226,8 @@ function RoleTimeline({ companies }: { companies: CompanyRow[] }) {
 
 // ── Connection table row ───────────────────────────────────────
 
-function stripPct(v: string | null): string | null {
-  return v ? String(v).replace(/%/g, '').trim() : null
+function stripPct(v: string | number | null): string | null {
+  return v != null ? String(v).replace(/%/g, '').trim() : null
 }
 
 function ConnectionRow({ c }: { c: CompanyRow }) {
