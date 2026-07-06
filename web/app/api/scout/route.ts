@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         model: 'google/gemini-2.5-flash',
-        max_tokens: 2048,
+        max_tokens: 8192,
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },

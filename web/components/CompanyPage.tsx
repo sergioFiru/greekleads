@@ -1,6 +1,8 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
+import KadDonut from './KadDonut'
+import CompanyNetworkGraph from './CompanyNetworkGraph'
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -184,6 +186,7 @@ function OverviewTab({
   similar: SimilarCompany[]
   activities: KadActivity[]
 }) {
+  const [objectiveExpanded, setObjectiveExpanded] = useState(false)
   const address = buildAddress(company)
   const capital = formatCapital(company.capital)
   const isActive = company.status_descr?.toLowerCase().includes('ενεργ')
@@ -217,10 +220,10 @@ function OverviewTab({
       </div>
 
       {/* Two-column content grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12, alignItems: 'start' }}>
 
         {/* Left */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
 
           <div className="card" style={{ padding: '20px 22px' }}>
             <div className="section-label" style={{ marginBottom: 14 }}>Ταυτότητα εταιρείας</div>
@@ -238,7 +241,7 @@ function OverviewTab({
                 {company.status_descr}
               </span>
             </KvRow>
-            <KvRow label="Ίδρυση">{company.incorporation_date ? formatDate(company.incorporation_date) : null}</KvRow>
+            <KvRow label="Ίδρυση"><span style={{ whiteSpace: 'nowrap' }}>{company.incorporation_date ? formatDate(company.incorporation_date) : null}</span></KvRow>
             <KvRow label="Κεφάλαιο">{capital}</KvRow>
           </div>
 
@@ -264,29 +267,50 @@ function OverviewTab({
           {company.objective && (
             <div className="card" style={{ padding: '20px 22px' }}>
               <div className="section-label" style={{ marginBottom: 10 }}>Σκοπός εταιρείας</div>
-              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75, margin: 0 }}>
-                {company.objective}
-              </p>
+              <div style={{ position: 'relative', maxHeight: objectiveExpanded ? 'none' : 90, overflow: 'hidden' }}>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75, margin: 0 }}>
+                  {company.objective}
+                </p>
+                {!objectiveExpanded && (
+                  <div style={{
+                    position: 'absolute', bottom: 0, left: 0, right: 0, height: 36,
+                    background: 'linear-gradient(to bottom, rgba(255,255,255,0), #fff)',
+                    pointerEvents: 'none',
+                  }} />
+                )}
+              </div>
+              {company.objective.length > 200 && (
+                <button
+                  onClick={() => setObjectiveExpanded(x => !x)}
+                  style={{
+                    marginTop: 6, background: 'none', border: 'none',
+                    color: 'var(--accent)', cursor: 'pointer',
+                    fontSize: 12, fontWeight: 500, padding: 0, display: 'block',
+                  }}
+                >
+                  {objectiveExpanded ? 'Λιγότερα ↑' : 'Περισσότερα ↓'}
+                </button>
+              )}
             </div>
           )}
         </div>
 
         {/* Right */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
 
           <div className="card" style={{ padding: '20px 22px' }}>
             <div className="section-label" style={{ marginBottom: 14 }}>Επικοινωνία</div>
             <KvRow label="Website">
               {company.url
                 ? <a href={ensureHttp(company.url)} target="_blank" rel="noopener noreferrer"
-                    style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+                    style={{ color: 'var(--accent)', textDecoration: 'none', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {displayUrl(company.url)}
                   </a>
                 : null}
             </KvRow>
             <KvRow label="Email">
               {company.email
-                ? <a href={`mailto:${company.email}`} style={{ color: 'var(--accent)', textDecoration: 'none' }}>{company.email}</a>
+                ? <a href={`mailto:${company.email}`} style={{ color: 'var(--accent)', textDecoration: 'none', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{company.email}</a>
                 : null}
             </KvRow>
             <KvRow label="Τηλέφωνο">
@@ -309,44 +333,6 @@ function OverviewTab({
               </div>
             )}
           </div>
-
-          {similar.length > 0 && (
-            <div className="card" style={{ padding: '20px 22px' }}>
-              <div className="section-label" style={{ marginBottom: 14 }}>Παρόμοιες εταιρείες</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                {similar.map((c, i) => {
-                  const lc = logoColor(c.ar_gemi)
-                  return (
-                    <Link key={c.ar_gemi} href={`/etaireies/${c.ar_gemi}`}
-                      style={{
-                        textDecoration: 'none', color: 'inherit',
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '10px 0',
-                        borderTop: i > 0 ? '0.5px solid var(--row-divider)' : 'none',
-                      }}>
-                      <div className="logo-initial lg"
-                        style={{ background: lc.bg, color: lc.fg, border: `1px solid ${lc.border}`, flexShrink: 0 }}>
-                        {getInitials(c.co_name_el ?? c.ar_gemi)}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {c.co_name_el ?? '—'}
-                        </div>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>
-                          {[c.legal_type_descr, c.city ?? c.prefecture_descr].filter(Boolean).join(' · ')}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                        {c.email && <span style={{ fontSize: 10, color: 'var(--active-text)', background: 'var(--active-bg)', border: '0.5px solid var(--active-border)', padding: '1px 5px', borderRadius: 3 }}>Email</span>}
-                        {c.phone && <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--surface-subtle)', border: '0.5px solid var(--border)', padding: '1px 5px', borderRadius: 3 }}>Τηλ.</span>}
-                        {c.url && <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--surface-subtle)', border: '0.5px solid var(--border)', padding: '1px 5px', borderRadius: 3 }}>Web</span>}
-                      </div>
-                    </Link>
-                  )
-                })}
-              </div>
-            </div>
-          )}
 
           {activePeople.length > 0 && (
             <div className="card" style={{ padding: '20px 22px' }}>
@@ -383,6 +369,45 @@ function OverviewTab({
                   </Link>
                 )
               })}
+            </div>
+          )}
+
+          {similar.length > 0 && (
+            <div className="card" style={{ padding: '20px 22px' }}>
+              <div className="section-label" style={{ marginBottom: 14 }}>Παρόμοιες εταιρείες</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {similar.map((c, i) => {
+                  const lc = logoColor(c.ar_gemi)
+                  return (
+                    <Link key={c.ar_gemi} href={`/etaireies/${c.ar_gemi}`}
+                      style={{
+                        textDecoration: 'none', color: 'inherit',
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '10px 0',
+                        borderTop: i > 0 ? '0.5px solid var(--row-divider)' : 'none',
+                        minWidth: 0,
+                      }}>
+                      <div className="logo-initial lg"
+                        style={{ background: lc.bg, color: lc.fg, border: `1px solid ${lc.border}`, flexShrink: 0 }}>
+                        {getInitials(c.co_name_el ?? c.ar_gemi)}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {c.co_name_el ?? '—'}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>
+                          {[c.legal_type_descr, c.city ?? c.prefecture_descr].filter(Boolean).join(' · ')}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                        {c.email && <span style={{ fontSize: 10, color: 'var(--active-text)', background: 'var(--active-bg)', border: '0.5px solid var(--active-border)', padding: '1px 5px', borderRadius: 3 }}>Email</span>}
+                        {c.phone && <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--surface-subtle)', border: '0.5px solid var(--border)', padding: '1px 5px', borderRadius: 3 }}>Τηλ.</span>}
+                        {c.url && <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--surface-subtle)', border: '0.5px solid var(--border)', padding: '1px 5px', borderRadius: 3 }}>Web</span>}
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -465,6 +490,13 @@ function ActivitiesTab({ activities }: { activities: KadActivity[] }) {
     return order.indexOf(a.type) - order.indexOf(b.type)
   })
   return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {activities.length >= 2 && (
+        <div className="card" style={{ padding: '20px 22px' }}>
+          <div className="section-label" style={{ marginBottom: 16 }}>Κατανομή ανά κλάδο</div>
+          <KadDonut activities={activities} />
+        </div>
+      )}
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
       {sorted.map((act, i) => {
         const isOld = act.type.startsWith('old_')
@@ -493,6 +525,7 @@ function ActivitiesTab({ activities }: { activities: KadActivity[] }) {
           </div>
         )
       })}
+    </div>
     </div>
   )
 }
@@ -546,7 +579,7 @@ export default function CompanyPage({
   persons: PersonRow[]
   similar: SimilarCompany[]
 }) {
-  type TabId = 'overview' | 'people' | 'activities' | 'similar'
+  type TabId = 'overview' | 'people' | 'activities' | 'similar' | 'network'
   const [activeTab, setActiveTab] = useState<TabId>('overview')
 
   const lc = logoColor(company.ar_gemi)
@@ -561,6 +594,7 @@ export default function CompanyPage({
     ...(persons.length > 0 ? [{ id: 'people' as TabId, label: 'Άνθρωποι', count: persons.length }] : []),
     ...(activities.length > 0 ? [{ id: 'activities' as TabId, label: 'Δραστηριότητες', count: activities.length }] : []),
     ...(similar.length > 0 ? [{ id: 'similar' as TabId, label: 'Παρόμοιες' }] : []),
+    ...(persons.length > 0 ? [{ id: 'network' as TabId, label: 'Δίκτυο' }] : []),
   ]
 
   return (
@@ -712,6 +746,9 @@ export default function CompanyPage({
             {activeTab === 'people' && <PeopleTab persons={persons} />}
             {activeTab === 'activities' && activities.length > 0 && <ActivitiesTab activities={activities} />}
             {activeTab === 'similar' && <SimilarTab similar={similar} />}
+            {activeTab === 'network' && (
+              <CompanyNetworkGraph arGemi={company.ar_gemi} companyName={company.co_name_el ?? company.ar_gemi} />
+            )}
           </div>
 
         </div>

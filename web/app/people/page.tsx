@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic'
 
+import { Suspense } from 'react'
 import TopNav from '@/components/TopNav'
 import PeopleSearch from '@/components/PeopleSearch'
 import { query } from '@/lib/db'
@@ -29,7 +30,7 @@ export default async function PeoplePage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <TopNav />
-      <PeopleSearch areas={areas} />
+      <Suspense><PeopleSearch areas={areas} /></Suspense>
     </div>
   )
 }

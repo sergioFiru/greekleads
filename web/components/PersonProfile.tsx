@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import type { PersonProfile, CompanyRow, ContactSignal } from '@/app/api/people/[slug]/route'
+import PersonNetworkGraph from './PersonNetworkGraph'
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -526,6 +527,9 @@ export default function PersonProfileComponent({ profile }: { profile: PersonPro
             </div>
           </div>
         )}
+
+        {/* Network graph */}
+        <PersonNetworkGraph name={profile.name} />
 
         {/* Contact Intelligence */}
         <ContactIntelligence contacts={contacts} />

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Icon from './Icon'
 import Paywall from './Paywall'
 import { ScoutPanel, ScoutPromptBar, ScoutSummaryBar, type ScoutRecipe } from './Scout'
+import CompanyPreviewPanel from './CompanyPreviewPanel'
 
 interface Company {
   ar_gemi: string
@@ -17,6 +18,12 @@ interface Company {
   email: string | null
   phone: string | null
   url: string | null
+  instagram_url: string | null
+  facebook_url: string | null
+  linkedin_url: string | null
+  twitter_url: string | null
+  tiktok_url: string | null
+  youtube_url: string | null
 }
 
 interface FilterOptions {
@@ -37,6 +44,12 @@ interface SearchState {
   has_phone: boolean
   has_website: boolean
   has_no_website: boolean
+  has_instagram: boolean
+  has_facebook: boolean
+  has_linkedin: boolean
+  has_twitter: boolean
+  has_tiktok: boolean
+  has_youtube: boolean
   year_from: string
   year_to: string
 }
@@ -47,11 +60,21 @@ const EMPTY: SearchState = {
   name: '', statuses: ['Ενεργή'], prefectures: [], municipality: '',
   legal_types: [], activities: [],
   has_email: false, has_phone: false, has_website: false, has_no_website: false,
+  has_instagram: false, has_facebook: false, has_linkedin: false, has_twitter: false, has_tiktok: false, has_youtube: false,
   year_from: '', year_to: '',
 }
 
 const GATE_DISABLED = process.env.NEXT_PUBLIC_DISABLE_GATE === 'true'
 const FREE_PAGE_LIMIT = 2
+
+const SOCIAL_PLATFORMS = [
+  { key: 'instagram_url', label: 'Instagram', icon: 'instagram',  color: '#E1306C' },
+  { key: 'facebook_url',  label: 'Facebook',  icon: 'facebook',   color: '#1877F2' },
+  { key: 'linkedin_url',  label: 'LinkedIn',  icon: 'linkedin',   color: '#0A66C2' },
+  { key: 'twitter_url',   label: 'X / Twitter', icon: 'twitter-x', color: '#1D1D1B' },
+  { key: 'tiktok_url',    label: 'TikTok',    icon: 'tiktok',     color: '#010101' },
+  { key: 'youtube_url',   label: 'YouTube',   icon: 'youtube',    color: '#FF0000' },
+] as const
 
 function useAnimatedCount(target: number | null, duration = 700) {
   const [display, setDisplay] = useState(0)
@@ -99,18 +122,38 @@ function logoColor(id: string) {
 }
 
 // URL ↔ filter state helpers
+const KAD_SESSION_KEY = 'gl_kad_filter'
+const KAD_URL_MAX = 5  // beyond this, store in sessionStorage to avoid 431 errors
+
 function parseParams(p: URLSearchParams): SearchState {
+  let activities: string[]
+  if (p.has('has_kad')) {
+    try {
+      const stored = sessionStorage.getItem(KAD_SESSION_KEY)
+      activities = stored ? JSON.parse(stored) : []
+    } catch {
+      activities = []
+    }
+  } else {
+    activities = p.getAll('kad')
+  }
   return {
     name:         p.get('name') ?? '',
     statuses:     p.getAll('status').length > 0 ? p.getAll('status') : ['Ενεργή'],
     prefectures:  p.getAll('prefecture'),
     municipality: p.get('municipality') ?? '',
     legal_types:  p.getAll('legal_type'),
-    activities:   p.getAll('kad'),
+    activities,
     has_email:      p.has('email'),
     has_phone:      p.has('phone'),
     has_website:    p.has('website'),
     has_no_website: p.has('no_website'),
+    has_instagram:  p.has('instagram'),
+    has_facebook:   p.has('facebook'),
+    has_linkedin:   p.has('linkedin'),
+    has_twitter:    p.has('twitter'),
+    has_tiktok:     p.has('tiktok'),
+    has_youtube:    p.has('youtube'),
     year_from: p.get('year_from') ?? '',
     year_to:   p.get('year_to')   ?? '',
   }
@@ -122,12 +165,23 @@ function buildParams(f: SearchState, page: number, sort: string): URLSearchParam
   f.statuses.forEach(s    => p.append('status',     s))
   f.prefectures.forEach(s => p.append('prefecture', s))
   f.legal_types.forEach(s => p.append('legal_type', s))
-  f.activities.forEach(s  => p.append('kad',        s))
+  if (f.activities.length > KAD_URL_MAX) {
+    try { sessionStorage.setItem(KAD_SESSION_KEY, JSON.stringify(f.activities)) } catch {}
+    p.set('has_kad', '1')
+  } else {
+    f.activities.forEach(s => p.append('kad', s))
+  }
   if (f.municipality)   p.set('municipality', f.municipality)
   if (f.has_email)      p.set('email',    '1')
   if (f.has_phone)      p.set('phone',    '1')
   if (f.has_website)    p.set('website',  '1')
   if (f.has_no_website) p.set('no_website', '1')
+  if (f.has_instagram)  p.set('instagram', '1')
+  if (f.has_facebook)   p.set('facebook',  '1')
+  if (f.has_linkedin)   p.set('linkedin',  '1')
+  if (f.has_twitter)    p.set('twitter',   '1')
+  if (f.has_tiktok)     p.set('tiktok',    '1')
+  if (f.has_youtube)    p.set('youtube',   '1')
   if (f.year_from)      p.set('year_from', f.year_from)
   if (f.year_to)        p.set('year_to',   f.year_to)
   if (page > 1)         p.set('page', String(page))
@@ -167,9 +221,9 @@ function FilterGroup({
 
 // Checkbox row with optional count on right
 function CheckRow({
-  checked, onChange, label, count,
+  checked, onChange, label, count, icon,
 }: {
-  checked: boolean; onChange: () => void; label: string; count?: number
+  checked: boolean; onChange: () => void; label: string; count?: number; icon?: React.ReactNode
 }) {
   return (
     <div className="sp-filter-row" onClick={onChange}>
@@ -179,6 +233,7 @@ function CheckRow({
           data-checked={checked ? 'true' : 'false'}
           onClick={e => { e.stopPropagation(); onChange() }}
         />
+        {icon && <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 5 }}>{icon}</span>}
         <span>{label}</span>
       </span>
       {count !== undefined && (
@@ -247,6 +302,9 @@ export default function SearchPage() {
   const [scoutOpen, setScoutOpen]       = useState(false)
   const [scoutSummary, setScoutSummary] = useState<string | null>(null)
   const [resultsKey, setResultsKey]     = useState(0)
+  const [previewArGemi, setPreviewArGemi] = useState<string | null>(null)
+  const [viewMode, setViewMode]           = useState<'table' | 'card'>('table')
+  const filterResetRef = useRef(false)
 
   useEffect(() => {
     fetch('/api/filters')
@@ -276,14 +334,17 @@ export default function SearchPage() {
   }, [])
 
   useEffect(() => {
+    filterResetRef.current = true
     setPage(1)
+    setLoading(true)
     const delay = filters.name ? 200 : 400
-    const id = setTimeout(() => search(filters, 1), delay)
-    return () => clearTimeout(id)
+    const id = setTimeout(() => { filterResetRef.current = false; search(filters, 1) }, delay)
+    return () => { clearTimeout(id); filterResetRef.current = false }
   }, [filters, search])
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (page === 1) return
+    if (filterResetRef.current) { filterResetRef.current = false; return }
     search(filters, page)
   }, [page])
 
@@ -299,10 +360,8 @@ export default function SearchPage() {
     return () => clearTimeout(urlSyncRef.current)
   }, [filters, page, sortBy, router])
 
-  const totalPages         = total != null ? Math.ceil(total / 50) : null
+  const totalPages          = total != null ? Math.ceil(total / 50) : null
   const effectiveTotalPages = totalPages
-    ? GATE_DISABLED ? totalPages : Math.min(totalPages, FREE_PAGE_LIMIT)
-    : null
 
   const toggleStatus = (s: string) =>
     setFilters(f => ({ ...f, statuses: f.statuses.includes(s) ? f.statuses.filter(x => x !== s) : [...f.statuses, s] }))
@@ -411,10 +470,16 @@ export default function SearchPage() {
       ? [{ id: 'act-all', key: 'ΚΑΔ', value: `${filters.activities.length} κλάδοι`, remove: () => setFilters(f => ({ ...f, activities: [] })) }]
       : filters.activities.map(k => ({ id: `act-${k}`, key: 'ΚΑΔ', value: k.length > 40 ? k.slice(0, 40) + '…' : k, remove: () => removeActivity(k) }))
     ),
-    filters.has_email      ? { id: 'email',  key: 'Επαφές', value: 'Email',          remove: () => setFilters(f => ({ ...f, has_email:      false })) } : null,
-    filters.has_phone      ? { id: 'phone',  key: 'Επαφές', value: 'Τηλέφωνο',      remove: () => setFilters(f => ({ ...f, has_phone:      false })) } : null,
-    filters.has_website    ? { id: 'web',    key: 'Επαφές', value: 'Website',        remove: () => setFilters(f => ({ ...f, has_website:    false })) } : null,
-    filters.has_no_website ? { id: 'noweb',  key: 'Επαφές', value: 'Χωρίς website', remove: () => setFilters(f => ({ ...f, has_no_website: false })) } : null,
+    filters.has_email      ? { id: 'email',     key: 'Επαφές', value: 'Email',          remove: () => setFilters(f => ({ ...f, has_email:      false })) } : null,
+    filters.has_phone      ? { id: 'phone',     key: 'Επαφές', value: 'Τηλέφωνο',      remove: () => setFilters(f => ({ ...f, has_phone:      false })) } : null,
+    filters.has_website    ? { id: 'web',       key: 'Επαφές', value: 'Website',        remove: () => setFilters(f => ({ ...f, has_website:    false })) } : null,
+    filters.has_no_website ? { id: 'noweb',     key: 'Επαφές', value: 'Χωρίς website', remove: () => setFilters(f => ({ ...f, has_no_website: false })) } : null,
+    filters.has_instagram  ? { id: 'instagram', key: 'Social', value: 'Instagram',      remove: () => setFilters(f => ({ ...f, has_instagram:  false })) } : null,
+    filters.has_facebook   ? { id: 'facebook',  key: 'Social', value: 'Facebook',       remove: () => setFilters(f => ({ ...f, has_facebook:   false })) } : null,
+    filters.has_linkedin   ? { id: 'linkedin',  key: 'Social', value: 'LinkedIn',       remove: () => setFilters(f => ({ ...f, has_linkedin:   false })) } : null,
+    filters.has_twitter    ? { id: 'twitter',   key: 'Social', value: 'X / Twitter',    remove: () => setFilters(f => ({ ...f, has_twitter:    false })) } : null,
+    filters.has_tiktok     ? { id: 'tiktok',    key: 'Social', value: 'TikTok',         remove: () => setFilters(f => ({ ...f, has_tiktok:     false })) } : null,
+    filters.has_youtube    ? { id: 'youtube',   key: 'Social', value: 'YouTube',        remove: () => setFilters(f => ({ ...f, has_youtube:    false })) } : null,
     filters.municipality ? { id: 'mun', key: 'Δήμος', value: filters.municipality, remove: () => setFilters(f => ({ ...f, municipality: '' })) } : null,
     filters.year_from    ? { id: 'yf',  key: 'Από',   value: filters.year_from,    remove: () => setFilters(f => ({ ...f, year_from: '' })) } : null,
     filters.year_to      ? { id: 'yt',  key: 'Έως',   value: filters.year_to,      remove: () => setFilters(f => ({ ...f, year_to:   '' })) } : null,
@@ -478,6 +543,25 @@ export default function SearchPage() {
           <CheckRow label="Phone number"    checked={filters.has_phone}      onChange={() => setFilters(f => ({ ...f, has_phone:      !f.has_phone }))} />
           <CheckRow label="Website"         checked={filters.has_website}    onChange={() => setFilters(f => ({ ...f, has_website:    !f.has_website,    has_no_website: false }))} />
           <CheckRow label="No website"      checked={filters.has_no_website} onChange={() => setFilters(f => ({ ...f, has_no_website: !f.has_no_website, has_website:    false }))} />
+        </FilterGroup>
+
+        <FilterGroup title="Κοινωνικά δίκτυα" active={filters.has_instagram || filters.has_facebook || filters.has_linkedin || filters.has_twitter || filters.has_tiktok || filters.has_youtube}>
+          {([
+            { key: 'has_instagram', label: 'Instagram', icon: 'instagram', color: '#E1306C' },
+            { key: 'has_facebook',  label: 'Facebook',  icon: 'facebook',  color: '#1877F2' },
+            { key: 'has_linkedin',  label: 'LinkedIn',  icon: 'linkedin',  color: '#0A66C2' },
+            { key: 'has_twitter',   label: 'X / Twitter', icon: 'twitter-x', color: '#1D1D1B' },
+            { key: 'has_tiktok',    label: 'TikTok',    icon: 'tiktok',    color: '#010101' },
+            { key: 'has_youtube',   label: 'YouTube',   icon: 'youtube',   color: '#FF0000' },
+          ] as const).map(s => (
+            <CheckRow
+              key={s.key}
+              label={s.label}
+              icon={<Icon name={s.icon} size={13} style={{ color: filters[s.key] ? s.color : 'var(--text-muted)' }} />}
+              checked={filters[s.key]}
+              onChange={() => setFilters(f => ({ ...f, [s.key]: !f[s.key] }))}
+            />
+          ))}
         </FilterGroup>
 
         <FilterGroup title="Location" defaultOpen active={filters.prefectures.length > 0}>
@@ -622,18 +706,14 @@ export default function SearchPage() {
               <span className="sp-search-icon"><Icon name="search" size={14} /></span>
               <input
                 className="sp-search-input"
-                placeholder="Search by company name, ΓΕΜΗ number, VAT, or keyword"
+                placeholder="Αναζήτηση εταιρείας, αριθμός ΓΕΜΗ, ΑΦΜ..."
                 value={filters.name}
                 onChange={e => setFilters(f => ({ ...f, name: e.target.value }))}
               />
             </div>
             <button className="sp-btn sp-btn-secondary">
-              <Icon name="filter" size={13} />
-              More filters
-            </button>
-            <button className="sp-btn sp-btn-secondary">
               <Icon name="bookmark" size={13} />
-              Save search
+              Αποθήκευση αναζήτησης
             </button>
             {total != null && (
               <span className="sp-match-count">
@@ -675,17 +755,25 @@ export default function SearchPage() {
                   <option value="year_founded">Ίδρυση (παλαιότερα)</option>
                 </select>
                 <span className="sp-v-divider" />
-                <button className="sp-icon-btn sp-icon-btn--active" title="Table view">
+                <button
+                  className={`sp-icon-btn ${viewMode === 'table' ? 'sp-icon-btn--active' : ''}`}
+                  title="Table view"
+                  onClick={() => setViewMode('table')}
+                >
                   <Icon name="table" size={14} />
                 </button>
-                <button className="sp-icon-btn" title="Settings">
-                  <Icon name="settings" size={14} />
+                <button
+                  className={`sp-icon-btn ${viewMode === 'card' ? 'sp-icon-btn--active' : ''}`}
+                  title="Card view"
+                  onClick={() => setViewMode('card')}
+                >
+                  <Icon name="grid" size={14} />
                 </button>
               </div>
             </div>
 
             {/* Table */}
-            <div className="sp-table-scroll">
+            <div className="sp-table-scroll" style={{ display: viewMode === 'card' ? 'none' : undefined }}>
               {gated && !GATE_DISABLED ? (
                 <div style={{ position: 'relative' }}>
                   <div style={{ filter: 'blur(3px)', pointerEvents: 'none', opacity: 0.4 }}>
@@ -781,16 +869,16 @@ export default function SearchPage() {
                             </div>
                           </td>
 
-                          <td onClick={e => e.stopPropagation()}>
-                            <div className="sp-enrich-row">
+                          <td className="sp-td-enrich" onClick={e => e.stopPropagation()}>
+                            <div className="sp-enrich-row" style={{ justifyContent: 'center' }}>
                               <span className="sp-badge sp-badge-gemi" title="Πηγή: επίσημο μητρώο ΓΕΜΗ">
                                 <Icon name="verified" size={11} stroke={1.6} />
                                 ΓΕΜΗ
                               </span>
                               {c.email && (
-                                <a href={`mailto:${c.email}`} className="sp-badge sp-badge-neutral" title={c.email} onClick={e => e.stopPropagation()}>
+                                <span className="sp-badge sp-badge-neutral" title={c.email}>
                                   <Icon name="mail" size={10} stroke={1.6} />
-                                </a>
+                                </span>
                               )}
                               {c.phone && (
                                 <span className="sp-badge sp-badge-neutral" title={c.phone}>
@@ -798,17 +886,16 @@ export default function SearchPage() {
                                 </span>
                               )}
                               {c.url && (
-                                <a
-                                  href={c.url.startsWith('http') ? c.url : `https://${c.url}`}
-                                  className="sp-badge sp-badge-neutral"
-                                  title={c.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={e => e.stopPropagation()}
-                                >
+                                <span className="sp-badge sp-badge-neutral" title={c.url}>
                                   <Icon name="globe" size={10} stroke={1.6} />
-                                </a>
+                                </span>
                               )}
+                              {SOCIAL_PLATFORMS.some(p => c[p.key]) && (
+                                <span style={{ width: '0.5px', height: 12, background: 'var(--border)', flexShrink: 0 }} />
+                              )}
+                              {SOCIAL_PLATFORMS.map(p => c[p.key] ? (
+                                <Icon key={p.key} name={p.icon} size={15} style={{ color: p.color, flexShrink: 0 }} />
+                              ) : null)}
                               {!isActive && (
                                 <span className="sp-badge sp-badge-inactive">Ανενεργή</span>
                               )}
@@ -816,14 +903,11 @@ export default function SearchPage() {
                           </td>
 
                           <td className="sp-td-actions" onClick={e => e.stopPropagation()}>
-                            <Link href={`/etaireies/${c.ar_gemi}`} className="sp-action-btn" title="Open profile" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <button className="sp-action-btn" title="Preview" onClick={() => setPreviewArGemi(c.ar_gemi)}>
                               <Icon name="eye" size={14} />
-                            </Link>
+                            </button>
                             <button className="sp-action-btn" title="Export" onClick={() => { setSelected(prev => { const s = new Set(prev); s.add(c.ar_gemi); return s }) }}>
                               <Icon name="download" size={14} />
-                            </button>
-                            <button className="sp-action-btn" title="More">
-                              <Icon name="more" size={14} />
                             </button>
                           </td>
                         </tr>
@@ -833,6 +917,62 @@ export default function SearchPage() {
                 </table>
               )}
             </div>
+
+            {/* Card grid */}
+            {viewMode === 'card' && (
+              <div className="sp-cards-grid">
+                {loading && Array.from({ length: 9 }).map((_, i) => (
+                  <div key={i} className="sp-card-item">
+                    <div className="sp-skel" style={{ width: 36, height: 36, borderRadius: 8, marginBottom: 10 }} />
+                    <div className="sp-skel" style={{ height: 13, width: '80%', marginBottom: 6 }} />
+                    <div className="sp-skel" style={{ height: 11, width: '55%', marginBottom: 10 }} />
+                    <div className="sp-skel" style={{ height: 18, width: '60%', borderRadius: 10 }} />
+                  </div>
+                ))}
+                {!loading && sortedRows.map((c, idx) => {
+                  const isSel    = selected.has(c.ar_gemi)
+                  const col      = logoColor(c.ar_gemi)
+                  const initials = getInitials(c.co_name_el)
+                  const isActive = c.status_descr?.toLowerCase().includes('ενεργ')
+                  const meta     = [
+                    c.legal_type_descr ?? null,
+                    c.municipality_descr || c.prefecture_descr || null,
+                    c.year_founded ? String(c.year_founded) : null,
+                  ].filter(Boolean).join(' · ')
+
+                  return (
+                    <div
+                      key={c.ar_gemi}
+                      className="sp-card-item sp-row-enter"
+                      style={{ animationDelay: `${idx * 14}ms`, cursor: 'pointer' }}
+                      data-selected={isSel ? 'true' : 'false'}
+                      onClick={() => router.push(`/etaireies/${c.ar_gemi}`)}
+                    >
+                      <span
+                        className="sp-logo"
+                        style={{ background: col.bg, color: col.fg, borderColor: col.border, width: 36, height: 36, borderRadius: 8, fontSize: 12 }}
+                      >
+                        {initials}
+                      </span>
+                      <div className="sp-card-item-name">{c.co_name_el}</div>
+                      {meta && <div className="sp-card-item-meta">{meta}</div>}
+                      <div className="sp-enrich-row" style={{ marginTop: 8 }}>
+                        <span className="sp-badge sp-badge-gemi" title="ΓΕΜΗ">
+                          <Icon name="verified" size={10} stroke={1.6} />ΓΕΜΗ
+                        </span>
+                        {c.email && <span className="sp-badge sp-badge-neutral" title={c.email}><Icon name="mail" size={9} stroke={1.6} /></span>}
+                        {c.phone && <span className="sp-badge sp-badge-neutral" title={c.phone}><Icon name="phone" size={9} stroke={1.6} /></span>}
+                        {c.url && <span className="sp-badge sp-badge-neutral" title={c.url}><Icon name="globe" size={9} stroke={1.6} /></span>}
+                        {SOCIAL_PLATFORMS.map(p => c[p.key] ? (
+                          <Icon key={p.key} name={p.icon} size={12} style={{ color: p.color, flexShrink: 0 }} />
+                        ) : null)}
+                        {!isActive && <span className="sp-badge sp-badge-inactive">Ανενεργή</span>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
 
             {/* Footer */}
             <div className="sp-card-footer">
@@ -890,6 +1030,8 @@ export default function SearchPage() {
         </div>
 
       </main>
+
+      <CompanyPreviewPanel arGemi={previewArGemi} onClose={() => setPreviewArGemi(null)} />
 
       <ScoutPanel
         open={scoutOpen}

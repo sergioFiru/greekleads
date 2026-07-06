@@ -37,12 +37,10 @@ BOTS = [
 ]
 # ---------------------------------------------------------------------------
 
-_conn = _db.get_conn()
-
-
 def make_job(bot):
     def job():
-        bot.run(_conn, _gemi)
+        conn = _db.get_conn()
+        bot.run(conn, _gemi)
     return job
 
 

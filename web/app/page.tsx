@@ -1,927 +1,1490 @@
-export const dynamic = 'force-dynamic'
+'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import TopNav from '@/components/TopNav'
-import LiveExhibit from '@/components/LiveExhibit'
-import Footer from '@/components/Footer'
+import { useRouter } from 'next/navigation'
+import Script from 'next/script'
 import Icon from '@/components/Icon'
-import HeroSearchBar from '@/components/HeroSearchBar'
-import { CountUp } from '@/components/CountUp'
-import { queryOne } from '@/lib/db'
+import TopNav from '@/components/TopNav'
 
-async function getTotalCompanies(): Promise<number> {
-  try {
-    const row = await queryOne<{ total: string }>(
-      "SELECT reltuples::bigint AS total FROM pg_class WHERE relname = 'companies'"
-    )
-    return parseInt(row?.total ?? '0', 10)
-  } catch { return 0 }
+// ── TypeScript globals ──────────────────────────────────────────────
+declare global {
+  interface Window {
+    particlesJS: (id: string, config: unknown) => void
+    pJSDom: Array<{ pJS: { fn: { vendors: { destroypJS: () => void } } } }>
+  }
 }
 
-async function getTotalPersonRoles(): Promise<number> {
-  try {
-    const row = await queryOne<{ total: string }>(
-      "SELECT reltuples::bigint AS total FROM pg_class WHERE relname = 'company_persons'"
-    )
-    return parseInt(row?.total ?? '0', 10)
-  } catch { return 0 }
-}
-
-const SECTORS = [
-  { label: 'Ναυτιλία & Logistics',    companies: 8420  },
-  { label: 'Τουρισμός & Φιλοξενία',  companies: 41280 },
-  { label: 'Κατασκευές & Ακίνητα',   companies: 24120 },
-  { label: 'Εστίαση & Τρόφιμα',      companies: 31840 },
-  { label: 'Βιομηχανία',              companies: 14820 },
-  { label: 'Λιανικό Εμπόριο',        companies: 62140 },
-  { label: 'Ενέργεια & Utilities',    companies: 1820  },
-  { label: 'Φάρμακα & Υγεία',        companies: 6240  },
-  { label: 'Τεχνολογία & IT',         companies: 9418  },
-  { label: 'Χρηματοοικονομικά',       companies: 3120  },
-]
-
-const PREVIEW_ROWS = [
-  { name: 'Pelagos Maritime Group ΑΕ',  legal: 'ΑΕ',  city: 'Πειραιάς',     year: 2014, email: true,  phone: true,  web: true  },
-  { name: 'Helleniq Cloud Systems ΙΚΕ', legal: 'ΙΚΕ', city: 'Αθήνα',        year: 2020, email: true,  phone: false, web: true  },
-  { name: 'Mediterra Pharma ΕΠΕ',       legal: 'ΕΠΕ', city: 'Πάτρα',        year: 2009, email: false, phone: true,  web: false },
-  { name: 'Aegean Bistro Holdings ΑΕ',  legal: 'ΑΕ',  city: 'Θεσσαλονίκη', year: 2016, email: true,  phone: true,  web: true  },
-  { name: 'Kyklades Hospitality ΑΕ',    legal: 'ΑΕ',  city: 'Ηράκλειο',     year: 2007, email: false, phone: true,  web: true  },
-]
-
+// ── Static data ─────────────────────────────────────────────────────
 const LOGO_COLORS = [
   { bg: '#EEF4FF', fg: '#1A4A8A', border: '#C0D0E8' },
   { bg: '#F1F0EA', fg: '#3D3527', border: '#D7D2C0' },
   { bg: '#EAF3EE', fg: '#1F5C42', border: '#B6D4C2' },
   { bg: '#F5EEEA', fg: '#7A3826', border: '#E0CCBE' },
   { bg: '#EEEEF5', fg: '#3D3A6E', border: '#C5C3DC' },
+  { bg: '#F0F7F4', fg: '#1E4D3B', border: '#B8D8CC' },
 ]
 
-function logoColor(name: string) {
+const PREVIEW_COMPANIES = [
+  { id: 'c001', name: 'Helleniq Cloud Systems', legal: 'IKE', city: 'Athens',       year: 2020, sectorLabel: 'Software & IT',          employees: 420,  revenue: 8.4   },
+  { id: 'c002', name: 'Pelagos Maritime Group',  legal: 'AE',  city: 'Piraeus',      year: 2014, sectorLabel: 'Shipping & Logistics',    employees: 1240, revenue: 184.2 },
+  { id: 'c003', name: 'Olympus Renewables',      legal: 'AE',  city: 'Athens',       year: 2018, sectorLabel: 'Energy & Utilities',      employees: 310,  revenue: 42.8  },
+  { id: 'c004', name: 'Aegean Bistro Holdings',  legal: 'AE',  city: 'Thessaloniki', year: 2016, sectorLabel: 'Food & Beverage',         employees: 890,  revenue: 32.1  },
+  { id: 'c005', name: 'Kyklades Hospitality',    legal: 'AE',  city: 'Santorini',    year: 2007, sectorLabel: 'Tourism & Hospitality',   employees: 1820, revenue: 61.4  },
+]
+
+const STREAM_EVENTS = [
+  { co: 'Pelagos Maritime Group',   action: 'Revenue updated to €184.2M',        tag: 'financials', t: '04:12' },
+  { co: 'Helleniq Cloud Systems',   action: 'Instagram + TikTok profiles linked', tag: 'social',     t: '04:11' },
+  { co: 'Olympus Renewables',       action: 'Annual filing FY2024 indexed',       tag: 'filing',     t: '04:09' },
+  { co: 'Thalia Fintech',           action: '3 board members cross-linked',       tag: 'network',    t: '04:07' },
+  { co: 'Mediterra Pharma',         action: 'Verified phone +30 261… added',     tag: 'contact',    t: '04:05' },
+  { co: 'Aegean Bistro Holdings',   action: 'Facebook page matched',              tag: 'social',     t: '04:02' },
+  { co: 'Boreas Wind Operations',   action: 'New permit filed in ΓΕΜΗ',           tag: 'filing',     t: '03:58' },
+  { co: 'Kyklades Hospitality',     action: 'Headcount revised to 380',           tag: 'financials', t: '03:55' },
+  { co: 'Lyceum Software Labs',     action: 'Shared shareholder detected',        tag: 'network',    t: '03:51' },
+  { co: 'Doric Construction Group', action: 'Subsidiary added (Doric Energy AE)', tag: 'event',      t: '03:47' },
+]
+
+const TAG_STYLES: Record<string, { bg: string; fg: string; border: string; label: string }> = {
+  filing:     { bg: 'var(--gemi-bg)',      fg: 'var(--gemi-text)',      border: 'var(--gemi-border)',   label: 'FILING'     },
+  social:     { bg: 'var(--li-bg)',        fg: 'var(--li-text)',        border: 'var(--li-border)',     label: 'SOCIAL'     },
+  network:    { bg: '#F1ECFA',             fg: '#5B45A8',               border: '#D7CCEC',              label: 'NETWORK'    },
+  contact:    { bg: '#F1F0EA',             fg: '#5F4A1E',               border: '#D7D2C0',              label: 'CONTACT'    },
+  financials: { bg: 'var(--accent-light)', fg: 'var(--accent)',         border: 'var(--li-border)',     label: 'FINANCIALS' },
+  event:      { bg: 'var(--subtle-bg)',    fg: 'var(--text-secondary)', border: 'var(--border)',        label: 'EVENT'      },
+}
+
+const SOCIAL_PLATFORMS = [
+  { key: 'instagram', icon: 'instagram', color: '#C13584' },
+  { key: 'facebook',  icon: 'facebook',  color: '#1877F2' },
+  { key: 'twitter-x', icon: 'twitter-x', color: 'var(--text-primary)' },
+  { key: 'tiktok',    icon: 'tiktok',    color: 'var(--text-primary)' },
+  { key: 'youtube',   icon: 'youtube',   color: '#E0322B' },
+]
+
+// ── Helpers ─────────────────────────────────────────────────────────
+function colorFor(id: string) {
   let h = 0
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
   return LOGO_COLORS[h % LOGO_COLORS.length]
 }
-
-function initials(name: string) {
-  const w = name.trim().split(/\s+/).filter(x => x.length > 1)
-  return w.length >= 2 ? (w[0][0] + w[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase()
+function initialOf(name: string) {
+  const words = name.trim().split(/\s+/).filter(w => w.length > 1)
+  return words.length >= 2 ? (words[0][0] + words[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase()
+}
+function fmtRevenue(m: number) { return m >= 1000 ? (m / 1000).toFixed(1) + 'B' : m.toFixed(1) }
+function fmtInt(n: number) { return n.toLocaleString('en-US') }
+function hashStr(s: string) {
+  let h = 0
+  for (let i = 0; i < (s || '').length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+  return h
 }
 
-function fmtInt(n: number) {
-  return n.toLocaleString('el-GR')
+// ── Sub-components ──────────────────────────────────────────────────
+function BrandMark({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 22 22" fill="none">
+      <rect x="1" y="1" width="12" height="12" stroke="#E8EDF5" strokeWidth="1.4" />
+      <rect x="9" y="9" width="12" height="12" fill="#2563A8" />
+    </svg>
+  )
 }
 
-export default async function HomePage() {
-  const [total, totalRoles] = await Promise.all([getTotalCompanies(), getTotalPersonRoles()])
-  const fmtTotal = total > 0
-    ? (total / 1_000_000).toFixed(2).replace('.', ',') + 'M+'
-    : '1,28M+'
+function CompanyLogo({ company }: { company: { id: string; name: string } }) {
+  const col = colorFor(company.id)
+  return (
+    <span style={{
+      width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+      background: col.bg, color: col.fg, border: `0.5px solid ${col.border}`,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 11, fontWeight: 600, letterSpacing: '0.02em',
+    }}>
+      {initialOf(company.name)}
+    </span>
+  )
+}
+
+function GemiBadge() {
+  return (
+    <span className="badge badge-gemi">
+      <Icon name="verified" size={10} stroke={1.6} />ΓΕΜΗ
+    </span>
+  )
+}
+
+function SectorBadge({ label }: { label: string }) {
+  return <span className="badge badge-sector">{label}</span>
+}
+
+function SocialChip({ icon, color, size = 28, active = true }: { icon: string; color: string; size?: number; active?: boolean }) {
+  return (
+    <span style={{
+      width: size, height: size, borderRadius: 7,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+      background: active ? 'var(--surface)' : 'var(--subtle-bg)',
+      border: '0.5px solid var(--border)',
+      color: active ? color : 'var(--text-muted)',
+      opacity: active ? 1 : 0.45,
+    }}>
+      <Icon name={icon} size={Math.round(size * 0.52)} />
+    </span>
+  )
+}
+
+function RowSignals({ company }: { company: { id: string } }) {
+  const h = hashStr(company.id)
+  const socials = SOCIAL_PLATFORMS.filter((_, i) => ((h >> i) & 1) === 1).slice(0, 3)
+  const hasEmail = (h & 0b1000) !== 0
+  const hasPhone = (h & 0b10000) !== 0
+  return (
+    <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+      {socials.map(s => (
+        <span key={s.key} title={s.key} style={{ color: s.color, display: 'inline-flex' }}>
+          <Icon name={s.icon} size={13} />
+        </span>
+      ))}
+      {hasEmail && <span title="Verified email" style={{ color: 'var(--gemi-text)', display: 'inline-flex' }}><Icon name="mail" size={12} stroke={1.7} /></span>}
+      {hasPhone && <span title="Verified phone" style={{ color: 'var(--gemi-text)', display: 'inline-flex' }}><Icon name="phone" size={12} stroke={1.7} /></span>}
+      {socials.length === 0 && !hasEmail && !hasPhone && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>}
+    </div>
+  )
+}
+
+function HomeBullets({ items }: { items: string[] }) {
+  return (
+    <ul style={{ listStyle: 'none', padding: 0, margin: '20px 0 0', display: 'flex', flexDirection: 'column', gap: 9 }}>
+      {items.map((p, i) => (
+        <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+          <span style={{
+            width: 15, height: 15, borderRadius: 8,
+            background: 'var(--gemi-bg)', color: 'var(--gemi-text)', border: '0.5px solid var(--gemi-border)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1,
+          }}>
+            <Icon name="check" size={9} stroke={2.4} />
+          </span>
+          <span>{p}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function SectionHeader({ index, eyebrow, title, body, compact = false, center = false }: {
+  index?: string; eyebrow?: string; title: string; body?: string; compact?: boolean; center?: boolean
+}) {
+  return (
+    <div style={{ maxWidth: center ? 760 : (compact ? 560 : 700), margin: center ? '0 auto' : undefined, textAlign: center ? 'center' : 'left' }}>
+      {eyebrow && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          justifyContent: center ? 'center' : 'flex-start',
+          fontSize: 11, color: 'var(--accent)',
+          textTransform: 'uppercase', letterSpacing: '0.1em',
+          marginBottom: 16, fontWeight: 500,
+        }}>
+          {index && <span className="section-index">{index}</span>}
+          {eyebrow}
+        </div>
+      )}
+      <h2 style={{
+        margin: 0,
+        fontSize: compact ? 30 : 40,
+        fontWeight: 600,
+        letterSpacing: '-0.025em',
+        lineHeight: 1.1,
+        color: 'var(--text-primary)',
+      }}>{title}</h2>
+      {body && (
+        <p style={{
+          margin: center ? '16px auto 0' : '16px 0 0',
+          fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.6, maxWidth: 600,
+        }}>{body}</p>
+      )}
+    </div>
+  )
+}
+
+function ScoutGlyph({ size = 28 }: { size?: number }) {
+  return (
+    <span style={{
+      width: size, height: size, borderRadius: 6,
+      background: 'var(--accent-light)', border: '0.5px solid var(--li-border)',
+      color: 'var(--accent)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    }}>
+      <Icon name="sparkle" size={Math.round(size * 0.6)} stroke={1.6} />
+    </span>
+  )
+}
+
+function ScoutChips({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'baseline', marginBottom: 7, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 58, flexShrink: 0 }}>{label}</span>
+      <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        {items.map((it, i) => <span key={i} className="badge badge-sector" style={{ height: 19 }}>{it}</span>)}
+      </span>
+    </div>
+  )
+}
+
+// ── LIVE EXHIBIT ─────────────────────────────────────────────────────
+function LiveExhibit() {
+  const [tick, setTick] = useState(0)
+  const [counter, setCounter] = useState(1284938)
+
+  useEffect(() => {
+    const i = setInterval(() => {
+      setTick(t => t + 1)
+      setCounter(c => c + Math.floor(Math.random() * 3) + 1)
+    }, 2200)
+    return () => clearInterval(i)
+  }, [])
+
+  const visible = Array.from({ length: 6 }, (_, i) => STREAM_EVENTS[(tick + i) % STREAM_EVENTS.length])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <TopNav totalCompanies={total} />
+    <div style={{
+      background: 'var(--surface)', border: '0.5px solid var(--border-strong)',
+      borderRadius: 12, overflow: 'hidden', boxShadow: 'var(--hero-card-shadow)',
+    }}>
+      <div style={{
+        padding: '10px 14px', borderBottom: '0.5px solid var(--border)',
+        background: 'var(--nav-bg)', color: 'var(--nav-text-active)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            width: 8, height: 8, borderRadius: 4, background: '#3EB57A',
+            boxShadow: '0 0 0 3px rgba(62,181,122,0.22)',
+            animation: 'agora-pulse 1.6s ease-in-out infinite',
+          }} />
+          <span style={{ fontSize: 11.5, fontWeight: 500, letterSpacing: '0.06em' }}>LIVE · ΓΕΜΗ STREAM</span>
+        </div>
+        <span style={{ fontSize: 10.5, color: 'var(--nav-text-muted)', fontFamily: 'var(--font-mono)' }}>
+          2026-07-02 · 04:12 EET
+        </span>
+      </div>
 
-      {/* ── HERO ──────────────────────────────────────────── */}
-      <section className="hp-hero-section">
-        <div className="hp-hero-backdrop" aria-hidden="true" />
-        <div className="hp-container">
-          <div className="hp-hero-grid">
+      <div style={{
+        padding: '16px 16px 14px', borderBottom: '0.5px solid var(--row-divider)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+      }}>
+        <div>
+          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Companies indexed</div>
+          <div className="mono" style={{
+            fontSize: 26, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '-0.01em',
+            fontVariantNumeric: 'tabular-nums', marginTop: 2,
+          }}>{counter.toLocaleString('en-US')}</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Last 24h</div>
+          <div className="mono" style={{ fontSize: 15, fontWeight: 500, color: 'var(--gemi-text)', marginTop: 2 }}>+1,284 records</div>
+        </div>
+      </div>
 
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 22, flexWrap: 'wrap' }}>
-                <span className="badge badge-gemi" style={{ height: 22, padding: '0 9px' }}>
-                  <Icon name="verified" size={11} stroke={1.6} />
-                  Επίσημα δεδομένα ΓΕΜΗ
-                </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--text-secondary)' }}>
-                  <span style={{ width: 4, height: 4, borderRadius: 2, background: 'var(--text-muted)', display: 'inline-block' }} />
-                  <span className="mono" style={{ color: 'var(--text-primary)' }}>Live</span> ενημέρωση μητρώου
-                </span>
-              </div>
-
-              <h1 style={{
-                margin: 0, fontSize: 64, lineHeight: 1.02,
-                letterSpacing: '-0.03em', fontWeight: 600, color: 'var(--text-primary)',
-              }}>
-                Κάθε ελληνική<br />
-                επιχείρηση &amp;<br />
-                <span style={{ color: 'var(--accent)' }}>στέλεχος, live.</span>
-              </h1>
-
-              <p style={{
-                fontSize: 16.5, lineHeight: 1.55, color: 'var(--text-secondary)',
-                marginTop: 22, maxWidth: 540,
-              }}>
-                {fmtTotal} εταιρείες, εκατοντάδες χιλιάδες στελέχη & εταίροι — με ιστορικό ρόλων, επαφές και Scout AI που βρίσκει leads από φυσική γλώσσα.
-              </p>
-
-              <HeroSearchBar />
-
-              <div style={{ marginTop: 16, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 12.5, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                  <span className="hp-live-dot" />
-                  25 δωρεάν εξαγωγές κάθε μήνα — χωρίς κάρτα
-                </span>
-                <span style={{ width: 1, height: 12, background: 'var(--border)', display: 'inline-block' }} />
-                <Link href="/pricing" style={{ color: 'var(--accent)', fontSize: 12.5, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  Δείτε τιμές <Icon name="chevron-right" size={11} />
-                </Link>
-              </div>
-
-              <div style={{ marginTop: 30, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Αναζήτηση σε</span>
-                {[
-                  { l: fmtTotal + ' εταιρείες', icon: 'building' as const },
-                  { l: '650K+ στελέχη',          icon: 'users'    as const },
-                  { l: '653K emails',             icon: 'mail'     as const },
-                  { l: '667K τηλέφωνα',           icon: 'phone'    as const },
-                ].map((chip, i) => (
-                  <span key={i} style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    height: 22, padding: '0 9px', borderRadius: 6,
-                    border: '0.5px solid var(--border)', background: '#fff',
-                    fontSize: 11.5, color: 'var(--text-primary)',
-                  }}>
-                    <Icon name={chip.icon} size={11} stroke={1.6} style={{ color: 'var(--text-muted)' }} />
-                    {chip.l}
-                  </span>
-                ))}
+      <div style={{ padding: '4px 0' }}>
+        {visible.map((e, i) => {
+          const ts = TAG_STYLES[e.tag]
+          return (
+            <div key={`${tick}-${i}`} style={{
+              padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10,
+              borderTop: i === 0 ? 'none' : '0.5px solid var(--row-divider)',
+              opacity: 1 - (i * 0.08),
+              animation: i === 0 ? 'agora-streamin .5s ease-out' : undefined,
+            }}>
+              <span className="mono" style={{ fontSize: 10.5, color: 'var(--text-muted)', width: 38, flexShrink: 0 }}>{e.t}</span>
+              <span style={{
+                fontSize: 9.5, fontWeight: 500, padding: '1px 6px', borderRadius: 3,
+                background: ts.bg, color: ts.fg, border: `0.5px solid ${ts.border}`,
+                letterSpacing: '0.04em', width: 78, textAlign: 'center', flexShrink: 0,
+              }}>{ts.label}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.co}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.action}</div>
               </div>
             </div>
+          )
+        })}
+      </div>
 
-            <div className="hp-crop-wrap">
-              <span className="hp-crop-mark hp-crop-tl" />
-              <span className="hp-crop-mark hp-crop-tr" />
-              <span className="hp-crop-mark hp-crop-bl" />
-              <span className="hp-crop-mark hp-crop-br" />
+      <div style={{
+        padding: '10px 14px', background: 'var(--subtle-bg2)', borderTop: '0.5px solid var(--border)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-secondary)',
+      }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Icon name="verified" size={11} stroke={1.6} style={{ color: 'var(--gemi-text)' }} />
+          Source · <span className="mono" style={{ color: 'var(--text-primary)' }}>business.gov.gr/gemi</span>
+        </span>
+        <span className="mono" style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>stream · 14 events/min</span>
+      </div>
+    </div>
+  )
+}
 
-              <div className="hp-social-icon" style={{
-                top: 18, right: -52,
-                background: 'radial-gradient(circle at 30% 107%, #fdf497 0%, #fd5949 45%, #d6249f 60%, #285AEB 90%)',
-                '--fd': '3.4s', '--dl': '0s', '--fr': '-4deg',
-              } as React.CSSProperties}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
-              </div>
-              <div className="hp-social-icon" style={{
-                bottom: 40, right: -52, background: '#0A66C2',
-                '--fd': '4.1s', '--dl': '-1.2s', '--fr': '3deg',
-              } as React.CSSProperties}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-              </div>
-              <div className="hp-social-icon" style={{
-                top: 50, left: -52, background: '#1877F2',
-                '--fd': '3.8s', '--dl': '-0.6s', '--fr': '4deg',
-              } as React.CSSProperties}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-              </div>
-              <div className="hp-social-icon" style={{
-                bottom: 18, left: -52, background: '#000',
-                '--fd': '4.4s', '--dl': '-2s', '--fr': '-3deg',
-              } as React.CSSProperties}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-              </div>
+// ── HERO BACKDROP ────────────────────────────────────────────────────
+function HeroBackdrop() {
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, pointerEvents: 'none',
+      backgroundImage: 'radial-gradient(circle, var(--hero-dot) 0.7px, transparent 0.7px)',
+      backgroundSize: '26px 26px', backgroundPosition: 'center top',
+      opacity: 'var(--hero-dot-opacity)' as unknown as number,
+      maskImage: 'linear-gradient(to bottom, #000 20%, transparent 92%)',
+      WebkitMaskImage: 'linear-gradient(to bottom, #000 20%, transparent 92%)',
+    }} />
+  )
+}
 
-              <div style={{ position: 'relative', zIndex: 1 }}>
-                <LiveExhibit />
-              </div>
+// ── PARTICLES BACKDROP ───────────────────────────────────────────────
+const particleConfig = (dot: string, line: string, dotOp = 0.6, lineOp = 0.5) => ({
+  particles: {
+    number: { value: 72, density: { enable: true, value_area: 900 } },
+    color: { value: dot },
+    shape: { type: 'circle' },
+    opacity: { value: dotOp, random: true, anim: { enable: true, speed: 0.5, opacity_min: dotOp * 0.3, sync: false } },
+    size: { value: 2.6, random: true },
+    line_linked: { enable: true, distance: 138, color: line, opacity: lineOp, width: 1 },
+    move: { enable: true, speed: 0.9, direction: 'none', random: true, straight: false, out_mode: 'out', bounce: false },
+  },
+  interactivity: {
+    detect_on: 'window',
+    events: { onhover: { enable: true, mode: 'grab' }, onclick: { enable: false }, resize: true },
+    modes: { grab: { distance: 170, line_linked: { opacity: 0.6 } } },
+  },
+  retina_detect: true,
+})
+
+function ParticlesBackdrop() {
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (reduce) return
+    let cancelled = false, tries = 0
+    const destroy = () => {
+      if (window.pJSDom?.length) {
+        try { window.pJSDom.forEach(d => d.pJS.fn.vendors.destroypJS()) } catch {}
+        window.pJSDom = []
+      }
+    }
+    const build = () => {
+      const el = document.getElementById('agora-particles')
+      if (cancelled || !window.particlesJS || !el) return
+      destroy()
+      const dark = document.documentElement.getAttribute('data-theme') === 'dark'
+      window.particlesJS('agora-particles', dark
+        ? particleConfig('#6BA6EE', '#5B93DE', 0.6, 0.5)
+        : particleConfig('#3E7DC4', '#6B98D0', 0.42, 0.32))
+      requestAnimationFrame(() => { try { window.dispatchEvent(new Event('resize')) } catch {} })
+    }
+    const tick = () => {
+      const el = document.getElementById('agora-particles')
+      if ((window.particlesJS as unknown) && el && el.clientHeight > 0) build()
+      else if (tries++ < 120) setTimeout(tick, 50)
+    }
+    tick()
+    const obs = new MutationObserver(() => build())
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    let ro: ResizeObserver | null = null
+    const roEl = document.getElementById('agora-particles')
+    if (window.ResizeObserver && roEl) {
+      let last = 0
+      ro = new ResizeObserver(() => {
+        const h = roEl.clientHeight
+        if (h > 0 && Math.abs(h - last) > 4) {
+          last = h
+          if (window.pJSDom?.length) {
+            try { window.dispatchEvent(new Event('resize')) } catch {}
+          } else build()
+        }
+      })
+      ro.observe(roEl)
+    }
+    return () => { cancelled = true; obs.disconnect(); if (ro) ro.disconnect(); destroy() }
+  }, [])
+
+  return (
+    <div id="agora-particles" aria-hidden style={{
+      position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none',
+      maskImage: 'linear-gradient(to bottom, #000 38%, transparent 92%)',
+      WebkitMaskImage: 'linear-gradient(to bottom, #000 38%, transparent 92%)',
+    }} />
+  )
+}
+
+// ── CROP MARKS ───────────────────────────────────────────────────────
+function CropMarks() {
+  return (
+    <div style={{ position: 'absolute', inset: -18, pointerEvents: 'none' }} aria-hidden>
+      {([
+        { top: 0,        left: 0,        sides: ['t','l'] },
+        { top: 0,        right: 0,       sides: ['t','r'] },
+        { bottom: 0,     left: 0,        sides: ['b','l'] },
+        { bottom: 0,     right: 0,       sides: ['b','r'] },
+      ] as Array<{ top?: number; right?: number; bottom?: number; left?: number; sides: string[] }>).map((c, i) => (
+        <span key={i} style={{
+          position: 'absolute',
+          top: c.top, left: c.left, right: c.right, bottom: c.bottom,
+          width: 14, height: 14,
+          borderTop:    c.sides.includes('t') ? '0.5px solid var(--border-strong)' : 'none',
+          borderBottom: c.sides.includes('b') ? '0.5px solid var(--border-strong)' : 'none',
+          borderLeft:   c.sides.includes('l') ? '0.5px solid var(--border-strong)' : 'none',
+          borderRight:  c.sides.includes('r') ? '0.5px solid var(--border-strong)' : 'none',
+        }} />
+      ))}
+    </div>
+  )
+}
+
+// ── HERO ─────────────────────────────────────────────────────────────
+function Hero({ onNavigate }: { onNavigate: (r: string) => void }) {
+  const [query, setQuery] = useState('')
+  const [focused, setFocused] = useState(false)
+
+  const SUGGESTIONS = [
+    { type: 'company', primary: 'Pelagos Maritime Group', secondary: 'A.E. · Piraeus · ΓΕΜΗ 044238900100', icon: 'building' },
+    { type: 'person',  primary: 'Dimitrios Konstantinou', secondary: '4 companies · Managing Director, shareholder', icon: 'users' },
+    { type: 'filter',  primary: 'Restaurants in Athens with Instagram, no website', secondary: '612 companies', icon: 'filter' },
+    { type: 'filter',  primary: 'Software firms in Thessaloniki with verified email', secondary: '248 companies', icon: 'filter' },
+  ]
+  const filtered = query ? SUGGESTIONS.filter(s => s.primary.toLowerCase().includes(query.toLowerCase())) : SUGGESTIONS
+
+  return (
+    <section className="hero-band home-screen" style={{ position: 'relative', overflow: 'hidden' }}>
+      <HeroBackdrop />
+      <ParticlesBackdrop />
+
+      <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1, width: '100%' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.05fr 0.95fr', gap: 56, alignItems: 'center' }}>
+
+          {/* LEFT */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 22, flexWrap: 'wrap' }}>
+              <span className="badge badge-gemi" style={{ height: 22, padding: '0 9px' }}>
+                <Icon name="verified" size={11} stroke={1.6} />
+                Official ΓΕΜΗ data partner
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                <span style={{ width: 4, height: 4, borderRadius: 2, background: 'var(--text-muted)', display: 'inline-block' }} />
+                <span className="mono" style={{ color: 'var(--text-primary)' }}>14</span> records ingested in the last minute
+              </span>
             </div>
 
+            <h1 style={{ margin: 0, fontSize: 64, lineHeight: 1.02, letterSpacing: '-0.03em', fontWeight: 600, color: 'var(--text-primary)' }}>
+              Every Greek company.<br />
+              Everyone behind them.<br />
+              <span style={{ color: 'var(--accent)' }}>One connected map.</span>
+            </h1>
+
+            <p style={{ fontSize: 16.5, lineHeight: 1.55, color: 'var(--text-secondary)', marginTop: 22, maxWidth: 548 }}>
+              AGORA turns the official ΓΕΜΗ registry — 1.28M companies and 4.1M of their
+              directors, shareholders, and reps — into a searchable network. Follow the
+              people, find them on social, and push qualified leads straight to your stack.
+            </p>
+
+            <div style={{ marginTop: 26, position: 'relative', maxWidth: 560 }}>
+              <span style={{ position: 'absolute', left: 16, top: 18, color: 'var(--text-muted)' }}>
+                <Icon name="search" size={16} />
+              </span>
+              <input
+                className="focus-ring"
+                placeholder="Search a company, a person, or describe who you want…"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setTimeout(() => setFocused(false), 150)}
+                style={{
+                  width: '100%', height: 54, padding: '0 130px 0 44px', fontSize: 15,
+                  background: 'var(--surface)', border: '1px solid var(--hero-input-border)',
+                  borderRadius: 10, fontFamily: 'var(--font-sans)', color: 'var(--text-primary)',
+                  boxShadow: 'var(--hero-float-shadow)',
+                }}
+              />
+              <button
+                className="btn btn-primary"
+                style={{ position: 'absolute', right: 6, top: 8, height: 36, padding: '0 16px', fontSize: 13 }}
+                onClick={() => onNavigate('search')}
+              >
+                Search free <Icon name="arrow-up-right" size={12} />
+              </button>
+
+              {focused && filtered.length > 0 && (
+                <div className="card" style={{
+                  position: 'absolute', top: 58, left: 0, right: 0, padding: 6,
+                  zIndex: 20, boxShadow: '0 12px 32px rgba(26,35,50,0.08)', background: 'var(--surface)',
+                }}>
+                  <div style={{ padding: '6px 10px', fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Suggestions</div>
+                  {filtered.map((s, i) => (
+                    <div key={i} onClick={() => onNavigate('search')} style={{
+                      padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 10,
+                      borderRadius: 6, cursor: 'pointer',
+                    }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'var(--row-hover)' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
+                    >
+                      <span style={{
+                        width: 26, height: 26, borderRadius: 5, flexShrink: 0,
+                        background: s.type === 'company' ? 'var(--accent-light)' : 'var(--subtle-bg)',
+                        color: s.type === 'company' ? 'var(--li-text)' : 'var(--text-secondary)',
+                        border: s.type === 'company' ? '0.5px solid var(--li-border)' : '0.5px solid var(--border)',
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <Icon name={s.icon} size={12} />
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{s.primary}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{s.secondary}</div>
+                      </div>
+                      <span style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.type}</span>
+                      <Icon name="chevron-right" size={12} style={{ color: 'var(--text-muted)' }} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginTop: 16, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12.5, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 6, height: 6, borderRadius: 3, background: '#3EB57A', boxShadow: '0 0 0 3px rgba(62,181,122,0.18)', display: 'inline-block' }} />
+                25 free company exports a month — no card needed
+              </span>
+              <span style={{ width: 1, height: 12, background: 'var(--border)', display: 'inline-block' }} />
+              <button onClick={() => onNavigate('pricing')} style={{
+                background: 'none', border: 'none', padding: 0,
+                color: 'var(--accent)', fontSize: 12.5, fontWeight: 500,
+                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
+              }}>See pricing <Icon name="chevron-right" size={11} /></button>
+            </div>
+
+            <div style={{ marginTop: 30, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Search across</span>
+              {[
+                { l: '1.28M companies', icon: 'building' },
+                { l: '4.1M people',     icon: 'users' },
+                { l: 'Social profiles', icon: 'instagram' },
+                { l: 'Verified contacts', icon: 'mail' },
+              ].map((chip, i) => (
+                <span key={i} className="hero-chip">
+                  <Icon name={chip.icon} size={11} stroke={1.6} style={{ color: 'var(--accent)' }} />
+                  {chip.l}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* RIGHT — live exhibit */}
+          <div style={{ position: 'relative' }}>
+            <CropMarks />
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <LiveExhibit />
+            </div>
           </div>
         </div>
-      </section>
 
-      {/* ── REGISTRY STRIP ─────────────────────────────────── */}
-      <section style={{ padding: '0 28px 48px' }}>
-        <div className="hp-container">
-          <div className="card" style={{
-            padding: '18px 22px',
-            display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0,
+        {/* Stats strip at bottom of hero */}
+        <div style={{
+          marginTop: 44, paddingTop: 28, borderTop: '1px solid var(--border)',
+          display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0,
+        }}>
+          {[
+            { value: '1,284,940', label: 'Active legal entities',      note: '100% of ΓΕΜΗ',         icon: 'building',  tint: '#3B82C4' },
+            { value: '4,108,420', label: 'Directors & shareholders',    note: 'fully cross-linked',    icon: 'users',     tint: '#6F5FCB' },
+            { value: '326,400',   label: 'With social profiles',        note: 'IG · FB · X · TikTok', icon: 'instagram', tint: '#C13584' },
+            { value: '188,440',   label: 'Verified emails & phones',    note: 'SMTP + carrier checked',icon: 'verified',  tint: '#1F8A5B' },
+          ].map((s, i) => (
+            <div key={i} style={{ padding: '0 26px', borderLeft: i === 0 ? 'none' : '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                <span style={{
+                  width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+                  background: 'var(--accent-light)', color: s.tint,
+                  border: '0.5px solid var(--border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Icon name={s.icon} size={13} stroke={1.7} />
+                </span>
+                <span className="mono" style={{ fontSize: 24, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>{s.value}</span>
+              </div>
+              <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{s.label}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>{s.note}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── PRODUCT PREVIEW ──────────────────────────────────────────────────
+function ProductPreview({ onNavigate }: { onNavigate: (r: string) => void }) {
+  return (
+    <section className="home-screen" style={{ background: 'var(--surface)' }}>
+      <div className="screen-inner">
+        <SectionHeader
+          index="01"
+          eyebrow="Company search"
+          title="A research-grade table, not a list of bookmarks."
+          body="Filter all 1.28M ΓΕΜΗ entities by industry (ΚΑΔ), prefecture, legal form, company status, and whether they have a verified email, phone, website, or social presence. Every column sorts. Every row exports clean."
+        />
+
+        <div style={{
+          marginTop: 28, position: 'relative', borderRadius: 10,
+          border: '0.5px solid var(--border-strong)', background: 'var(--surface)',
+          overflow: 'hidden', boxShadow: '0 4px 24px rgba(26,35,50,0.04)',
+        }}>
+          {/* fake browser chrome */}
+          <div style={{
+            height: 32, background: 'var(--subtle-bg)', borderBottom: '0.5px solid var(--border)',
+            display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px',
           }}>
-            {[
-              { raw: total,                 dur: 1600, ft: 'million' as const, label: 'Εγγεγραμμένες εταιρείες', note: '100% ΓΕΜΗ' },
-              { raw: totalRoles || 750000,  dur: 1400, ft: 'locale'  as const, label: 'Εγγραφές ρόλων & στελεχών', note: 'Πλήρες ιστορικό' },
-              { raw: 653340,                dur: 1200, ft: 'locale'  as const, label: 'Επαληθευμένα emails',       note: 'SMTP verified' },
-              { raw: 667195,                dur: 1200, ft: 'locale'  as const, label: 'Αριθμοί τηλεφώνου',         note: 'Carrier verified' },
-            ].map((stat, i) => (
-              <div key={i} style={{ padding: '0 22px', borderLeft: i === 0 ? 'none' : '0.5px solid var(--border)' }}>
-                <div className="mono" style={{ fontSize: 22, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-                  <CountUp value={stat.raw} formatType={stat.ft} duration={stat.dur} />
+            <div style={{ display: 'flex', gap: 5 }}>
+              {['#D0CEC8','#D0CEC8','#D0CEC8'].map((c, i) => <span key={i} style={{ width: 9, height: 9, borderRadius: 5, background: c }} />)}
+            </div>
+            <div style={{
+              flex: 1, height: 18, background: 'var(--surface)', borderRadius: 4,
+              border: '0.5px solid var(--border)', display: 'inline-flex', alignItems: 'center',
+              padding: '0 8px', fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)',
+            }}>agora.gr/search?kad=6201&prefecture=attiki&has=instagram,email</div>
+          </div>
+
+          {/* filter pill row */}
+          <div style={{
+            padding: '12px 16px', background: 'var(--subtle-bg2)', borderBottom: '0.5px solid var(--border)',
+            display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+          }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Filters:</span>
+            <span className="pill"><span className="pill-label">Industry:</span> Software & IT (ΚΑΔ 62)</span>
+            <span className="pill"><span className="pill-label">Prefecture:</span> Attiki</span>
+            <span className="pill"><span className="pill-label">Has:</span> Instagram</span>
+            <span className="pill"><span className="pill-label">Has:</span> Verified email</span>
+            <div style={{ flex: 1 }} />
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              <span className="mono" style={{ color: 'var(--text-primary)', fontWeight: 500 }}>284</span> companies match
+            </span>
+          </div>
+
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th style={{ paddingLeft: 16 }}>Company</th>
+                <th>Sector</th>
+                <th style={{ textAlign: 'right' }}>Employees</th>
+                <th style={{ textAlign: 'right' }}>Revenue</th>
+                <th>Signals</th>
+                <th style={{ textAlign: 'right', paddingRight: 16 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {PREVIEW_COMPANIES.map(c => (
+                <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => onNavigate('search')}>
+                  <td style={{ paddingLeft: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <CompanyLogo company={c} />
+                      <div>
+                        <div style={{ fontWeight: 500, fontSize: 13 }}>{c.name}</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                          {c.legal} · {c.city} · Founded <span className="mono">{c.year}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td><SectorBadge label={c.sectorLabel} /></td>
+                  <td style={{ textAlign: 'right' }} className="mono">{fmtInt(c.employees)}</td>
+                  <td style={{ textAlign: 'right' }} className="mono">€{fmtRevenue(c.revenue)}M</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <GemiBadge />
+                      <RowSignals company={c} />
+                    </div>
+                  </td>
+                  <td style={{ textAlign: 'right', paddingRight: 16 }}>
+                    <Icon name="chevron-right" size={14} style={{ color: 'var(--text-muted)' }} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div style={{
+            height: 60,
+            background: 'linear-gradient(to bottom, transparent, var(--surface))',
+            marginTop: -60, position: 'relative', pointerEvents: 'none',
+          }} />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── PEOPLE SECTION ───────────────────────────────────────────────────
+function PeopleDemo({ onNavigate }: { onNavigate: (r: string) => void }) {
+  const companies = [
+    { name: 'Pelagos Maritime Group',      role: 'Managing Director',       own: '22.0%', status: 'active', dot: 'var(--gemi-text)'  },
+    { name: 'Nereus Logistics',            role: 'Shareholder',             own: '12.5%', status: 'active', dot: 'var(--gemi-text)'  },
+    { name: 'Aiolos Bulk Carriers A.E.',   role: 'Chairman of the Board',   own: null,    status: 'past',   dot: 'var(--warn-text)'  },
+    { name: 'Konstantinou Maritime EPE',   role: 'Sole Administrator',      own: null,    status: 'past',   dot: 'var(--danger)'     },
+  ]
+  return (
+    <div className="card" style={{ padding: 0, overflow: 'hidden', boxShadow: '0 12px 36px rgba(26,35,50,0.06)' }}>
+      <div style={{ padding: 18, display: 'flex', alignItems: 'center', gap: 14, borderBottom: '0.5px solid var(--border)', cursor: 'pointer' }} onClick={() => onNavigate('people')}>
+        <span style={{ width: 48, height: 48, borderRadius: 10, background: 'var(--accent-light)', color: 'var(--accent)', border: '0.5px solid var(--li-border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, fontWeight: 600 }}>DK</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 15, fontWeight: 600 }}>Dimitrios Konstantinou</span>
+            <span className="badge badge-neutral" style={{ fontWeight: 400 }}>Attiki</span>
+          </div>
+          <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 2 }}>Managing Director · Pelagos Maritime Group</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div className="mono" style={{ fontSize: 18, fontWeight: 500 }}>4</div>
+          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>companies</div>
+        </div>
+      </div>
+      <div>
+        {companies.map((c, i) => (
+          <div key={i} style={{ padding: '9px 18px', display: 'flex', alignItems: 'center', gap: 10, borderTop: i === 0 ? 'none' : '0.5px solid var(--row-divider)' }}>
+            <span style={{ width: 6, height: 6, borderRadius: 3, background: c.dot, flexShrink: 0 }} />
+            <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-primary)', flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{c.role}</span>
+            <span className="mono" style={{ fontSize: 11.5, color: c.own ? 'var(--text-primary)' : 'var(--text-muted)', width: 44, textAlign: 'right' }}>{c.own || '—'}</span>
+            <span className={`badge ${c.status === 'active' ? 'badge-active' : 'badge-neutral'}`} style={{ width: 52, justifyContent: 'center' }}>{c.status === 'active' ? 'Active' : 'Past'}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ padding: '12px 18px', background: 'var(--subtle-bg2)', borderTop: '0.5px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <span style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Inferred personal contact</span>
+          <span className="badge badge-amber"><Icon name="sparkle" size={10} stroke={1.6} />Potentially personal</span>
+        </div>
+        <div className="mono" style={{ fontSize: 12.5, color: 'var(--text-primary)' }}>d.konstantinou@gmail.com</div>
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 5, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 5, height: 5, borderRadius: 3, background: 'var(--gemi-text)', display: 'inline-block' }} />
+          Seen at <span className="mono" style={{ color: 'var(--text-primary)' }}>3</span> of <span className="mono">4</span> companies · high confidence
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PeopleSection({ onNavigate }: { onNavigate: (r: string) => void }) {
+  return (
+    <section className="home-screen" style={{ background: 'var(--page-bg)' }}>
+      <div className="screen-inner">
+        <div style={{ display: 'grid', gridTemplateColumns: '1.08fr 0.92fr', gap: 56, alignItems: 'center' }}>
+          <PeopleDemo onNavigate={onNavigate} />
+          <div>
+            <SectionHeader
+              index="02"
+              eyebrow="People · registry graph"
+              title="Follow the people behind the companies."
+              body="Search 4.1M directors, board members, and shareholders by name, ΑΦΜ, role, or company. Every person opens to a timeline of their roles across companies — plus a contact view that flags which email or phone looks personal."
+            />
+            <HomeBullets items={[
+              'Every officer and shareholder, past and present',
+              'A Gantt timeline of roles and ownership stakes',
+              'Reused personal contacts flagged across companies',
+              'Jump from any person straight to a company profile',
+            ]} />
+            <button className="btn btn-secondary" style={{ marginTop: 24 }} onClick={() => onNavigate('people')}>
+              <Icon name="users" size={13} stroke={1.6} /> Search people <Icon name="arrow-up-right" size={12} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── NETWORK SECTION ──────────────────────────────────────────────────
+function NetworkGraph({ onNavigate }: { onNavigate: (r: string) => void }) {
+  const nodes: Record<string, { x: number; y: number; label: string; type: string; primary?: boolean }> = {
+    you:    { x: 90,  y: 150, label: 'D. Konstantinou', type: 'person',  primary: true },
+    pelagos:{ x: 300, y: 64,  label: 'Pelagos Maritime', type: 'company' },
+    nereus: { x: 330, y: 150, label: 'Nereus Logistics',  type: 'company' },
+    aiolos: { x: 300, y: 236, label: 'Aiolos Bulk A.E.',  type: 'company' },
+    other:  { x: 520, y: 150, label: 'M. Vlachou',        type: 'person' },
+  }
+  const edges: [string, string, string][] = [
+    ['you','pelagos','Managing Dir.'],
+    ['you','nereus','Shareholder'],
+    ['you','aiolos','Chairman'],
+    ['other','pelagos','Board'],
+    ['other','aiolos','Board'],
+  ]
+  return (
+    <div style={{ background: 'var(--app-bg)' }}>
+      <svg viewBox="0 0 610 300" style={{ width: '100%', display: 'block' }}>
+        {edges.map(([a, b, lbl], i) => {
+          const A = nodes[a], B = nodes[b]
+          const shared = a === 'other'
+          return (
+            <g key={i}>
+              <line x1={A.x} y1={A.y} x2={B.x} y2={B.y}
+                stroke={shared ? 'var(--accent)' : 'var(--border-strong)'}
+                strokeWidth={shared ? 1.6 : 1}
+                strokeDasharray={shared ? '4 3' : undefined} />
+              <text x={(A.x + B.x) / 2} y={(A.y + B.y) / 2 - 4}
+                textAnchor="middle" fontSize="9.5"
+                fill="var(--text-muted)" style={{ fontFamily: 'var(--font-mono)' }}>{lbl}</text>
+            </g>
+          )
+        })}
+        {Object.entries(nodes).map(([k, n]) => {
+          const isPerson = n.type === 'person'
+          const r = n.primary ? 26 : 22
+          return (
+            <g key={k} style={{ cursor: 'pointer' }} onClick={() => onNavigate(isPerson ? 'people' : 'search')}>
+              <circle cx={n.x} cy={n.y} r={r}
+                fill={n.primary ? 'var(--accent)' : 'var(--surface)'}
+                stroke={isPerson ? 'var(--accent)' : 'var(--border-strong)'}
+                strokeWidth="1.2" />
+              <g transform={`translate(${n.x - 7}, ${n.y - 7})`}
+                style={{ color: n.primary ? '#fff' : isPerson ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                <Icon name={isPerson ? 'users' : 'building'} size={14} stroke={1.7} />
+              </g>
+              <text x={n.x} y={n.y + r + 13} textAnchor="middle" fontSize="11"
+                fontWeight={n.primary ? 600 : 500} fill="var(--text-primary)">{n.label}</text>
+            </g>
+          )
+        })}
+      </svg>
+    </div>
+  )
+}
+
+function NetworkSection({ onNavigate }: { onNavigate: (r: string) => void }) {
+  return (
+    <section className="home-screen" style={{ background: 'var(--surface)' }}>
+      <div className="screen-inner">
+        <div style={{ display: 'grid', gridTemplateColumns: '0.92fr 1.08fr', gap: 56, alignItems: 'center' }}>
+          <div>
+            <SectionHeader
+              index="03"
+              eyebrow="Connected data"
+              title="The connections are the product."
+              body="Every company links to its people. Every person links to their other companies. Follow those edges and patterns surface on their own — shared directors reveal corporate groups, one board seat becomes several warm introductions."
+            />
+            <HomeBullets items={[
+              'Company → its directors & shareholders',
+              'Person → every other company they touch',
+              'Shared directors reveal corporate groups',
+              'One board seat becomes several warm intros',
+            ]} />
+            <button className="btn btn-secondary" style={{ marginTop: 24 }} onClick={() => onNavigate('people')}>
+              <Icon name="network" size={13} stroke={1.6} /> Explore the graph <Icon name="arrow-up-right" size={12} />
+            </button>
+          </div>
+          <div className="card" style={{ padding: 0, overflow: 'hidden', boxShadow: '0 12px 36px rgba(26,35,50,0.06)' }}>
+            <div style={{ padding: '11px 16px', borderBottom: '0.5px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <Icon name="network" size={14} stroke={1.7} style={{ color: 'var(--accent)' }} />
+                Relationship map
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>1 person · 3 companies · 5 shared links</span>
+            </div>
+            <NetworkGraph onNavigate={onNavigate} />
+            <div style={{ padding: '11px 16px', background: 'var(--subtle-bg2)', borderTop: '0.5px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: 'var(--text-secondary)' }}>
+              <span className="badge badge-amber" style={{ height: 18 }}><Icon name="sparkle" size={10} stroke={1.6} />Insight</span>
+              Konstantinou and Vlachou share <span className="mono" style={{ color: 'var(--text-primary)' }}>2</span> boards — likely a corporate group.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── SCOUT SECTION ────────────────────────────────────────────────────
+function ScoutSection({ onNavigate }: { onNavigate: (r: string) => void }) {
+  return (
+    <section className="home-screen" style={{ background: 'var(--page-bg)' }}>
+      <div className="screen-inner">
+        <div style={{ display: 'grid', gridTemplateColumns: '0.92fr 1.08fr', gap: 56, alignItems: 'center' }}>
+          <div>
+            <SectionHeader
+              index="04"
+              eyebrow="Scout · AI search"
+              title="Ask in plain Greek or English. Scout sets the filters."
+              body={'No ΚΑΔ codes, no filter syntax. Describe who you want — “restaurants in Athens with Instagram but no website” — and Scout reads the industry, geography, legal form, and the data signals you need, then applies them to your search live.'}
+            />
+            <HomeBullets items={[
+              'Understands Greek and English, plain language',
+              'Maps your words to ΚΑΔ codes and prefectures',
+              'Reads data signals — social, website, email, phone',
+              'Applies filters live; refine by replying',
+            ]} />
+            <button className="btn btn-secondary" style={{ marginTop: 24 }} onClick={() => onNavigate('search')}>
+              <Icon name="sparkle" size={13} stroke={1.6} /> Try Scout <Icon name="arrow-up-right" size={12} />
+            </button>
+          </div>
+
+          {/* Scout demo card */}
+          <div className="card" style={{ padding: 0, overflow: 'hidden', boxShadow: '0 12px 36px rgba(26,35,50,0.06)' }}>
+            <div style={{ padding: '11px 14px', borderBottom: '0.5px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <ScoutGlyph size={28} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}>
+                  Scout <span className="badge badge-amber" style={{ height: 16, fontSize: 9.5 }}>AI</span>
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{stat.label}</div>
-                <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{stat.note}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Prospecting agent · sets your filters</div>
+              </div>
+            </div>
+            <div style={{ padding: '16px 14px', display: 'flex', flexDirection: 'column', gap: 14, background: 'var(--subtle-bg2)' }}>
+              <div style={{ alignSelf: 'flex-end', maxWidth: '82%' }}>
+                <div style={{ background: 'var(--accent)', color: '#fff', padding: '9px 12px', borderRadius: '10px 10px 2px 10px', fontSize: 13, lineHeight: 1.5 }}>
+                  Εστιατόρια στην Αθήνα με Instagram αλλά χωρίς website.
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 9 }}>
+                <ScoutGlyph size={24} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, lineHeight: 1.55, color: 'var(--text-primary)' }}>
+                    Got it — restaurants in Attiki, active on Instagram, no website on file. Filters applied.
+                  </div>
+                  <div style={{ border: '0.5px solid var(--li-border)', borderRadius: 8, overflow: 'hidden', marginTop: 8, background: 'var(--surface)' }}>
+                    <div style={{ padding: '9px 12px', background: 'var(--accent-light)', borderBottom: '0.5px solid var(--li-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--li-text)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Search recipe</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>≈ <span className="mono" style={{ color: 'var(--text-primary)', fontWeight: 500 }}>612</span> match</span>
+                    </div>
+                    <div style={{ padding: '12px 12px 6px' }}>
+                      <ScoutChips label="Industry"   items={['Food & Beverage (ΚΑΔ 56)']} />
+                      <ScoutChips label="Prefecture" items={['Attiki']} />
+                      <ScoutChips label="Has"        items={['Instagram']} />
+                      <ScoutChips label="Missing"    items={['Website']} />
+                    </div>
+                    <div style={{ padding: '2px 12px 12px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      {[
+                        ['Industry.',   '"Εστιατόρια" mapped to ΚΑΔ 56 — food service.'],
+                        ['Geography.', '"Αθήνα" resolved to the Attiki prefecture.'],
+                        ['Signals.',    'Has an Instagram profile; no website on record.'],
+                      ].map((r, i) => (
+                        <div key={i} style={{ display: 'flex', gap: 7, fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                          <Icon name="check" size={11} stroke={2} style={{ color: 'var(--gemi-text)', marginTop: 2, flexShrink: 0 }} />
+                          <span><span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{r[0]}</span> {r[1]}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: '10px 14px', background: 'var(--surface)', borderTop: '0.5px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: 'var(--text-secondary)' }}>
+              <span style={{ width: 7, height: 7, borderRadius: 4, background: '#3EB57A', boxShadow: '0 0 0 3px rgba(62,181,122,0.18)', display: 'inline-block' }} />
+              Filters applied to your search · refine by replying in chat
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── SOCIAL SECTION ───────────────────────────────────────────────────
+function SocialSection({ onNavigate }: { onNavigate: (r: string) => void }) {
+  const rows = [
+    { name: 'Aegean Bistro Holdings', city: 'Athens',       on: ['instagram', 'facebook', 'tiktok'],            web: false },
+    { name: 'Kyklades Hospitality',   city: 'Santorini',    on: ['instagram', 'facebook', 'youtube'],           web: true  },
+    { name: 'Helleniq Cloud Systems', city: 'Athens',       on: ['twitter-x', 'youtube'],                       web: true  },
+    { name: 'Mediterra Pharma',       city: 'Patras',       on: ['facebook'],                                   web: true  },
+  ]
+  return (
+    <section className="home-screen" style={{ background: 'var(--surface)' }}>
+      <div className="screen-inner">
+        <div style={{ display: 'grid', gridTemplateColumns: '1.08fr 0.92fr', gap: 56, alignItems: 'center' }}>
+          <div className="card" style={{ padding: 0, overflow: 'hidden', boxShadow: '0 12px 36px rgba(26,35,50,0.06)' }}>
+            <div style={{ padding: '11px 16px', borderBottom: '0.5px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 12, fontWeight: 600 }}>Social presence</span>
+              <span className="pill" style={{ height: 22 }}><span className="pill-label">Has:</span> Instagram</span>
+            </div>
+            {rows.map((r, i) => (
+              <div key={i} style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, borderTop: i === 0 ? 'none' : '0.5px solid var(--row-divider)' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>{r.city} · {r.web ? 'website on file' : 'no website'}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 5 }}>
+                  {SOCIAL_PLATFORMS.map(p => (
+                    <SocialChip key={p.key} icon={p.icon} color={p.color} size={26} active={r.on.includes(p.key)} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <SectionHeader
+              index="05"
+              eyebrow="Social enrichment"
+              title="Find businesses where they actually show up."
+              body="We scan company websites to attach their social profiles — Instagram, Facebook, X, TikTok, and YouTube. Filter for companies by where they're active online, then reach them on the channel they actually check."
+            />
+            <HomeBullets items={[
+              'Profiles matched from each company\'s own site',
+              'Filter by presence — e.g. has Instagram, no website',
+              'Spot consumer brands by their social footprint',
+              'Reach owners where email never lands',
+            ]} />
+            <button className="btn btn-secondary" style={{ marginTop: 24 }} onClick={() => onNavigate('search')}>
+              <Icon name="instagram" size={13} /> Filter by social <Icon name="arrow-up-right" size={12} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── EXPORT SECTION ───────────────────────────────────────────────────
+function ExportSection({ onNavigate }: { onNavigate: (r: string) => void }) {
+  const tools = [
+    { name: 'Instantly',  tint: '#2A6FDB' },
+    { name: 'Apollo',     tint: '#5B45A8' },
+    { name: 'HubSpot',    tint: '#E0662B' },
+    { name: 'Salesforce', tint: '#1F8AC9' },
+    { name: 'Pipedrive',  tint: '#1F8A5B' },
+    { name: 'Lemlist',    tint: '#C0392B' },
+  ]
+  return (
+    <section className="home-screen" style={{ background: 'var(--page-bg)' }}>
+      <div className="screen-inner">
+        <SectionHeader
+          index="06" center
+          eyebrow="Export & connections"
+          title="The sourcing layer for your outreach stack."
+          body="Find and qualify leads in AGORA, then export to CSV or push them straight into the tools your team already runs. AGORA finds the leads; your stack works them."
+        />
+
+        <div style={{ marginTop: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 28, flexWrap: 'wrap' }}>
+          <div className="card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <BrandMark size={26} />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.12em' }}>AGORA</div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Qualified leads</div>
+            </div>
+          </div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)' }}>
+            <span style={{ width: 44, height: 1, background: 'var(--border-strong)', display: 'inline-block' }} />
+            <Icon name="arrow-up-right" size={14} style={{ transform: 'rotate(45deg)' }} />
+            <span style={{ width: 44, height: 1, background: 'var(--border-strong)', display: 'inline-block' }} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+            {tools.map(t => (
+              <div key={t.name} className="card" style={{ padding: '11px 14px', display: 'flex', alignItems: 'center', gap: 9, minWidth: 134 }}>
+                <span style={{ width: 22, height: 22, borderRadius: 5, background: t.tint, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{t.name[0]}</span>
+                <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-primary)' }}>{t.name}</span>
               </div>
             ))}
           </div>
         </div>
-      </section>
 
-      {/* ── PRODUCT PREVIEW ────────────────────────────────── */}
-      <section style={{ padding: '16px 28px 80px' }}>
-        <div className="hp-container">
-          <div style={{ maxWidth: 680 }}>
-            <div style={{ fontSize: 11, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10, fontWeight: 500 }}>
-              Αναζήτηση εταιρειών
-            </div>
-            <h2 style={{ margin: 0, fontSize: 30, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
-              Ένας πίνακας ερευνητικής ποιότητας, όχι μια λίστα ονομάτων.
-            </h2>
-            <p style={{ margin: '12px 0 0', fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.55, maxWidth: 580 }}>
-              Φιλτράρετε ολόκληρο το μητρώο ανά τοποθεσία, κλάδο ΚΑΔ, νομική μορφή και κατάσταση. Κάθε εταιρεία ανοίγει σε πλήρες profile.
-            </p>
-          </div>
-
-          <div style={{
-            marginTop: 28, position: 'relative',
-            borderRadius: 10, border: '0.5px solid var(--border-strong)',
-            background: '#fff', overflow: 'hidden',
-            boxShadow: '0 4px 24px rgba(26,35,50,0.04)',
-          }}>
-            <div style={{
-              height: 32, background: '#F2F1ED',
-              borderBottom: '0.5px solid var(--border)',
-              display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px',
-            }}>
-              <div style={{ display: 'flex', gap: 5 }}>
-                {['#D0CEC8', '#D0CEC8', '#D0CEC8'].map((c, i) => (
-                  <span key={i} style={{ width: 9, height: 9, borderRadius: 5, background: c }} />
-                ))}
-              </div>
-              <div style={{
-                flex: 1, height: 18, background: '#fff', borderRadius: 4,
-                border: '0.5px solid var(--border)',
-                display: 'inline-flex', alignItems: 'center', padding: '0 8px',
-                fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)',
-              }}>
-                greekleads.gr/search?sector=software&location=attiki&status=ενεργη
-              </div>
-            </div>
-
-            <div style={{
-              padding: '12px 16px', background: '#FAFAF7',
-              borderBottom: '0.5px solid var(--border)',
-              display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-            }}>
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Φίλτρα:</span>
-              <span className="pill"><span className="pill-label">Κλάδος:</span> Τεχνολογία & IT</span>
-              <span className="pill"><span className="pill-label">Τοποθεσία:</span> Αττική</span>
-              <span className="pill"><span className="pill-label">Κατάσταση:</span> Ενεργή</span>
-              <span className="pill"><span className="pill-label">Email:</span> Verified</span>
-              <div style={{ flex: 1 }} />
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                <span className="mono" style={{ color: 'var(--text-primary)', fontWeight: 500 }}>284</span> εταιρείες
-              </span>
-            </div>
-
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  {['Εταιρεία', 'Enrichment', ''].map((h, i) => (
-                    <th key={i} style={{
-                      textAlign: i === 2 ? 'right' : 'left',
-                      fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)',
-                      padding: i === 0 ? '8px 12px 8px 16px' : i === 2 ? '8px 16px 8px 12px' : '8px 12px',
-                      borderBottom: '0.5px solid var(--border)',
-                      background: '#FAFAF7', textTransform: 'uppercase', letterSpacing: '0.04em',
-                    }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {PREVIEW_ROWS.map((c, idx) => {
-                  const col = logoColor(c.name)
-                  return (
-                    <tr key={idx} style={{ borderTop: idx === 0 ? 'none' : '0.5px solid var(--row-divider)', cursor: 'default' }}>
-                      <td style={{ padding: '10px 12px 10px 16px', verticalAlign: 'middle' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <span style={{
-                            width: 28, height: 28, borderRadius: 6, flexShrink: 0,
-                            background: col.bg, color: col.fg, borderColor: col.border,
-                            border: '0.5px solid', display: 'inline-flex', alignItems: 'center',
-                            justifyContent: 'center', fontSize: 12, fontWeight: 600, letterSpacing: '0.02em',
-                          }}>
-                            {initials(c.name)}
-                          </span>
-                          <div>
-                            <div style={{ fontWeight: 500, fontSize: 13 }}>{c.name}</div>
-                            <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 1 }}>
-                              {c.legal} · {c.city} · <span className="mono">{c.year}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
-                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                          <span className="badge badge-gemi"><Icon name="verified" size={10} stroke={1.6} />ΓΕΜΗ</span>
-                          {c.email  && <span className="badge badge-neutral"><Icon name="mail"  size={10} stroke={1.6} /></span>}
-                          {c.phone  && <span className="badge badge-neutral"><Icon name="phone" size={10} stroke={1.6} /></span>}
-                          {c.web    && <span className="badge badge-neutral"><Icon name="globe" size={10} stroke={1.6} /></span>}
-                        </div>
-                      </td>
-                      <td style={{ padding: '10px 16px 10px 12px', textAlign: 'right', verticalAlign: 'middle' }}>
-                        <Icon name="chevron-right" size={14} style={{ color: 'var(--text-muted)' }} />
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-
-            <div style={{
-              height: 60, background: 'linear-gradient(to bottom, rgba(255,255,255,0), #fff)',
-              marginTop: -60, position: 'relative', pointerEvents: 'none',
-            }} />
-          </div>
-
-          <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
-            <Link href="/search" className="btn btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              Ανοίξτε την αναζήτηση <Icon name="arrow-up-right" size={12} />
-            </Link>
-          </div>
+        <div style={{ marginTop: 22, textAlign: 'center', display: 'flex', gap: 16, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+            <Icon name="download" size={13} stroke={1.6} /> CSV / XLSX export on every plan
+          </span>
+          <span style={{ width: 3, height: 3, borderRadius: 2, background: 'var(--border-strong)', display: 'inline-block' }} />
+          <button onClick={() => onNavigate('lists')} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent)', fontSize: 12.5, fontWeight: 500, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            See lists & exports <Icon name="chevron-right" size={11} />
+          </button>
         </div>
-      </section>
+      </div>
+    </section>
+  )
+}
 
-      {/* ── PEOPLE & NETWORKS ──────────────────────────────── */}
-      <section style={{ padding: '80px 28px', background: 'var(--app-bg)', borderTop: '0.5px solid var(--border)', borderBottom: '0.5px solid var(--border)' }}>
-        <div className="hp-container">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 64, alignItems: 'center' }}>
-
-            {/* LEFT — text */}
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10, fontWeight: 500 }}>
-                Δίκτυο ανθρώπων
-              </div>
-              <h2 style={{ margin: 0, fontSize: 30, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
-                Βρείτε το σωστό πρόσωπο,<br />όχι μόνο την εταιρεία.
-              </h2>
-              <p style={{ margin: '16px 0 0', fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                Κάθε CEO, Διαχειριστής και εταίρος έχει το δικό του profile — με πλήρες χρονολόγιο ρόλων από κάθε εταιρεία στην οποία εμφανίστηκε, ποσοστά συμμετοχής και contact intelligence.
-              </p>
-              <ul style={{ listStyle: 'none', padding: 0, margin: '24px 0 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {[
-                  { icon: 'trend-up' as const, text: 'Χρονολόγιο ρόλων — ποιος ήταν πού και πότε' },
-                  { icon: 'users'    as const, text: 'Μετοχικό ποσοστό ανά εταιρεία & ρόλο' },
-                  { icon: 'mail'     as const, text: 'Contact intelligence από κοινά emails & τηλέφωνα' },
-                ].map((pt, i) => (
-                  <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, fontSize: 14 }}>
+// ── USE CASES ────────────────────────────────────────────────────────
+function UseCases() {
+  const cases = [
+    {
+      who: 'Sales & SDR teams',
+      title: 'Build territory plans without guesswork.',
+      body: 'Slice the Greek market by industry, prefecture, and size. Pull verified contacts, then export qualified accounts to your CRM.',
+      points: ['Industry + region account maps', 'Verified emails & phones', 'Export to HubSpot, Salesforce, Pipedrive'],
+      icon: 'users',
+    },
+    {
+      who: 'Agencies & outreach',
+      title: 'Reach owners where they actually are.',
+      body: 'Find businesses by their social footprint — great for local and consumer brands — and push lists straight into your sequencing tool.',
+      points: ['Filter by social presence', 'Owner & decision-maker contacts', 'Push to Instantly, Apollo, Lemlist'],
+      icon: 'share',
+    },
+    {
+      who: 'M&A & research',
+      title: 'Screen targets at registry depth.',
+      body: 'Filter by financials and shareholder structure, then follow the network — shared directors, common owners, corporate groups.',
+      points: ['3-year financial history', 'Shareholder & officer graph', 'Map corporate groups'],
+      icon: 'network',
+    },
+  ]
+  return (
+    <section className="home-screen" style={{ background: 'var(--surface)' }}>
+      <div className="screen-inner">
+        <SectionHeader index="07" center eyebrow="Who it's for" title="One platform. Three jobs to be done." />
+        <div style={{ marginTop: 32, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+          {cases.map((c, i) => (
+            <div key={i} className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>For {c.who}</span>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em', lineHeight: 1.3 }}>{c.title}</h3>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55 }}>{c.body}</p>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {c.points.map(pt => (
+                  <li key={pt} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13 }}>
                     <span style={{
-                      width: 28, height: 28, borderRadius: 7, flexShrink: 0,
-                      background: '#EEF4FF', color: '#1A4A8A', border: '0.5px solid #C0D0E8',
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 14, height: 14, borderRadius: 7,
+                      background: 'var(--gemi-bg)', color: 'var(--gemi-text)', border: '0.5px solid var(--gemi-border)',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1,
                     }}>
-                      <Icon name={pt.icon} size={13} stroke={1.6} />
+                      <Icon name="check" size={9} stroke={2.4} />
                     </span>
-                    <span style={{ paddingTop: 5, color: 'var(--text-primary)' }}>{pt.text}</span>
+                    <span>{pt}</span>
                   </li>
                 ))}
               </ul>
-              <div style={{ marginTop: 28 }}>
-                <Link href="/people" className="btn btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  Αναζητήστε στελέχη <Icon name="arrow-up-right" size={13} />
-                </Link>
-              </div>
             </div>
-
-            {/* RIGHT — person profile mockup */}
-            <div style={{
-              borderRadius: 12, border: '0.5px solid var(--border-strong)',
-              background: '#fff', overflow: 'hidden',
-              boxShadow: '0 4px 28px rgba(26,35,50,0.07)',
-            }}>
-              {/* Header */}
-              <div style={{ padding: '18px 20px 16px', borderBottom: '0.5px solid var(--border)', background: 'var(--app-bg)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{
-                    width: 52, height: 52, borderRadius: 8, flexShrink: 0,
-                    background: '#EEF4FF', color: '#1A4A8A', border: '0.5px solid #C0D0E8',
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 18, fontWeight: 600, letterSpacing: '0.04em',
-                  }}>ΓΚ</div>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>ΓΕΩΡΓΙΟΣ ΚΩΝΣΤΑΝΤΙΝΙΔΗΣ</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                      <span className="badge badge-gemi" style={{ fontSize: 10 }}>ΓΕΜΗ ✓</span>
-                      <span style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>Αθήνα · Ενεργός από 2009</span>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 14 }}>
-                  {[
-                    { label: 'Εταιρείες', val: '4' },
-                    { label: 'Ενεργοί ρόλοι', val: '2' },
-                    { label: 'Μεγ. μετοχή', val: '50%' },
-                  ].map((s, i) => (
-                    <div key={i} style={{ textAlign: 'center', padding: '8px', background: '#fff', borderRadius: 6, border: '0.5px solid var(--border)' }}>
-                      <div style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-primary)' }}>{s.val}</div>
-                      <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>{s.label}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Gantt timeline */}
-              <div style={{ padding: '14px 20px 0' }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
-                  Χρονολόγιο ρόλων
-                </div>
-                {[
-                  { label: 'ΑΛΦΑ ΤΕΧΝΟΛΟΓΙΕΣ ΑΕ', left: 0,  width: 100, active: true,  color: '#2563A8', role: 'CEO'          },
-                  { label: 'ΒΗΤΑ ΣΥΣΤΗΜΑΤΑ ΕΠΕ',   left: 15, width: 45,  active: false, color: '#CFD6DE', role: 'Εταίρος 50%'  },
-                  { label: 'ΓΑΜΑ SOLUTIONS ΙΚΕ',   left: 55, width: 45,  active: true,  color: '#8A5A00', role: 'Εταίρος 25%'  },
-                ].map((bar, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: 8 }}>
-                    <div style={{
-                      width: 148, fontSize: 11, color: 'var(--text-secondary)',
-                      flexShrink: 0, paddingRight: 10,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {bar.label}
-                    </div>
-                    <div style={{ flex: 1, height: 20, background: '#F2F1ED', borderRadius: 4, position: 'relative', overflow: 'visible' }}>
-                      <div style={{
-                        position: 'absolute',
-                        left: `${bar.left}%`, width: `${bar.width}%`,
-                        top: 0, bottom: 0, background: bar.color,
-                        borderRadius: 4, display: 'flex', alignItems: 'center', paddingLeft: 7,
-                        overflow: 'hidden',
-                      }}>
-                        <span style={{ fontSize: 10.5, color: bar.active ? '#fff' : '#6B7280', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                          {bar.role}
-                        </span>
-                        {bar.active && (
-                          <span style={{ marginLeft: 'auto', marginRight: 5, fontSize: 9.5, color: 'rgba(255,255,255,0.85)', whiteSpace: 'nowrap' }}>→ now</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                <div style={{ display: 'flex', marginLeft: 148, paddingBottom: 12, marginTop: 4 }}>
-                  {['2009', '2013', '2017', '2021', '2025'].map((y, i) => (
-                    <div key={y} style={{ flex: 1, textAlign: i === 0 ? 'left' : 'center', fontSize: 9.5, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                      {y}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Contact strip */}
-              <div style={{ padding: '10px 20px', background: '#FAFAF7', borderTop: '0.5px solid var(--border)', display: 'flex', gap: 16, alignItems: 'center' }}>
-                <span style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <Icon name="mail" size={11} stroke={1.6} style={{ color: 'var(--text-muted)' }} />
-                  g.konstan…@company.gr
-                </span>
-                <span style={{ width: 1, height: 12, background: 'var(--border)', display: 'inline-block' }} />
-                <span style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <Icon name="phone" size={11} stroke={1.6} style={{ color: 'var(--text-muted)' }} />
-                  +30 210 123 ••••
-                </span>
-              </div>
-            </div>
-
-          </div>
+          ))}
         </div>
-      </section>
+      </div>
+    </section>
+  )
+}
 
-      {/* ── SCOUT AI ─────────────────────────────────────────── */}
-      <section style={{ padding: '80px 28px', background: 'var(--nav-bg)' }}>
-        <div className="hp-container">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 64, alignItems: 'center' }}>
-
-            {/* LEFT — chat mockup */}
-            <div style={{
-              borderRadius: 12, border: '0.5px solid rgba(255,255,255,0.1)',
-              background: 'rgba(255,255,255,0.04)', overflow: 'hidden',
-            }}>
-              <div style={{
-                padding: '12px 16px', borderBottom: '0.5px solid rgba(255,255,255,0.08)',
-                display: 'flex', alignItems: 'center', gap: 8,
-              }}>
-                <div style={{
-                  width: 26, height: 26, borderRadius: 6, background: 'var(--accent)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <Icon name="search" size={12} stroke={1.8} style={{ color: '#fff' }} />
-                </div>
-                <span style={{ fontSize: 13, fontWeight: 500, color: 'rgba(232,237,245,0.9)' }}>Scout AI</span>
-                <span style={{ marginLeft: 'auto', fontSize: 10, padding: '2px 7px', borderRadius: 4, background: 'var(--accent)', color: '#fff', letterSpacing: '0.04em', fontWeight: 500 }}>Beta</span>
-              </div>
-
-              <div style={{ padding: '16px 16px 0' }}>
-                {/* User message */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
-                  <div style={{
-                    maxWidth: '85%', background: 'var(--accent)',
-                    borderRadius: '10px 10px 2px 10px', padding: '9px 13px',
-                  }}>
-                    <div style={{ fontSize: 12.5, color: '#fff', lineHeight: 1.45 }}>
-                      βρες τεχνολογικές startup στη Θεσσαλονίκη με επαληθευμένο email
-                    </div>
-                  </div>
-                </div>
-
-                {/* Scout response */}
-                <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-                  <div style={{
-                    width: 26, height: 26, borderRadius: 6, background: 'rgba(255,255,255,0.1)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2,
-                  }}>
-                    <Icon name="search" size={11} stroke={1.8} style={{ color: 'rgba(232,237,245,0.7)' }} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 11.5, color: 'rgba(232,237,245,0.55)', marginBottom: 8 }}>
-                      Εντοπίστηκαν φίλτρα — εφαρμόζω:
-                    </div>
-                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10 }}>
-                      {['ΚΑΔ: 62 (Τεχνολογία)', 'Νομός: Θεσσαλονίκης', 'Email: Verified'].map(t => (
-                        <span key={t} style={{
-                          fontSize: 11, padding: '3px 8px', borderRadius: 4,
-                          background: 'rgba(255,255,255,0.07)', color: 'rgba(232,237,245,0.8)',
-                          border: '0.5px solid rgba(255,255,255,0.12)',
-                        }}>{t}</span>
-                      ))}
-                    </div>
-                    <div style={{ fontSize: 13, color: 'rgba(232,237,245,0.9)' }}>
-                      Βρέθηκαν <span style={{ color: '#fff', fontWeight: 600 }}>127</span> εταιρείες.
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ padding: '12px 16px 16px' }}>
-                <div style={{
-                  background: 'rgba(255,255,255,0.05)', border: '0.5px solid rgba(255,255,255,0.1)',
-                  borderRadius: 8, height: 36, display: 'flex', alignItems: 'center', padding: '0 12px',
-                }}>
-                  <span style={{ fontSize: 12, color: 'rgba(232,237,245,0.25)' }}>Ρωτήστε τον Scout…</span>
-                </div>
-              </div>
-            </div>
-
-            {/* RIGHT — text */}
-            <div>
-              <div style={{ fontSize: 11, color: 'rgba(232,237,245,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10, fontWeight: 500 }}>
-                AI-Powered Search
-              </div>
-              <h2 style={{ margin: 0, fontSize: 30, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.2, color: 'var(--nav-text-active)' }}>
-                Πληκτρολογήστε.<br />Βρίσκει μόνος.
-              </h2>
-              <p style={{ margin: '16px 0 0', fontSize: 14, color: 'var(--nav-text-muted)', lineHeight: 1.6 }}>
-                Ο Scout AI κατανοεί ελληνικές ερωτήσεις, εξάγει κλάδο, γεωγραφία και κριτήρια εμπλουτισμού — και εφαρμόζει αυτόματα τα σωστά φίλτρα.
-              </p>
-              <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {[
-                  '"εστιατόρια με Facebook αλλά χωρίς website"',
-                  '"logistics ΑΕ στη Θεσσαλονίκη ιδρύθηκαν μετά το 2015"',
-                  '"tech ΙΚΕ στην Αττική με email"',
-                ].map((q, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{
-                      width: 18, height: 18, borderRadius: 4, flexShrink: 0,
-                      background: 'rgba(255,255,255,0.07)', border: '0.5px solid rgba(255,255,255,0.12)',
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 9, color: 'rgba(232,237,245,0.4)', fontFamily: 'var(--font-mono)',
-                    }}>{i + 1}</span>
-                    <span style={{ fontSize: 12.5, color: 'rgba(232,237,245,0.55)', fontStyle: 'italic', lineHeight: 1.4 }}>{q}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ marginTop: 28 }}>
-                <Link href="/search" style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  background: '#fff', color: 'var(--nav-bg)', fontWeight: 500,
-                  height: 38, padding: '0 18px', borderRadius: 6, fontSize: 13, textDecoration: 'none',
-                }}>
-                  Δοκιμάστε τον Scout <Icon name="arrow-up-right" size={13} />
-                </Link>
-              </div>
-            </div>
-
-          </div>
+// ── SECTORS TEASER ───────────────────────────────────────────────────
+function SectorsTeaser({ onNavigate }: { onNavigate: (r: string) => void }) {
+  const sectors = [
+    { label: 'Shipping & Logistics',        companies: 8420,  revenue: 28.4, growth: 4.2  },
+    { label: 'Tourism & Hospitality',       companies: 41280, revenue: 22.2, growth: 9.6  },
+    { label: 'Construction & Real Estate',  companies: 24120, revenue: 18.9, growth: 6.1  },
+    { label: 'Food & Beverage',             companies: 31840, revenue: 14.2, growth: 3.4  },
+    { label: 'Manufacturing',               companies: 14820, revenue: 12.8, growth: 2.1  },
+    { label: 'Retail & Consumer',           companies: 62140, revenue: 11.4, growth: 1.8  },
+    { label: 'Energy & Utilities',          companies: 1820,  revenue: 9.8,  growth: 11.4 },
+    { label: 'Pharma & Health',             companies: 6240,  revenue: 6.1,  growth: 5.8  },
+    { label: 'Software & IT',              companies: 9418,  revenue: 3.8,  growth: 18.2 },
+    { label: 'Finance & Insurance',         companies: 3120,  revenue: 3.2,  growth: 4.4  },
+  ]
+  return (
+    <section className="home-screen" style={{ background: 'var(--page-bg)' }}>
+      <div className="screen-inner">
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
+          <SectionHeader index="08" eyebrow="Every sector of the Greek economy" title="Macro at a glance. Drill into any cell." compact />
+          <button className="btn btn-secondary" onClick={() => onNavigate('sectors')}>
+            Explore sectors <Icon name="arrow-up-right" size={12} />
+          </button>
         </div>
-      </section>
 
-      {/* ── DATA SOURCES ───────────────────────────────────── */}
-      <section style={{ padding: '80px 28px', background: 'var(--app-bg)', borderTop: '0.5px solid var(--border)', borderBottom: '0.5px solid var(--border)' }}>
-        <div className="hp-container">
-          <div style={{ maxWidth: 680, marginBottom: 32 }}>
-            <div style={{ fontSize: 11, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10, fontWeight: 500 }}>
-              Η πηγή των δεδομένων
-            </div>
-            <h2 style={{ margin: 0, fontSize: 30, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
-              Τέσσερις πηγές. Ένα ενοποιημένο αρχείο.
-            </h2>
-            <p style={{ margin: '12px 0 0', fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.55, maxWidth: 580 }}>
-              Κάθε εγγραφή βασίζεται σε επίσημα δεδομένα μητρώου, εμπλουτισμένα με επαληθευμένες επαφές και — σύντομα — social media presence.
-            </p>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
-            {[
-              {
-                tag: 'Πρωτεύουσα πηγή', tagClass: 'badge-gemi',
-                title: 'Μητρώο ΓΕΜΗ',
-                desc: 'Ημερήσια ενημέρωση από το Γενικό Εμπορικό Μητρώο — νομική πηγή αλήθειας για κάθε εταιρεία, στελέχη και εταίρους.',
-                stats: [{ k: 'Κάλυψη', v: '100%' }, { k: 'Latency', v: '< 24h' }, { k: 'Πεδία', v: '47' }],
-                icon: 'verified' as const, soon: false,
-              },
-              {
-                tag: 'Enrichment', tagClass: 'badge-neutral',
-                title: 'Email & Τηλέφωνο',
-                desc: 'Emails επαληθεύονται μέσω SMTP handshake, τηλέφωνα μέσω carrier lookup. Bounced records αποκλείονται αυτόματα.',
-                stats: [{ k: 'Emails', v: '653.340' }, { k: 'Τηλέφωνα', v: '667.195' }, { k: 'Suppression', v: 'Active' }],
-                icon: 'mail' as const, soon: false,
-              },
-              {
-                tag: 'Enrichment', tagClass: 'badge-neutral',
-                title: 'Web Presence',
-                desc: 'Websites κάθε εταιρείας — επαληθευμένα με HTTP check. Φιλτράρετε μόνο εταιρείες με web παρουσία.',
-                stats: [{ k: 'Websites', v: '76.220' }, { k: 'Κάλυψη', v: '6%' }, { k: 'Refresh', v: 'Weekly' }],
-                icon: 'globe' as const, soon: false,
-              },
-              {
-                tag: 'Έρχεται σύντομα', tagClass: 'badge-neutral',
-                title: 'Social Media Enrichment',
-                desc: 'Instagram, Facebook, LinkedIn και Twitter/X για κάθε ελληνική εταιρεία. Ψηφιακό αποτύπωμα και social presence — σε production σύντομα.',
-                stats: [{ k: 'Instagram', v: '—' }, { k: 'Facebook', v: '—' }, { k: 'LinkedIn', v: '—' }],
-                icon: 'users' as const, soon: true,
-              },
-            ].map((s, i) => (
-              <div key={i} className="card" style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 14, opacity: s.soon ? 0.85 : 1, position: 'relative', overflow: 'hidden' }}>
-                {s.soon && (
-                  <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, background: 'repeating-linear-gradient(-45deg, transparent, transparent 6px, rgba(0,0,0,0.015) 6px, rgba(0,0,0,0.015) 12px)', pointerEvents: 'none' }} />
-                )}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span className={`badge ${s.tagClass}`} style={s.soon ? { background: '#F5F0E8', color: '#7A5C1E', borderColor: '#E0D0A8' } : {}}>
-                    {s.soon && '⚡ '}{s.tag}
-                  </span>
-                  {s.soon ? (
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {[
-                        { bg: 'radial-gradient(circle at 30% 107%, #fdf497 0%, #fd5949 45%, #d6249f 60%, #285AEB 90%)' },
-                        { bg: '#1877F2' },
-                        { bg: '#0A66C2' },
-                        { bg: '#000' },
-                      ].map((icon, j) => (
-                        <span key={j} style={{
-                          width: 22, height: 22, borderRadius: 5, background: icon.bg,
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          opacity: 0.5,
-                        }} />
-                      ))}
-                    </div>
-                  ) : (
-                    <span style={{
-                      width: 28, height: 28, borderRadius: 6,
-                      background: '#F2F1ED', color: 'var(--text-secondary)',
-                      border: '0.5px solid var(--border)',
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <Icon name={s.icon} size={14} stroke={1.6} />
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>{s.title}</div>
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55 }}>{s.desc}</div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderTop: '0.5px solid var(--row-divider)', paddingTop: 12 }}>
-                  {s.stats.map((st, j) => (
-                    <div key={j} style={{ borderLeft: j === 0 ? 'none' : '0.5px solid var(--row-divider)', paddingLeft: j === 0 ? 0 : 12 }}>
-                      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{st.k}</div>
-                      <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: s.soon ? 'var(--text-muted)' : 'var(--text-primary)', marginTop: 3 }}>{st.v}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── USE CASES ──────────────────────────────────────── */}
-      <section style={{ padding: '80px 28px' }}>
-        <div className="hp-container">
-          <div style={{ maxWidth: 680, marginBottom: 32 }}>
-            <div style={{ fontSize: 11, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10, fontWeight: 500 }}>
-              Για ποιους είναι
-            </div>
-            <h2 style={{ margin: 0, fontSize: 30, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
-              Μία πλατφόρμα. Τρεις δουλειές.
-            </h2>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-            {[
-              {
-                who: 'Sales teams',
-                title: 'Χτίστε prospect lists χωρίς εικασίες.',
-                body: 'Κόψτε την ελληνική αγορά ανά κλάδο, μέγεθος και γεωγραφία. Βρείτε τον υπεύθυνο αποφάσεων και εξάγετε στο CRM σας σε ένα κλικ.',
-                points: ['Λίστες ανά κλάδο & νομό', 'Profiles στελεχών & CEOs', 'CSV για HubSpot / Salesforce'],
-                icon: 'users' as const,
-              },
-              {
-                who: 'Ερευνητές & αναλυτές',
-                title: 'Sector benchmarks με μονοχρωματική βεβαιότητα.',
-                body: 'Παρακολουθήστε ανταγωνιστικά σύνολα, τάσεις ανάπτυξης και κλαδική ανάλυση σε οποιοδήποτε τμήμα της ελληνικής οικονομίας.',
-                points: ['Κλαδικά αθροίσματα', 'Custom watchlists', 'Bulk CSV export'],
-                icon: 'trend-up' as const,
-              },
-              {
-                who: 'Import / Export',
-                title: 'Βρείτε εμπορικούς εταίρους ανά κλάδο.',
-                body: 'Αναζητήστε προμηθευτές, διανομείς ή αγοραστές σε συγκεκριμένο νομό ή κλάδο ΚΑΔ με πλήρη στοιχεία επικοινωνίας.',
-                points: ['10K+ κλάδοι ΚΑΔ', '56 νομοί', 'Φίλτρα νομικής μορφής'],
-                icon: 'table' as const,
-              },
-            ].map((c, i) => (
-              <div key={i} className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Για {c.who}</span>
-                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em', lineHeight: 1.3 }}>{c.title}</h3>
-                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55 }}>{c.body}</p>
-                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {c.points.map(pt => (
-                    <li key={pt} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13 }}>
-                      <span style={{
-                        width: 14, height: 14, borderRadius: 7,
-                        background: 'var(--gemi-bg)', color: 'var(--gemi-text)', border: '0.5px solid var(--gemi-border)',
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        flexShrink: 0, marginTop: 1,
-                      }}>
-                        <Icon name="check" size={9} stroke={2.4} />
-                      </span>
-                      <span>{pt}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── SECTORS TEASER ─────────────────────────────────── */}
-      <section style={{ padding: '60px 28px', background: 'var(--app-bg)', borderTop: '0.5px solid var(--border)', borderBottom: '0.5px solid var(--border)' }}>
-        <div className="hp-container">
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
-            <div style={{ maxWidth: 560 }}>
-              <div style={{ fontSize: 11, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10, fontWeight: 500 }}>
-                Κάθε κλάδος της ελληνικής οικονομίας
-              </div>
-              <h2 style={{ margin: 0, fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
-                Macro μάτια. Drill σε κάθε κλάδο.
-              </h2>
-            </div>
-            <Link href="/search" className="btn btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              Εξερευνήστε κλάδους <Icon name="arrow-up-right" size={12} />
-            </Link>
-          </div>
-
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  {['Κλάδος', 'Εταιρείες'].map((h, i) => (
-                    <th key={i} style={{
-                      textAlign: i === 0 ? 'left' : 'right',
-                      fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)',
-                      padding: i === 0 ? '8px 12px 8px 18px' : '8px 18px 8px 12px',
-                      borderBottom: '0.5px solid var(--border)', background: '#FAFAF7',
-                      textTransform: 'uppercase', letterSpacing: '0.04em',
-                    }}>{h}</th>
-                  ))}
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th style={{ paddingLeft: 18 }}>Sector</th>
+                <th style={{ textAlign: 'right' }}>Companies</th>
+                <th style={{ textAlign: 'right' }}>Aggregate revenue</th>
+                <th style={{ textAlign: 'right', paddingRight: 18 }}>YoY growth</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sectors.map(s => (
+                <tr key={s.label} style={{ cursor: 'pointer' }} onClick={() => onNavigate('sectors')}>
+                  <td style={{ paddingLeft: 18, fontWeight: 500 }}>{s.label}</td>
+                  <td style={{ textAlign: 'right' }} className="mono">{fmtInt(s.companies)}</td>
+                  <td style={{ textAlign: 'right' }} className="mono">€{s.revenue.toFixed(1)}B</td>
+                  <td style={{ textAlign: 'right', paddingRight: 18 }}>
+                    <span className="mono" style={{ color: s.growth >= 5 ? 'var(--gemi-text)' : 'var(--text-primary)', fontWeight: 500 }}>+{s.growth.toFixed(1)}%</span>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {SECTORS.map((s, i) => (
-                  <tr key={s.label} style={{ borderTop: i === 0 ? 'none' : '0.5px solid var(--row-divider)', cursor: 'pointer' }}>
-                    <td style={{ padding: '10px 12px 10px 18px', fontWeight: 500, fontSize: 13 }}>{s.label}</td>
-                    <td style={{ textAlign: 'right', padding: '10px 18px 10px 12px' }} className="mono">{fmtInt(s.companies)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </section>
+      </div>
+    </section>
+  )
+}
 
-      {/* ── PRICING TEASER ─────────────────────────────────── */}
-      <section style={{ padding: '80px 28px' }}>
-        <div className="hp-container">
-          <div style={{ maxWidth: 680, marginBottom: 28 }}>
-            <div style={{ fontSize: 11, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10, fontWeight: 500 }}>
-              Τιμολόγηση
-            </div>
-            <h2 style={{ margin: 0, fontSize: 30, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
-              Πληρώστε για credits, όχι για άδειες που δεν χρησιμοποιείτε.
-            </h2>
-            <p style={{ margin: '12px 0 0', fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.55, maxWidth: 580 }}>
-              Κάθε πλάνο περιλαμβάνει πλήρη πρόσβαση στο μητρώο. Τα πληρωμένα πλάνα προσθέτουν email, τηλέφωνο και μεγαλύτερο όγκο εξαγωγών.
-            </p>
+// ── FOUNDATION ───────────────────────────────────────────────────────
+function SourceCard({ tag, tagColor, title, desc, stats, icon }: {
+  tag: string; tagColor: 'gemi' | 'li' | 'neutral'; title: string; desc: string;
+  stats: { k: string; v: string }[]; icon: string
+}) {
+  return (
+    <div className="card" style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span className={`badge ${tagColor === 'gemi' ? 'badge-gemi' : tagColor === 'li' ? 'badge-li' : 'badge-neutral'}`}>{tag}</span>
+        <span style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--subtle-bg)', color: 'var(--text-secondary)', border: '0.5px solid var(--border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name={icon} size={14} stroke={1.6} />
+        </span>
+      </div>
+      <div>
+        <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>{title}</div>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55 }}>{desc}</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderTop: '0.5px solid var(--row-divider)', paddingTop: 12 }}>
+        {stats.map((s, i) => (
+          <div key={i} style={{ borderLeft: i === 0 ? 'none' : '0.5px solid var(--row-divider)', paddingLeft: i === 0 ? 0 : 12 }}>
+            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.k}</div>
+            <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginTop: 3 }}>{s.v}</div>
           </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-            {[
-              { name: 'Free',       price: '€0',    note: '/ μήνα',            blurb: '25 εξαγωγές το μήνα, για πάντα.', cta: 'Ξεκινήστε δωρεάν',       primary: false, highlight: false },
-              { name: 'Pro',        price: '€49',   note: '/ χρήστη / μήνα',   blurb: 'Επαληθευμένες επαφές + 1.000 credits / μήνα.', cta: 'Δοκιμή 14 ημερών', primary: true, highlight: true },
-              { name: 'Enterprise', price: 'Custom', note: '',                  blurb: 'Volume credits, SSO, REST API.',   cta: 'Επικοινωνήστε μαζί μας', primary: false, highlight: false },
-            ].map(p => (
-              <div key={p.name} className="card" style={{
-                padding: 22, display: 'flex', flexDirection: 'column', gap: 12,
-                borderColor: p.highlight ? 'var(--accent)' : 'var(--border)',
-                borderWidth: p.highlight ? '1px' : '0.5px', position: 'relative',
-              }}>
-                {p.highlight && (
-                  <span style={{
-                    position: 'absolute', top: -10, left: 18,
-                    background: 'var(--accent)', color: '#fff',
-                    fontSize: 10, fontWeight: 500, padding: '3px 9px',
-                    borderRadius: 4, letterSpacing: '0.06em', textTransform: 'uppercase',
-                  }}>Πιο δημοφιλές</span>
-                )}
-                <div style={{ fontSize: 14, fontWeight: 600 }}>{p.name}</div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                  <span className="mono" style={{ fontSize: 28, fontWeight: 500 }}>{p.price}</span>
-                  {p.note && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.note}</span>}
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, minHeight: 36 }}>{p.blurb}</div>
-                <Link href="/search" className={`btn ${p.primary ? 'btn-primary' : 'btn-secondary'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
-                  {p.cta}
-                </Link>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ marginTop: 16, textAlign: 'center' }}>
-            <Link href="/pricing" style={{ color: 'var(--accent)', fontSize: 13, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              Δείτε πλήρη σύγκριση λειτουργιών →
-            </Link>
-          </div>
+function Foundation() {
+  return (
+    <section className="home-screen hero-band">
+      <div className="screen-inner">
+        <SectionHeader
+          index="09"
+          eyebrow="Built on ΓΕΜΗ"
+          title="Anchored in the official registry. Not scraped guesswork."
+          body="Everything starts with the General Electronic Commercial Registry — the legal source of truth for every Greek company. On top of that spine we layer social profiles and verified contacts, so each record traces back to an official filing."
+        />
+        <div style={{ marginTop: 32, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+          <SourceCard
+            tag="Source of truth" tagColor="gemi" title="ΓΕΜΗ registry" icon="verified"
+            desc="Daily sync with the General Electronic Commercial Registry: legal status, incorporation date, registered capital and history, official address, ΚΑΔ activities, and every named director and shareholder."
+            stats={[{ k: 'Coverage', v: '100%' }, { k: 'Latency', v: '< 24h' }, { k: 'Fields', v: '47' }]}
+          />
+          <SourceCard
+            tag="Enrichment" tagColor="li" title="Social profiles" icon="instagram"
+            desc="We scan each company's own website to attach its public social accounts — Instagram, Facebook, X, TikTok, and YouTube — so you can find and reach businesses where they're actually active."
+            stats={[{ k: 'Companies', v: '326k' }, { k: 'Platforms', v: '5' }, { k: 'Refresh', v: 'Weekly' }]}
+          />
+          <SourceCard
+            tag="Enrichment" tagColor="neutral" title="Verified contact data" icon="mail"
+            desc="Work emails and phone numbers are verified through SMTP handshakes and carrier lookups before exposure. Reused personal contacts are flagged across companies; bounced records auto-suppress."
+            stats={[{ k: 'Email accuracy', v: '94.1%' }, { k: 'Phone accuracy', v: '88.6%' }, { k: 'Suppression', v: 'Active' }]}
+          />
         </div>
-      </section>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 24, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+            <Icon name="verified" size={13} stroke={1.6} style={{ color: 'var(--gemi-text)' }} />
+            Source · <span className="mono" style={{ color: 'var(--text-secondary)' }}>business.gov.gr/gemi</span>
+          </span>
+          <span style={{ width: 3, height: 3, borderRadius: 2, background: 'var(--border-strong)', display: 'inline-block' }} />
+          <span>EU data residency · Athens & Frankfurt</span>
+          <span style={{ width: 3, height: 3, borderRadius: 2, background: 'var(--border-strong)', display: 'inline-block' }} />
+          <span>GDPR-compliant · opt-out registry</span>
+        </div>
+      </div>
+    </section>
+  )
+}
 
-      {/* ── BOTTOM CTA ─────────────────────────────────────── */}
-      <section style={{ padding: '0 28px 80px' }}>
-        <div className="hp-container">
-          <div style={{
-            background: 'var(--nav-bg)', borderRadius: 12,
-            padding: '56px 48px', position: 'relative', overflow: 'hidden',
-          }}>
-            <div style={{ maxWidth: 560, position: 'relative', zIndex: 2 }}>
-              <span style={{ fontSize: 11, color: 'rgba(232,237,245,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                Ξεκινήστε δωρεάν
-              </span>
-              <h2 style={{
-                margin: '10px 0 14px', fontSize: 32, fontWeight: 600,
-                color: 'var(--nav-text-active)', letterSpacing: '-0.02em', lineHeight: 1.15,
-              }}>
-                Τα επόμενα 25 leads σας είναι μια αναζήτηση μακριά.
-              </h2>
-              <p style={{ margin: 0, fontSize: 14, color: 'var(--nav-text-muted)', lineHeight: 1.55 }}>
-                Δημιουργήστε λογαριασμό, αναζητήστε χωρίς περιορισμό και εξάγετε τις πρώτες 25 εταιρείες κάθε μήνα — δωρεάν.
-              </p>
-              <div style={{ display: 'flex', gap: 8, marginTop: 22 }}>
-                <Link href="/search" style={{
-                  background: '#fff', color: 'var(--nav-bg)', fontWeight: 500,
-                  height: 38, padding: '0 18px',
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  borderRadius: 6, fontSize: 13, textDecoration: 'none',
-                }}>
-                  Δωρεάν λογαριασμός <Icon name="arrow-up-right" size={13} />
-                </Link>
-                <Link href="/pricing" style={{
-                  background: 'transparent', color: 'var(--nav-text-active)',
-                  border: '0.5px solid rgba(232,237,245,0.24)',
-                  height: 38, padding: '0 18px',
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  borderRadius: 6, fontSize: 13, textDecoration: 'none',
-                }}>
-                  Δείτε τιμολόγηση
-                </Link>
-              </div>
-            </div>
-
-            <div style={{
-              position: 'absolute', right: -40, top: -40, bottom: -40,
-              width: 380, opacity: 0.18, pointerEvents: 'none',
+// ── PRICING TEASER ───────────────────────────────────────────────────
+function PricingTeaser({ onNavigate }: { onNavigate: (r: string) => void }) {
+  const plans = [
+    { name: 'Free',       price: '€0',     blurb: 'Explore the registry. 25 exports a month, forever.',          cta: 'Start free',         ctaStyle: 'secondary', highlight: false },
+    { name: 'Business',   price: '€149',   blurb: 'Verified contacts, social, financials + 2,500 credits.',      cta: 'Start 14-day trial', ctaStyle: 'primary',   highlight: true  },
+    { name: 'Enterprise', price: 'Custom', blurb: 'Volume credits, SSO, REST API, dedicated success.',            cta: 'Talk to sales',      ctaStyle: 'secondary', highlight: false },
+  ]
+  return (
+    <section className="home-screen" style={{ background: 'var(--surface)' }}>
+      <div className="screen-inner">
+        <SectionHeader
+          index="10" center eyebrow="Pricing"
+          title="Pay for credits, not seats you don't fill."
+          body="Every plan includes the full registry. Paid tiers add enrichment depth and export volume."
+        />
+        <div style={{ marginTop: 28, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+          {plans.map(p => (
+            <div key={p.name} className="card" style={{
+              padding: 22, display: 'flex', flexDirection: 'column', gap: 12,
+              borderColor: p.highlight ? 'var(--accent)' : 'var(--border)',
+              borderWidth: p.highlight ? '1px' : '0.5px', position: 'relative',
             }}>
-              <svg width="100%" height="100%" viewBox="0 0 380 380" fill="none">
-                {Array.from({ length: 12 }).map((_, i) =>
-                  Array.from({ length: 12 }).map((__, j) => (
-                    <rect
-                      key={`${i}-${j}`}
-                      x={i * 32 + 2} y={j * 32 + 2}
-                      width={28} height={28}
-                      stroke="#8FA3BC" strokeWidth="0.5"
-                      fill={(i + j) % 7 === 0 ? '#2563A8' : 'transparent'}
-                      fillOpacity={(i + j) % 7 === 0 ? 0.6 : 0}
-                    />
-                  ))
+              {p.highlight && (
+                <span style={{
+                  position: 'absolute', top: -10, left: 18,
+                  background: 'var(--accent)', color: '#fff',
+                  fontSize: 10, fontWeight: 500, padding: '3px 9px', borderRadius: 4,
+                  letterSpacing: '0.06em', textTransform: 'uppercase',
+                }}>Most popular</span>
+              )}
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{p.name}</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                <span className="mono" style={{ fontSize: 28, fontWeight: 500 }}>{p.price}</span>
+                {p.price.startsWith('€') && p.price !== '€0' && (
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/ user / month</span>
                 )}
-              </svg>
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, minHeight: 36 }}>{p.blurb}</div>
+              <button
+                className={p.ctaStyle === 'primary' ? 'btn btn-primary' : 'btn btn-secondary'}
+                onClick={() => onNavigate('pricing')}
+              >{p.cta}</button>
             </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 16, textAlign: 'center' }}>
+          <button className="btn btn-ghost" style={{ color: 'var(--accent)' }} onClick={() => onNavigate('pricing')}>
+            See full feature comparison →
+          </button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── BOTTOM CTA ───────────────────────────────────────────────────────
+function BottomCTA({ onNavigate }: { onNavigate: (r: string) => void }) {
+  return (
+    <section className="home-screen" style={{ background: 'var(--page-bg)' }}>
+      <div className="screen-inner" style={{ maxWidth: 1080, position: 'relative', background: 'var(--nav-bg)', borderRadius: 12, padding: '56px 48px', overflow: 'hidden' }}>
+        <div style={{ maxWidth: 560, position: 'relative', zIndex: 2 }}>
+          <span style={{ fontSize: 11, color: 'var(--nav-text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Start free</span>
+          <h2 style={{ margin: '10px 0 14px', fontSize: 32, fontWeight: 600, color: 'var(--nav-text-active)', letterSpacing: '-0.02em', lineHeight: 1.15 }}>
+            Your next 25 prospects are one search away.
+          </h2>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--nav-text-muted)', lineHeight: 1.55 }}>
+            Create an account, run an unlimited search, and export your first 25 companies — every month, on the house.
+          </p>
+          <div style={{ display: 'flex', gap: 8, marginTop: 22 }}>
+            <button className="btn" style={{ background: 'var(--cta-light)', color: 'var(--cta-light-text)', fontWeight: 500, height: 38, padding: '0 18px' }} onClick={() => onNavigate('search')}>
+              Create free account <Icon name="arrow-up-right" size={13} />
+            </button>
+            <button className="btn" style={{ background: 'transparent', color: 'var(--nav-text-active)', border: '0.5px solid rgba(232,237,245,0.24)', height: 38, padding: '0 18px' }} onClick={() => onNavigate('pricing')}>
+              See pricing
+            </button>
           </div>
         </div>
-      </section>
+        <div style={{ position: 'absolute', right: -40, top: -40, bottom: -40, width: 380, opacity: 0.18, pointerEvents: 'none' }}>
+          <svg width="100%" height="100%" viewBox="0 0 380 380" fill="none">
+            {Array.from({ length: 12 }).map((_, i) =>
+              Array.from({ length: 12 }).map((__, j) => (
+                <rect key={`${i}-${j}`} x={i * 32 + 2} y={j * 32 + 2} width={28} height={28}
+                  stroke="#8FA3BC" strokeWidth="0.5"
+                  fill={(i + j) % 7 === 0 ? '#2563A8' : 'transparent'}
+                  fillOpacity={(i + j) % 7 === 0 ? 0.6 : 0} />
+              ))
+            )}
+          </svg>
+        </div>
+      </div>
+    </section>
+  )
+}
 
-      <Footer />
+// ── FOOTER ───────────────────────────────────────────────────────────
+function FooterCol({ title, links, onNavigate }: { title: string; links: { l: string; href: string }[]; onNavigate: (r: string) => void }) {
+  return (
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>{title}</div>
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {links.map((l, i) => (
+          <li key={i}>
+            <Link href={l.href} style={{ color: 'var(--text-secondary)', fontSize: 12.5 }}>{l.l}</Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function HomeFooter({ onNavigate }: { onNavigate: (r: string) => void }) {
+  return (
+    <footer style={{ padding: '40px 28px 32px', background: 'var(--app-bg)', borderTop: '0.5px solid var(--border)', color: 'var(--text-secondary)', fontSize: 12.5 }}>
+      <div style={{ maxWidth: 1120, margin: '0 auto' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 1fr', gap: 24, paddingBottom: 28 }}>
+          <div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 12, color: 'var(--text-primary)' }}>
+              <BrandMark size={20} />
+              <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.14em' }}>AGORA</span>
+            </div>
+            <div style={{ lineHeight: 1.55, maxWidth: 280 }}>
+              Greek business intelligence for sales, advisory, and research teams.
+            </div>
+            <div style={{ marginTop: 14, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
+              Agora Data Systems IKE · ΓΕΜΗ 164920018000 · Athens
+            </div>
+          </div>
+
+          <FooterCol title="Product" onNavigate={onNavigate} links={[
+            { l: 'Company search', href: '/search' },
+            { l: 'People search',  href: '/people' },
+            { l: 'Lists & exports',href: '/search' },
+            { l: 'Sectors',        href: '/search' },
+            { l: 'Scout AI',       href: '/search' },
+          ]} />
+          <FooterCol title="Use cases" onNavigate={onNavigate} links={[
+            { l: 'Sales prospecting', href: '/' },
+            { l: 'Agency outreach',   href: '/' },
+            { l: 'M&A & research',    href: '/' },
+            { l: 'Market mapping',    href: '/search' },
+          ]} />
+          <FooterCol title="Company" onNavigate={onNavigate} links={[
+            { l: 'Pricing',  href: '/pricing' },
+            { l: 'About',    href: '/' },
+            { l: 'Press',    href: '/' },
+            { l: 'Careers',  href: '/' },
+            { l: 'Contact',  href: '/' },
+          ]} />
+          <FooterCol title="Legal" onNavigate={onNavigate} links={[
+            { l: 'Terms of service',    href: '/' },
+            { l: 'Privacy policy',      href: '/' },
+            { l: 'GDPR & data sources', href: '/' },
+            { l: 'Opt-out registry',    href: '/' },
+          ]} />
+        </div>
+
+        <div style={{
+          borderTop: '0.5px solid var(--border)', paddingTop: 18,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
+          fontSize: 11.5, color: 'var(--text-muted)',
+        }}>
+          <div>© 2026 Agora Data Systems IKE. All rights reserved.</div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 14 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 6, height: 6, borderRadius: 3, background: '#3EB57A', boxShadow: '0 0 0 3px rgba(62,181,122,0.18)', display: 'inline-block' }} />
+              All systems operational
+            </span>
+            <span>EN</span>
+            <span>·</span>
+            <span>ΕΛ</span>
+          </div>
+        </div>
+      </div>
+    </footer>
+  )
+}
+
+// ── HOME PAGE ────────────────────────────────────────────────────────
+export default function HomePage() {
+  const router = useRouter()
+
+  const navigate = (route: string) => {
+    const routes: Record<string, string> = {
+      search:  '/search',
+      people:  '/people',
+      sectors: '/search',
+      pricing: '/pricing',
+      lists:   '/search',
+      home:    '/',
+    }
+    router.push(routes[route] ?? '/')
+  }
+
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <Script
+        src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"
+        strategy="afterInteractive"
+      />
+      <TopNav totalCompanies={1284940} />
+      <div className="home-scroll">
+        <Hero onNavigate={navigate} />
+        <ProductPreview onNavigate={navigate} />
+        <PeopleSection onNavigate={navigate} />
+        <NetworkSection onNavigate={navigate} />
+        <ScoutSection onNavigate={navigate} />
+        <SocialSection onNavigate={navigate} />
+        <ExportSection onNavigate={navigate} />
+        <UseCases />
+        <SectorsTeaser onNavigate={navigate} />
+        <Foundation />
+        <PricingTeaser onNavigate={navigate} />
+        <BottomCTA onNavigate={navigate} />
+        <HomeFooter onNavigate={navigate} />
+      </div>
     </div>
   )
 }

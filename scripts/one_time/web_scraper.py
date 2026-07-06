@@ -18,6 +18,7 @@ import re
 import sys
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -29,8 +30,12 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 OUTPUT_JSON = Path(__file__).parent.parent / "web_scan_results.json"
-REQUEST_TIMEOUT = 15
-SLEEP_BETWEEN = 0.5  # seconds between requests — be polite
+CONNECT_TIMEOUT = 5    # seconds to establish connection
+READ_TIMEOUT    = 8    # seconds between data chunks
+HARD_TIMEOUT    = 18   # wall-clock limit per URL (kills SSL hangs)
+MAX_BYTES       = 512_000  # stop reading after 500 KB
+SLEEP_BETWEEN   = 0.3  # seconds between requests
+SAVE_EVERY      = 50   # write JSON every N new results
 
 
 # ---------------------------------------------------------------------------
@@ -43,7 +48,10 @@ def normalize_url(raw: str) -> str:
         return ""
     if not raw.startswith(("http://", "https://")):
         raw = "https://" + raw.lstrip("/")
-    parsed = urlparse(raw)
+    try:
+        parsed = urlparse(raw)
+    except ValueError:
+        return ""
     if not parsed.netloc:
         return ""
     return f"{parsed.scheme}://{parsed.netloc}"
@@ -149,11 +157,33 @@ def scan_site(session: requests.Session, raw_url: str) -> dict:
     if not base_url:
         return {"error": "invalid_url"}
 
-    try:
-        resp = session.get(base_url, timeout=REQUEST_TIMEOUT, allow_redirects=True)
+    def _fetch():
+        resp = session.get(
+            base_url,
+            timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
+            allow_redirects=True,
+            stream=True,
+        )
         if resp.status_code >= 400:
+            resp.close()
             return {"error": f"http_{resp.status_code}"}
-        return extract_all(resp.text, base_url)
+        chunks, total = [], 0
+        for chunk in resp.iter_content(chunk_size=8192):
+            chunks.append(chunk)
+            total += len(chunk)
+            if total >= MAX_BYTES:
+                break
+        resp.close()
+        html = b"".join(chunks).decode("utf-8", errors="ignore")
+        return extract_all(html, base_url)
+
+    try:
+        with ThreadPoolExecutor(max_workers=1) as ex:
+            future = ex.submit(_fetch)
+            try:
+                return future.result(timeout=HARD_TIMEOUT)
+            except FuturesTimeout:
+                return {"error": "hard_timeout"}
     except requests.exceptions.Timeout:
         return {"error": "timeout"}
     except requests.exceptions.TooManyRedirects:
@@ -215,6 +245,8 @@ def main():
             _draw_bar(idx, total)
             continue
 
+        sys.stdout.write(f"\r[scanning] {row['url'][:70]:<70}")
+        sys.stdout.flush()
         found = scan_site(session, row["url"])
 
         results[ar_gemi] = {
@@ -225,12 +257,16 @@ def main():
         }
         scanned += 1
 
-        # Save after every result
-        with OUTPUT_JSON.open("w", encoding="utf-8") as f:
-            json.dump(list(results.values()), f, ensure_ascii=False, indent=2)
+        if scanned % SAVE_EVERY == 0:
+            with OUTPUT_JSON.open("w", encoding="utf-8") as f:
+                json.dump(list(results.values()), f, ensure_ascii=False, indent=2)
 
         _draw_bar(idx, total, extra=f"  new={scanned}")
         time.sleep(SLEEP_BETWEEN)
+
+    # Final save
+    with OUTPUT_JSON.open("w", encoding="utf-8") as f:
+        json.dump(list(results.values()), f, ensure_ascii=False, indent=2)
 
     print(f"\n\nDone. {scanned:,} newly scanned. Results in: {OUTPUT_JSON}")
 

@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 interface CompanyChip {
@@ -50,13 +51,26 @@ const STATUS_OPTIONS = [
 ]
 
 export default function PeopleSearch({ areas }: { areas: string[] }) {
-  const [q, setQ] = useState('')
-  const [area, setArea] = useState('')
-  const [count, setCount] = useState('')
-  const [status, setStatus] = useState('')
+  const searchParams = useSearchParams()
+  const router       = useRouter()
+
+  const [q, setQ]         = useState(() => searchParams.get('q') ?? '')
+  const [area, setArea]   = useState(() => searchParams.get('area') ?? '')
+  const [count, setCount] = useState(() => searchParams.get('count') ?? '')
+  const [status, setStatus] = useState(() => searchParams.get('status') ?? '')
   const [results, setResults] = useState<PersonResult[] | null>(null)
   const [loading, setLoading] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Sync state → URL so back navigation restores the search
+  useEffect(() => {
+    const p = new URLSearchParams()
+    if (q.trim())  p.set('q', q.trim())
+    if (area)      p.set('area', area)
+    if (count)     p.set('count', count)
+    if (status)    p.set('status', status)
+    router.replace(`/people${p.toString() ? '?' + p.toString() : ''}`, { scroll: false })
+  }, [q, area, count, status, router])
 
   const search = useCallback(async (query: string, area: string, count: string, status: string) => {
     if (!query.trim() || query.trim().length < 2) {

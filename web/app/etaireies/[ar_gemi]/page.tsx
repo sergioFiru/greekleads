@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
-import { query, queryOne } from '@/lib/db'
+import { query, queryOne, queryWithTimeout } from '@/lib/db'
 import TopNav from '@/components/TopNav'
 import CompanyPage from '@/components/CompanyPage'
 import type { CompanyData, PersonRow, SimilarCompany } from '@/components/CompanyPage'
@@ -40,29 +40,35 @@ async function getSimilar(
   if (!kad) return []
   const prefix = kad.slice(0, 4) + '%'
 
-  if (prefecture) {
-    const rows = await query<SimilarCompany>(
+  try {
+    if (prefecture) {
+      const rows = await queryWithTimeout<SimilarCompany>(
+        `SELECT ar_gemi::text, co_name_el, legal_type_descr, city, prefecture_descr, primary_kad, email, phone, url
+         FROM companies
+         WHERE status_descr = 'Ενεργή'
+           AND primary_kad LIKE $1
+           AND prefecture_descr = $2
+           AND ar_gemi != $3::bigint
+         LIMIT 4`,
+        [prefix, prefecture, ar_gemi],
+        4000
+      )
+      if (rows.length >= 4) return rows
+    }
+
+    return await queryWithTimeout<SimilarCompany>(
       `SELECT ar_gemi::text, co_name_el, legal_type_descr, city, prefecture_descr, primary_kad, email, phone, url
        FROM companies
        WHERE status_descr = 'Ενεργή'
          AND primary_kad LIKE $1
-         AND prefecture_descr = $2
-         AND ar_gemi != $3::bigint
+         AND ar_gemi != $2::bigint
        LIMIT 4`,
-      [prefix, prefecture, ar_gemi]
+      [prefix, ar_gemi],
+      4000
     )
-    if (rows.length >= 4) return rows
+  } catch {
+    return []
   }
-
-  return query<SimilarCompany>(
-    `SELECT ar_gemi::text, co_name_el, legal_type_descr, city, prefecture_descr, primary_kad, email, phone, url
-     FROM companies
-     WHERE status_descr = 'Ενεργή'
-       AND primary_kad LIKE $1
-       AND ar_gemi != $2::bigint
-     LIMIT 4`,
-    [prefix, ar_gemi]
-  )
 }
 
 export async function generateMetadata({
