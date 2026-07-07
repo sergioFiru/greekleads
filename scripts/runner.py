@@ -27,11 +27,13 @@ import gemi as _gemi
 # Register bots here
 # ---------------------------------------------------------------------------
 from bots import new_firms_watcher
+from bots import website_scanner
 # from bots import linkedin_enricher   ← add future bots like this
 # from bots import contact_finder
 
 BOTS = [
     new_firms_watcher,
+    website_scanner,
     # linkedin_enricher,
     # contact_finder,
 ]

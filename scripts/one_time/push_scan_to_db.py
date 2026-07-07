@@ -108,8 +108,29 @@ def main():
         sys.stdout.write(f"\r[{bar}] {pct:5.1%}  {updated:,}/{len(rows):,}")
         sys.stdout.flush()
 
+    # Stamp website_scanned_at for ALL scanned companies (including errors and no-socials)
+    # so the live bot never rescans them.
+    all_ar_gemis = [int(e["ar_gemi"]) for e in data]
+    print(f"\nStamping website_scanned_at for {len(all_ar_gemis):,} scanned companies...")
+
+    for i in range(0, len(all_ar_gemis), BATCH_SIZE):
+        chunk = all_ar_gemis[i : i + BATCH_SIZE]
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE companies SET website_scanned_at = NOW() WHERE ar_gemi = ANY(%s) AND website_scanned_at IS NULL",
+                (chunk,)
+            )
+        conn.commit()
+
+        done = min(i + BATCH_SIZE, len(all_ar_gemis))
+        pct = done / len(all_ar_gemis)
+        filled = int(40 * pct)
+        bar = "█" * filled + "░" * (40 - filled)
+        sys.stdout.write(f"\r[{bar}] {pct:5.1%}  {done:,}/{len(all_ar_gemis):,}")
+        sys.stdout.flush()
+
     conn.close()
-    print(f"\n\nDone. {updated:,} companies updated.")
+    print(f"\n\nDone. {updated:,} companies updated with socials, {len(all_ar_gemis):,} stamped as scanned.")
 
 
 if __name__ == "__main__":

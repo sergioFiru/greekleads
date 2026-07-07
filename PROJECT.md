@@ -157,9 +157,9 @@ Sections: Hero (dotted grid backdrop + LiveExhibit with crop marks) → Registry
 - [x] DB indexes for fast filtered search
 - [x] `new_firms_watcher.py` — live bot adding new GEMI registrations every 10 min
 - [x] Next.js web app with AGORA design system
-- [x] Home page (full marketing page, 9 sections)
+- [x] Home page — complete AGORA rewrite (`page.tsx`, 13 sections, scroll-snap, dark mode, particles.js)
 - [x] Search page (full filter sidebar, results table, company panel, paywall)
-- [x] `/api/search` — filtered + paginated search
+- [x] `/api/search` — filtered + paginated search (word-order-insensitive name search)
 - [x] `/api/filters` — all filter options
 - [x] `/api/stream` — live GEMI stream data
 - [x] `/api/company/[ar_gemi]` — company detail
@@ -169,6 +169,12 @@ Sections: Hero (dotted grid backdrop + LiveExhibit with crop marks) → Registry
 - [x] Company detail panel (slide-in)
 - [x] Deployed to Vercel (web) + Railway (scripts)
 - [x] Custom domain greekleads.gr on Vercel
+- [x] Individual company pages `/etaireies/[ar_gemi]` — full detail page with persons table, similar companies
+- [x] People Search `/people` + `/people/[slug]` — search by name, profile page with Gantt timeline, ContactIntelligence
+- [x] Company network graph — `/api/company/[ar_gemi]/connections` + `CompanyNetworkGraph` (force-directed, persons + linked companies)
+- [x] Scout AI agent — slide-over chat on /search, Gemini Flash 2.5 picks filters from natural language
+- [x] `queryWithTimeout` in `web/lib/db.ts` — prevents Railway proxy from killing long queries
+- [x] Railway live watcher fix — `runner.py` now reconnects per-job (was crashing every 10min on idle connection)
 
 ## What's Next
 
@@ -177,6 +183,7 @@ Sections: Hero (dotted grid backdrop + LiveExhibit with crop marks) → Registry
 - [ ] Email provider (Resend / SendGrid) for auth emails
 - [ ] Sector mapping — group KAD codes into ~12 broader sectors for the ΚΛΑΔΟΣ column
 - [ ] Affiliate tracking link for influencer marketing
+- [ ] Sitemap.xml generation for SEO
 - [ ] LinkedIn enrichment bot (Phase 2)
 - [ ] Contact verification bot — SMTP email check, carrier phone lookup (Phase 2)
 
@@ -198,3 +205,12 @@ Sections: Hero (dotted grid backdrop + LiveExhibit with crop marks) → Registry
 - 2026-06-25: Fixed Next.js 15/16 async params API in route handler
 - 2026-06-25: Fixed LiveExhibit width stability (long names no longer resize widget)
 - 2026-06-25: Reordered sidebar filters: Data enrichment first (open), KAD open, Founded open, Δήμος open, Κατάσταση closed
+- 2026-06-28: Built individual company pages `/etaireies/[ar_gemi]` with full detail, persons table, similar companies
+- 2026-06-28: Built People Search `/people` + `/people/[slug]` — `company_persons` table, Gantt timeline, ContactIntelligence
+- 2026-06-28: Built Scout AI agent — slide-over panel on /search, Gemini Flash 2.5 via OpenRouter
+- 2026-07-01: Added `queryWithTimeout` to `web/lib/db.ts`; fixed company page 42s query (missing `idx_companies_primary_kad`)
+- 2026-07-01: Built company network graph — `/api/company/[ar_gemi]/connections` + ForceGraph component
+- 2026-07-01: Fixed Scout truncated JSON (max_tokens 2048→8192 for Gemini 2.5 Flash thinking tokens)
+- 2026-07-01: Fixed search word-order insensitivity (per-word ILIKE AND chain)
+- 2026-07-07: Complete home page rewrite — AGORA design, 13 sections, scroll-snap, dark mode, particles.js
+- 2026-07-07: Fixed Railway live watcher idle connection crash — runner.py now calls get_conn() per-job
