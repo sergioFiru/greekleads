@@ -175,6 +175,8 @@ Sections: Hero (dotted grid backdrop + LiveExhibit with crop marks) → Registry
 - [x] Scout AI agent — slide-over chat on /search, Gemini Flash 2.5 picks filters from natural language
 - [x] `queryWithTimeout` in `web/lib/db.ts` — prevents Railway proxy from killing long queries
 - [x] Railway live watcher fix — `runner.py` now reconnects per-job (was crashing every 10min on idle connection)
+- [x] `website_scanner` bot — scans new company websites for socials every 3 min, never rescans (`website_scanned_at` column)
+- [x] `scan_utils.py` — shared scan logic (extract_all, scan_site, PATTERNS) used by bot + bulk scraper
 
 ## What's Next
 
@@ -186,6 +188,43 @@ Sections: Hero (dotted grid backdrop + LiveExhibit with crop marks) → Registry
 - [ ] Sitemap.xml generation for SEO
 - [ ] LinkedIn enrichment bot (Phase 2)
 - [ ] Contact verification bot — SMTP email check, carrier phone lookup (Phase 2)
+
+---
+
+## Planned: Financial Statements (Phase 2)
+
+Collect all financial statement PDFs from GEMI, store on Cloudflare R2, parse into structured financial data (revenue, profit, assets, equity), surface in the web app.
+
+**API:** `GEMI_FINANCIAL_API_KEY` (second key, separate from polling key `GEMI_API_KEY`)
+**Endpoint:** `GET /companies/{ar_gemi}/documents` → filter `decisionSubjectID` in `[4, 8, 78, 79]`
+**Download:** `GET /downloadFile?key=assemblyDecision&elementId={kak}`
+
+**Architecture (two-phase):**
+1. **Download phase** — bulk script downloads all PDFs and stores to Cloudflare R2. Resumable via a `financial_docs` DB table tracking (ar_gemi, kak, r2_key, downloaded_at). Rate-limited to 8 req/min.
+2. **Parse phase** — separate script reads PDFs from R2, extracts numbers, writes to `financial_statements` DB table. Re-runnable without re-downloading.
+
+**Why two phases:** Parser is still being refined; separating download from parse means a parser fix = re-run locally, not re-download weeks of PDFs.
+
+**Storage:** Cloudflare R2 (~$7/TB/month, free egress, S3-compatible)
+
+**Parser approach (validated via test_financials.py / analyze_financials.py):**
+- `pdfplumber` extracts text from B.5/B.6 ELP format PDFs reliably
+- Automated filings ("Αυτοματοποιημένη Καταχώριση") parse cleanly; prefer over manual filings for same year
+- Known gaps to fix: net profit label varies by format, 2015-era filings may be scanned images
+
+**Fields to extract:** revenue (Κύκλος εργασιών), total assets (Σύνολο ενεργητικού), equity (Κεφάλαια και αποθεματικά), profit before tax, net profit, fiscal year
+
+**Steps before building:**
+- [ ] Set up Cloudflare R2 bucket + API token
+- [ ] Finalize parser (fix net profit pattern, handle manual filing format)
+- [ ] Create `financial_docs` and `financial_statements` DB tables
+- [ ] Build download bot + parse script
+
+---
+
+## Planned: vrisko.gr Scrape
+
+Scrape vrisko.gr for supplementary company data not available in GEMI (details TBD). Implementation approach to be defined by user.
 
 ---
 
@@ -214,3 +253,4 @@ Sections: Hero (dotted grid backdrop + LiveExhibit with crop marks) → Registry
 - 2026-07-01: Fixed search word-order insensitivity (per-word ILIKE AND chain)
 - 2026-07-07: Complete home page rewrite — AGORA design, 13 sections, scroll-snap, dark mode, particles.js
 - 2026-07-07: Fixed Railway live watcher idle connection crash — runner.py now calls get_conn() per-job
+- 2026-07-07: Built website_scanner bot — scans new firm URLs for socials (3 min interval, 20/batch, website_scanned_at tracks what's done)

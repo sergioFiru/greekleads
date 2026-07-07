@@ -110,7 +110,7 @@ def extract_all(html: str) -> dict:
                     "tiktok":    "tiktok.com",
                     "youtube":   "youtube.com",
                 }[platform]
-                prefix = "@" if platform in ("instagram", "twitter", "tiktok", "youtube") else ""
+                prefix = "@" if platform in ("tiktok", "youtube") else ""
                 found[platform] = f"https://www.{domain}/{prefix}{handle}"
 
     emails = set()

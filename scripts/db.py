@@ -49,7 +49,8 @@ def sync_persons(conn, records):
 
     rows = []
     for r in records:
-        for p in r.get("persons") or []:
+        persons = r.get("persons") or []
+        for p in persons:
             name = (p.get("personName") or "").strip()
             if not name or name.lower().startswith("nolastname"):
                 continue
@@ -65,6 +66,21 @@ def sync_persons(conn, records):
                 p.get("isRepresentativeAlone"),
                 p.get("isRepresentativeInCommon"),
             ))
+
+        # For sole proprietorships the company name IS the owner —
+        # GEMI never populates the persons JSONB for ΑΤΟΜΙΚΗ firms.
+        if not persons and (r.get("legal_type_descr") or "").upper().startswith("ΑΤΟΜΙΚΗ"):
+            name = (r.get("co_name_el") or "").strip()
+            if name:
+                rows.append((
+                    r["ar_gemi"],
+                    name,
+                    "ΙΔΙΟΚΤΗΤΗΣ",
+                    "ΦΥΣΙΚΟ ΠΡΟΣΩΠΟ",
+                    r.get("incorporation_date") or None,
+                    None,   # dt_to — active
+                    None, None, None, None,
+                ))
 
     with conn.cursor() as cur:
         cur.execute(
