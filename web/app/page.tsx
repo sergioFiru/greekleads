@@ -229,9 +229,13 @@ function ScoutChips({ label, items }: { label: string; items: string[] }) {
 }
 
 // ── LIVE EXHIBIT ─────────────────────────────────────────────────────
-function LiveExhibit() {
+function LiveExhibit({ initialCount }: { initialCount: number }) {
   const [tick, setTick] = useState(0)
-  const [counter, setCounter] = useState(1284938)
+  const [counter, setCounter] = useState(initialCount)
+
+  useEffect(() => {
+    setCounter(initialCount)
+  }, [initialCount])
 
   useEffect(() => {
     const i = setInterval(() => {
@@ -437,7 +441,7 @@ function CropMarks() {
 }
 
 // ── HERO ─────────────────────────────────────────────────────────────
-function Hero({ onNavigate }: { onNavigate: (r: string) => void }) {
+function Hero({ onNavigate, totalCompanies }: { onNavigate: (r: string) => void; totalCompanies: number }) {
   const [query, setQuery] = useState('')
   const [focused, setFocused] = useState(false)
 
@@ -576,7 +580,7 @@ function Hero({ onNavigate }: { onNavigate: (r: string) => void }) {
           <div style={{ position: 'relative' }}>
             <CropMarks />
             <div style={{ position: 'relative', zIndex: 1 }}>
-              <LiveExhibit />
+              <LiveExhibit initialCount={totalCompanies} />
             </div>
           </div>
         </div>
@@ -1450,6 +1454,14 @@ function HomeFooter({ onNavigate }: { onNavigate: (r: string) => void }) {
 // ── HOME PAGE ────────────────────────────────────────────────────────
 export default function HomePage() {
   const router = useRouter()
+  const [totalCompanies, setTotalCompanies] = useState(1_670_000)
+
+  useEffect(() => {
+    fetch('/api/stats')
+      .then(r => r.json())
+      .then(d => { if (d.companies) setTotalCompanies(d.companies) })
+      .catch(() => {})
+  }, [])
 
   const navigate = (route: string) => {
     const routes: Record<string, string> = {
@@ -1469,9 +1481,9 @@ export default function HomePage() {
         src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"
         strategy="afterInteractive"
       />
-      <TopNav totalCompanies={1284940} />
+      <TopNav totalCompanies={totalCompanies} />
       <div className="home-scroll">
-        <Hero onNavigate={navigate} />
+        <Hero onNavigate={navigate} totalCompanies={totalCompanies} />
         <ProductPreview onNavigate={navigate} />
         <PeopleSection onNavigate={navigate} />
         <NetworkSection onNavigate={navigate} />

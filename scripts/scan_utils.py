@@ -43,7 +43,7 @@ PATTERNS = {
         re.IGNORECASE,
     ),
     "linkedin": re.compile(
-        r'(?:https?:)?//(?:www\.)?linkedin\.com/(?:company|in)/([A-Za-z0-9_%-]+)/?',
+        r'(?:https?:)?//(?:www\.)?linkedin\.com/((?:company|in)/[A-Za-z0-9_%-]+)/?',
         re.IGNORECASE,
     ),
     "twitter": re.compile(

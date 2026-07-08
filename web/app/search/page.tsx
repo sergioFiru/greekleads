@@ -11,7 +11,7 @@ export const metadata = {
 
 async function getTotalCompanies(): Promise<number> {
   try {
-    const row = await queryOne<{ total: string }>('SELECT reltuples::bigint AS total FROM pg_class WHERE relname = \'companies\'')
+    const row = await queryOne<{ total: string }>('SELECT COUNT(*)::text AS total FROM companies')
     return parseInt(row?.total ?? '0', 10)
   } catch {
     return 0
