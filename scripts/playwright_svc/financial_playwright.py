@@ -64,10 +64,14 @@ def ensure_tables(conn):
                 scanned_at TIMESTAMPTZ DEFAULT NOW()
             )
         """)
-        # Add docs_found if table was created by the old runner (which didn't have it)
+        # Add columns if table was created by the old runner
         cur.execute("""
             ALTER TABLE financial_ar_gemi_scanned
             ADD COLUMN IF NOT EXISTS docs_found INT DEFAULT 0
+        """)
+        cur.execute("""
+            ALTER TABLE financial_ar_gemi_scanned
+            ADD COLUMN IF NOT EXISTS has_failures BOOLEAN DEFAULT FALSE
         """)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS financial_docs (
@@ -107,21 +111,23 @@ def fetch_unscanned(conn, size: int) -> list:
                    ON s.ar_gemi = c.ar_gemi::bigint
             WHERE c.status_descr  = 'Ενεργή'
               AND c.legal_type_descr IN ('ΑΕ', 'ΙΚΕ', 'ΕΠΕ')
-              AND s.ar_gemi IS NULL
-            ORDER BY c.ar_gemi
+              AND (s.ar_gemi IS NULL OR s.has_failures = TRUE)
+            ORDER BY (s.ar_gemi IS NOT NULL) ASC, c.ar_gemi ASC
             LIMIT {size}
         """)
         return [str(row[0]) for row in cur.fetchall()]
 
 
-def mark_scanned(conn, ar_gemi: str, docs_found: int):
+def mark_scanned(conn, ar_gemi: str, docs_found: int, has_failures: bool = False):
     with conn.cursor() as cur:
         cur.execute("""
-            INSERT INTO financial_ar_gemi_scanned (ar_gemi, docs_found)
-            VALUES (%s, %s)
+            INSERT INTO financial_ar_gemi_scanned (ar_gemi, docs_found, has_failures)
+            VALUES (%s, %s, %s)
             ON CONFLICT (ar_gemi) DO UPDATE SET
-                scanned_at = NOW(), docs_found = EXCLUDED.docs_found
-        """, (int(ar_gemi), docs_found))
+                scanned_at   = NOW(),
+                docs_found   = EXCLUDED.docs_found,
+                has_failures = EXCLUDED.has_failures
+        """, (int(ar_gemi), docs_found, has_failures))
     conn.commit()
 
 
@@ -152,18 +158,26 @@ def upload_to_r2(s3, key: str, data: bytes):
     s3.put_object(Bucket=BUCKET, Key=key, Body=data, ContentType="application/pdf")
 
 
-# ── PDF download (plain HTTP — public gov registry, no auth needed) ──────────────
+# ── PDF download with retry on 429 ───────────────────────────────────────────────
 
-def download_pdf(doc_id: int, ar_gemi: str, session: http_requests.Session) -> bytes:
+async def download_pdf(doc_id: int, ar_gemi: str, session: http_requests.Session) -> bytes:
     url = f"{PORTAL}/api/download/financial/{doc_id}?companyId={ar_gemi}"
-    r = session.get(url, timeout=60)
-    r.raise_for_status()
-    if not r.content or r.content[:4] != b"%PDF":
-        raise ValueError(f"Not a PDF ({len(r.content)} bytes, starts: {r.content[:20]})")
-    return r.content
+    for attempt in range(5):
+        r = session.get(url, timeout=60)
+        if r.status_code == 429:
+            wait = min(2 ** attempt, 30)  # 1, 2, 4, 8, 16 → cap at 30s
+            await asyncio.sleep(wait)
+            continue
+        r.raise_for_status()
+        if not r.content or r.content[:4] != b"%PDF":
+            raise ValueError(f"Not a PDF ({len(r.content)} bytes)")
+        return r.content
+    raise Exception(f"429 after 5 retries: doc_id={doc_id}")
 
 
 # ── Per-company processing ───────────────────────────────────────────────────────
+
+DOWNLOAD_GAP = 5.0  # seconds between PDF download requests (rate-limit guard)
 
 async def process_company(
     ar_gemi: str,
@@ -171,7 +185,7 @@ async def process_company(
     s3,
     conn,
     http_session: http_requests.Session,
-) -> int:
+) -> tuple:
     url = f"{PORTAL}/company/{ar_gemi}"
     financial_entries = []
 
@@ -193,6 +207,8 @@ async def process_company(
         log.warning("ar_gemi=%s  page error: %s", ar_gemi, e)
 
     docs_downloaded = 0
+    docs_failed     = 0
+    first_doc       = True
     for period in financial_entries:
         for files in (period.get("FilesAndAuditors") or []):
             for doc in (files.get("balancesheet") or []):
@@ -204,16 +220,22 @@ async def process_company(
                 kak    = str(doc_id)
                 r2_key = f"financials/{ar_gemi}/{kak}.pdf"
 
+                if not first_doc:
+                    await asyncio.sleep(DOWNLOAD_GAP)
+                first_doc = False
+
                 try:
-                    pdf = download_pdf(doc_id, ar_gemi, http_session)
+                    pdf = await download_pdf(doc_id, ar_gemi, http_session)
                     upload_to_r2(s3, r2_key, pdf)
                     record_doc(conn, kak, ar_gemi, bal_date, r2_key)
                     docs_downloaded += 1
                 except Exception as e:
                     log.warning("ar_gemi=%s  doc_id=%s  err: %s", ar_gemi, doc_id, e)
+                    docs_failed += 1
 
-    mark_scanned(conn, ar_gemi, docs_downloaded)
-    return docs_downloaded
+    has_failures = docs_failed > 0
+    mark_scanned(conn, ar_gemi, docs_downloaded, has_failures)
+    return docs_downloaded, has_failures
 
 
 # ── Worker ───────────────────────────────────────────────────────────────────────
@@ -255,11 +277,13 @@ async def worker(
 
         ar_gemi = item
         t0 = time.time()
+        has_fail = False
         try:
-            docs = await process_company(ar_gemi, page, s3, conn, http_session)
+            docs, has_fail = await process_company(ar_gemi, page, s3, conn, http_session)
         except Exception as e:
             log.error("worker-%d  ar_gemi=%s  unexpected: %s", worker_id, ar_gemi, e)
-            docs = 0
+            docs     = 0
+            has_fail = True
             try:
                 conn.rollback()
             except Exception:
@@ -269,7 +293,7 @@ async def worker(
             except Exception:
                 pass
             try:
-                mark_scanned(conn, ar_gemi, 0)
+                mark_scanned(conn, ar_gemi, 0, has_failures=True)
             except Exception:
                 pass
 
@@ -287,9 +311,10 @@ async def worker(
         eta_h      = remaining / rate if rate > 0 else 0
 
         log.info(
-            "w%d  ar_gemi=%-14s  docs=%d  t=%.1fs  "
+            "w%d  ar_gemi=%-14s  docs=%d%s  t=%.1fs  "
             "overall=%s/%s (%.1f%%)  rate=%.0f/hr  eta=%.1fh",
-            worker_id, ar_gemi, docs, time.time() - t0,
+            worker_id, ar_gemi, docs, " [FAIL]" if has_fail else "",
+            time.time() - t0,
             f"{total_done:,}", f"{total_target:,}", pct,
             rate, eta_h,
         )
