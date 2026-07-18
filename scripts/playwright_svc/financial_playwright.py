@@ -8,10 +8,9 @@ pre-filtered financial file IDs, then downloads PDFs directly to R2.
 Speed: 3 parallel browser contexts ≈ 500+ companies/hr (~16 days for 187k).
 
 Railway setup:
-  Dockerfile   : scripts/Dockerfile  (uses official Playwright Python image)
-  Root dir     : scripts/
-  Env vars     : DATABASE_URL, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
-                 R2_ENDPOINT, R2_BUCKET
+  Root dir  : scripts/playwright_svc/     ← Railway detects Dockerfile here
+  Env vars  : DATABASE_URL, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
+              R2_ENDPOINT, R2_BUCKET
 """
 
 import asyncio
@@ -27,7 +26,8 @@ import requests as http_requests
 from dotenv import load_dotenv
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
 
-load_dotenv(Path(__file__).parent / ".env")
+# .env lives one level up (scripts/) — used for local dev only; Railway uses env vars
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -155,7 +155,7 @@ def download_pdf(doc_id: int, ar_gemi: str, session: http_requests.Session) -> b
     r = session.get(url, timeout=60)
     r.raise_for_status()
     if not r.content or r.content[:4] != b"%PDF":
-        raise ValueError(f"Response is not a PDF (got {len(r.content)} bytes, starts: {r.content[:20]})")
+        raise ValueError(f"Not a PDF ({len(r.content)} bytes, starts: {r.content[:20]})")
     return r.content
 
 
@@ -272,17 +272,16 @@ async def worker(
         queue.task_done()
 
         with stats["lock"]:
-            stats["done"]  += 1
-            stats["docs"]  += docs
-            session_done    = stats["done"]
-            session_docs    = stats["docs"]
+            stats["done"] += 1
+            stats["docs"] += docs
+            session_done   = stats["done"]
 
-        elapsed   = time.time() - session_start
-        rate      = session_done / elapsed * 3600 if elapsed > 0 else 0
+        elapsed    = time.time() - session_start
+        rate       = session_done / elapsed * 3600 if elapsed > 0 else 0
         total_done = already_done + session_done
-        pct       = total_done / total_target * 100 if total_target else 0
-        remaining = max(total_target - total_done, 0)
-        eta_h     = remaining / rate if rate > 0 else 0
+        pct        = total_done / total_target * 100 if total_target else 0
+        remaining  = max(total_target - total_done, 0)
+        eta_h      = remaining / rate if rate > 0 else 0
 
         log.info(
             "w%d  ar_gemi=%-14s  docs=%d  t=%.1fs  "
@@ -334,7 +333,11 @@ async def main():
                 "--disable-dev-shm-usage",
                 "--disable-blink-features=AutomationControlled",
                 "--disable-gpu",
-                "--single-process",
+                "--no-zygote",
+                "--disable-extensions",
+                "--disable-background-networking",
+                "--disable-default-apps",
+                "--mute-audio",
             ],
         )
         log.info("Chromium launched (headless)")
@@ -348,7 +351,6 @@ async def main():
             for i in range(WORKERS)
         ]
 
-        # Producer: keep feeding the queue
         refill_conn = get_conn()
         while True:
             batch = fetch_unscanned(refill_conn, BATCH_SIZE)
@@ -360,10 +362,8 @@ async def main():
             for ar_gemi in batch:
                 await queue.put(ar_gemi)
 
-            # Wait until this batch is consumed before fetching next
             await queue.join()
 
-        # Unreachable during normal operation; here for graceful shutdown
         for _ in range(WORKERS):
             await queue.put(_STOP)
         await asyncio.gather(*worker_tasks)
