@@ -275,10 +275,9 @@ async def worker(
 
         queue.task_done()
 
-        with stats["lock"]:
-            stats["done"] += 1
-            stats["docs"] += docs
-            session_done   = stats["done"]
+        stats["done"] += 1
+        stats["docs"] += docs
+        session_done = stats["done"]
 
         elapsed    = time.time() - session_start
         rate       = session_done / elapsed * 3600 if elapsed > 0 else 0
@@ -325,7 +324,7 @@ async def main():
     log.info("  Workers:         %d", WORKERS)
     log.info("=" * 60)
 
-    stats = {"done": 0, "docs": 0, "lock": asyncio.Lock()}
+    stats = {"done": 0, "docs": 0}
     session_start = time.time()
 
     async with async_playwright() as pw:
