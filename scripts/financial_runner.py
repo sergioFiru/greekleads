@@ -285,6 +285,15 @@ def main():
             {LEGAL_TYPE_FILTER}
         """)
         total_target = cur.fetchone()[0]
+        cur.execute("""
+            SELECT legal_type_descr, COUNT(*) AS n
+            FROM companies
+            WHERE status_descr = 'Ενεργή' AND legal_type_descr IS NOT NULL
+            GROUP BY legal_type_descr
+            ORDER BY n DESC
+            LIMIT 15
+        """)
+        top_legal_types = cur.fetchall()
 
     remaining = max(total_target - already_done, 0)
     pct_done  = already_done / total_target * 100 if total_target else 0
@@ -299,6 +308,9 @@ def main():
     log.info("  Remaining:         %s", f"{remaining:,}")
     log.info("  PDFs in R2:        %s", f"{pdfs_stored:,}")
     log.info("  ETA (at 8 req/min): %.1f days", eta_days)
+    log.info("  Top legal_type_descr values in DB:")
+    for descr, cnt in top_legal_types:
+        log.info("    %s  →  %s", f"{cnt:>8,}", repr(descr))
     log.info("=" * 60)
 
     total_scanned      = 0
