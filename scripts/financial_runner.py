@@ -331,7 +331,7 @@ def main():
     total_dl           = 0
     consecutive_errors = 0
     session_start      = time.time()
-    LOG_EVERY          = 10   # log a progress line every N companies
+    LOG_EVERY          = 1
 
     while True:
         # Fetch next batch of unscanned companies
