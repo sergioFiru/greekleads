@@ -137,6 +137,22 @@ def ensure_tables(conn):
                 doc_count  INT DEFAULT 0
             )
         """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS financial_docs (
+                kak          TEXT PRIMARY KEY,
+                ar_gemi      BIGINT NOT NULL,
+                subject_id   INT,
+                date_filed   TEXT,
+                summary      TEXT,
+                r2_key       TEXT,
+                downloaded_at TIMESTAMPTZ,
+                parse_error  TEXT
+            )
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS financial_docs_ar_gemi_idx
+            ON financial_docs (ar_gemi)
+        """)
     conn.commit()
 
 
@@ -315,7 +331,7 @@ def main():
     total_dl           = 0
     consecutive_errors = 0
     session_start      = time.time()
-    LOG_EVERY          = 100  # log a progress line every N companies
+    LOG_EVERY          = 10   # log a progress line every N companies
 
     while True:
         # Fetch next batch of unscanned companies
