@@ -51,53 +51,137 @@ def parse_num(s: str):
         return None
 
 
-def last_number(line: str):
-    """Return the last Greek-format number found on a line."""
-    nums = re.findall(r"-?[\d]+(?:[.,][\d]+)*", line)
-    if not nums:
-        return None
-    # Prefer numbers that look like currency (have comma or are large)
-    for n in reversed(nums):
-        v = parse_num(n)
-        if v is not None and (abs(v) > 1 or "," in n or "." in n):
-            return v
-    return parse_num(nums[-1])
+_NUM_RE = re.compile(r"-?[\d]+(?:[.,][\d]+)*")
 
 
-LABEL_PATTERNS = {
-    "revenue":           re.compile(r"κύκλος\s+εργασιών", re.IGNORECASE),
-    "total_assets":      re.compile(r"σύνολο\s+ενεργητικού", re.IGNORECASE),
-    "equity":            re.compile(r"κεφάλαια\s+και\s+αποθεματικά", re.IGNORECASE),
-    "profit_before_tax": re.compile(r"αποτέλεσμα\s+προ\s+φόρων", re.IGNORECASE),
-    "net_profit":        re.compile(r"αποτέλεσμα\s+περιόδου\s+μετά", re.IGNORECASE),
+def _significant_nums(segment: str):
+    """Return list of significant financial numbers (not single digits/years) from segment."""
+    out = []
+    for raw in _NUM_RE.findall(segment):
+        v = parse_num(raw)
+        if v is not None and (abs(v) > 1 or "," in raw or "." in raw):
+            out.append(v)
+    return out
+
+
+def _first_num(segment: str):
+    nums = _significant_nums(segment)
+    return nums[0] if nums else None
+
+
+def _two_nums(segment: str):
+    nums = _significant_nums(segment)
+    return (nums[0] if nums else None), (nums[1] if len(nums) > 1 else None)
+
+
+def _find_value(text: str, patterns: list):
+    """Try each pattern; return (after_label_segment, match) for first that has a number."""
+    for pat in patterns:
+        for m in pat.finditer(text):
+            line_end = text.find("\n", m.end())
+            after = text[m.end(): line_end if line_end != -1 else m.end() + 300]
+            if _significant_nums(after):
+                return after, m
+    return None, None
+
+
+# ── patterns (ordered by preference within each field) ───────────────────────
+_P = {
+    "revenue": [
+        re.compile(r"κύκλος\s+εργασιών", re.IGNORECASE),
+    ],
+    "gross_profit": [
+        re.compile(r"μικτ[οό]\s+αποτέλεσμα", re.IGNORECASE),
+        re.compile(r"μικτ[οό]\s+κέρδος", re.IGNORECASE),
+    ],
+    "ebit": [
+        re.compile(r"αποτελέσματα?\s+προ\s+τόκων\s+και\s+φόρων", re.IGNORECASE),
+        re.compile(r"κέρδη\s+προ\s+τόκων[,\s]+φόρων", re.IGNORECASE),
+    ],
+    "profit_before_tax": [
+        re.compile(r"αποτέλεσμα\s+προ\s+φόρων", re.IGNORECASE),
+        re.compile(r"κέρδη[/\s]*ζημ[ίι]ες?\s+προ\s+φόρων", re.IGNORECASE),
+    ],
+    "net_profit": [
+        re.compile(r"αποτέλεσμα\s+περιόδου\s+μετ[άα]", re.IGNORECASE),
+        re.compile(r"κέρδη[/\s]*ζημ[ίι]ες?\s+(?:χρήσ(?:εως?|ης?)\s+)?μετ[άα]\s+φόρ", re.IGNORECASE),
+    ],
+    "total_assets": [
+        re.compile(r"σύνολο\s+ενεργητικού", re.IGNORECASE),
+        re.compile(r"σύνολο\s+περιουσιακών\s+στοιχείων", re.IGNORECASE),
+    ],
+    "equity": [
+        # "Σύνολο καθαρής θέσης" but NOT "...και υποχρεώσεων"
+        re.compile(r"σύνολο\s+καθαρής\s+θέσης(?!\s+και\s+υπο)", re.IGNORECASE),
+        re.compile(r"κεφάλαια\s+και\s+αποθεματικά", re.IGNORECASE),
+        re.compile(r"ίδια\s+κεφάλαια(?!\s+μειοψ)", re.IGNORECASE),
+    ],
+    "cash": [
+        re.compile(r"ταμειακά\s+διαθέσιμα", re.IGNORECASE),
+    ],
+    "short_term_liabilities": [
+        re.compile(r"σύνολο\s+βραχυπρόθεσμ", re.IGNORECASE),
+        re.compile(r"βραχυπρόθεσμες\s+υποχρεώσεις", re.IGNORECASE),
+    ],
+    "long_term_liabilities": [
+        re.compile(r"σύνολο\s+μακροπρόθεσμ", re.IGNORECASE),
+        re.compile(r"μακροπρόθεσμες\s+υποχρεώσεις", re.IGNORECASE),
+    ],
 }
 
 
-def extract_financials(pdf_bytes):
-    result = {}
+def extract_financials(pdf_bytes: bytes) -> dict:
+    """
+    Parse a GEMI financial PDF and return a dict with:
+      revenue, prior_year_revenue, gross_profit, ebit,
+      profit_before_tax, net_profit, total_assets, equity,
+      cash, short_term_liabilities, long_term_liabilities,
+      fiscal_year (int), fiscal_year_start, fiscal_year_end (DD/MM/YYYY strings)
+
+    Returns empty dict if the PDF yields no text (scanned image / bad OCR).
+    Current-year value is always the LEFT column; prior-year is the RIGHT column.
+    """
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         raw = "\n".join(p.extract_text() or "" for p in pdf.pages)
 
-    # Process line by line, normalising doubled chars per line
     lines = [normalise_line(ln) for ln in raw.split("\n")]
     text  = "\n".join(lines)
 
-    for key, pat in LABEL_PATTERNS.items():
-        m = pat.search(text)
-        if m:
-            # Take the rest of the line from the match
-            line_end = text.find("\n", m.end())
-            segment  = text[m.start(): line_end if line_end != -1 else m.start()+200]
-            v = last_number(segment)
+    result: dict = {}
+
+    for key, patterns in _P.items():
+        seg, _ = _find_value(text, patterns)
+        if seg is None:
+            continue
+        if key == "revenue":
+            curr, prev = _two_nums(seg)
+            if curr is not None:
+                result["revenue"] = curr
+            if prev is not None:
+                result["prior_year_revenue"] = prev
+        else:
+            v = _first_num(seg)
             if v is not None:
                 result[key] = v
 
-    # Fiscal year
-    m = re.search(r"Φορολογικό έτος[:\s]*(20\d\d)", text, re.IGNORECASE)
-    if not m:
-        m = re.search(r"31/12/(20\d\d)", text)
-    if m:
-        result["period"] = m.group(1)
+    # Fiscal year dates from "χρήση 01/01/2023 έως 31/12/2023" or similar
+    date_m = re.search(
+        r"(?:χρήσ(?:ης?|εως?|η)|από)\s+"
+        r"(\d{1,2}[/.]?\d{1,2}[/.]?\d{4})"
+        r"\s*(?:[-–—]|έως|μέχρι)\s*"
+        r"(\d{1,2}[/.]?\d{1,2}[/.]?\d{4})",
+        text, re.IGNORECASE,
+    )
+    if date_m:
+        result["fiscal_year_start"] = date_m.group(1).replace(".", "/")
+        result["fiscal_year_end"]   = date_m.group(2).replace(".", "/")
+
+    # Fiscal year integer — from "31/12/20XX" or "Φορολογικό έτος 20XX"
+    fy_m = re.search(r"31/12/(20\d\d)", text)
+    if not fy_m:
+        fy_m = re.search(r"Φορολογικό\s+έτος[:\s]*(20\d\d)", text, re.IGNORECASE)
+    if fy_m:
+        result["fiscal_year"] = int(fy_m.group(1))
 
     return result
 
