@@ -61,9 +61,13 @@ def ensure_tables(conn):
         cur.execute("""
             CREATE TABLE IF NOT EXISTS financial_ar_gemi_scanned (
                 ar_gemi    BIGINT PRIMARY KEY,
-                scanned_at TIMESTAMPTZ DEFAULT NOW(),
-                docs_found INT DEFAULT 0
+                scanned_at TIMESTAMPTZ DEFAULT NOW()
             )
+        """)
+        # Add docs_found if table was created by the old runner (which didn't have it)
+        cur.execute("""
+            ALTER TABLE financial_ar_gemi_scanned
+            ADD COLUMN IF NOT EXISTS docs_found INT DEFAULT 0
         """)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS financial_docs (
