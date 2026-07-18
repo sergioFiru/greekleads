@@ -42,6 +42,31 @@ def parse_num(s: str):
     s = s.strip().replace("−", "-")  # unicode minus
     neg = s.startswith("-")
     s = s.lstrip("-").strip()
+    dot_count   = s.count(".")
+    comma_count = s.count(",")
+
+    # English decimal: single dot, no comma, ≤2 digits after dot (e.g. "371628.32")
+    if dot_count == 1 and comma_count == 0 and len(s.split(".")[1]) <= 2:
+        try:
+            v = float(s)
+            return -v if neg else v
+        except:
+            return None
+
+    # US format: comma=thousands, period=decimal (e.g. "1,290,871.83", "845,368.27")
+    # Last separator is a period AND ≤2 digits after it AND at least one comma before it
+    if dot_count == 1 and comma_count >= 1:
+        last_dot_pos = s.rfind(".")
+        after_dot = s[last_dot_pos + 1:]
+        last_comma_pos = s.rfind(",")
+        if len(after_dot) <= 2 and last_comma_pos < last_dot_pos:
+            s_us = s.replace(",", "")  # remove thousands commas, keep decimal dot
+            try:
+                v = float(s_us)
+                return -v if neg else v
+            except:
+                pass
+
     # Greek format: 1.234.567,89 → remove dots, replace comma with dot
     s = s.replace(".", "").replace(",", ".")
     try:
@@ -59,7 +84,12 @@ def _significant_nums(segment: str):
     out = []
     for raw in _NUM_RE.findall(segment):
         v = parse_num(raw)
-        if v is not None and (abs(v) > 1 or "," in raw or "." in raw):
+        if v is None:
+            continue
+        # Skip bare year integers (1900-2100) with no decimal component
+        if 1900 <= v <= 2100 and "," not in raw and "." not in raw:
+            continue
+        if abs(v) > 1 or "," in raw or "." in raw:
             out.append(v)
     return out
 
@@ -88,44 +118,48 @@ def _find_value(text: str, patterns: list):
 # ── patterns (ordered by preference within each field) ───────────────────────
 _P = {
     "revenue": [
-        re.compile(r"κύκλος\s+εργασιών", re.IGNORECASE),
+        # accent-insensitive: κύκλος / κυκλος, εργασιών / εργασιων
+        re.compile(r"κ[υύ]κλος\s+εργασι[ωώ]ν", re.IGNORECASE),
     ],
     "gross_profit": [
-        re.compile(r"μικτ[οό]\s+αποτέλεσμα", re.IGNORECASE),
-        re.compile(r"μικτ[οό]\s+κέρδος", re.IGNORECASE),
+        re.compile(r"μικτ[οό]\s+αποτ[εέ]λεσμα", re.IGNORECASE),
+        re.compile(r"μικτ[οό]\s+κ[εέ]ρδος", re.IGNORECASE),
     ],
     "ebit": [
-        re.compile(r"αποτελέσματα?\s+προ\s+τόκων\s+και\s+φόρων", re.IGNORECASE),
-        re.compile(r"κέρδη\s+προ\s+τόκων[,\s]+φόρων", re.IGNORECASE),
+        re.compile(r"αποτελ[εέ]σματα?\s+προ\s+τ[οό]κων\s+και\s+φ[οό]ρων", re.IGNORECASE),
+        re.compile(r"κ[εέ]ρδη\s+προ\s+τ[οό]κων[,\s]+φ[οό]ρων", re.IGNORECASE),
     ],
     "profit_before_tax": [
-        re.compile(r"αποτέλεσμα\s+προ\s+φόρων", re.IGNORECASE),
-        re.compile(r"κέρδη[/\s]*ζημ[ίι]ες?\s+προ\s+φόρων", re.IGNORECASE),
+        re.compile(r"αποτ[εέ]λεσμα\s+προ\s+φ[οό]ρων", re.IGNORECASE),
+        re.compile(r"κ[εέ]ρδη[/\s]*ζημ[ίι][εέ]ς?\s+προ\s+φ[οό]ρων", re.IGNORECASE),
     ],
     "net_profit": [
-        re.compile(r"αποτέλεσμα\s+περιόδου\s+μετ[άα]", re.IGNORECASE),
-        re.compile(r"κέρδη[/\s]*ζημ[ίι]ες?\s+(?:χρήσ(?:εως?|ης?)\s+)?μετ[άα]\s+φόρ", re.IGNORECASE),
+        re.compile(r"αποτ[εέ]λεσμα\s+περι[οό]δου\s+μετ[άα]", re.IGNORECASE),
+        re.compile(r"κ[εέ]ρδη[/\s]*ζημ[ίι][εέ]ς?\s+(?:χρ[ήη]σ(?:[εέ]ως?|[ηή]ς?)\s+)?μετ[άα]\s+φ[οό]ρ", re.IGNORECASE),
+        re.compile(r"αποτ[εέ]λεσμα\s+χρ[ήη]σ(?:[εέ]ως?|[ηή]ς?)\s+μετ[άα]", re.IGNORECASE),
     ],
     "total_assets": [
-        re.compile(r"σύνολο\s+ενεργητικού", re.IGNORECASE),
-        re.compile(r"σύνολο\s+περιουσιακών\s+στοιχείων", re.IGNORECASE),
+        re.compile(r"σ[υύ]νολο\s+ενεργητικο[υύ]", re.IGNORECASE),
+        re.compile(r"σ[υύ]νολο\s+περιουσιακ[ωώ]ν\s+στοιχε[ίι]ων", re.IGNORECASE),
+        # simplified/abbreviated format: "Σύνολο Ενεργητικού" as standalone line
+        re.compile(r"σ[υύ]νολο\s+ενεργητικ", re.IGNORECASE),
     ],
     "equity": [
         # "Σύνολο καθαρής θέσης" but NOT "...και υποχρεώσεων"
-        re.compile(r"σύνολο\s+καθαρής\s+θέσης(?!\s+και\s+υπο)", re.IGNORECASE),
-        re.compile(r"κεφάλαια\s+και\s+αποθεματικά", re.IGNORECASE),
-        re.compile(r"ίδια\s+κεφάλαια(?!\s+μειοψ)", re.IGNORECASE),
+        re.compile(r"σ[υύ]νολο\s+καθαρ[ήη]ς\s+θ[εέ]σης(?!\s+και\s+υπο)", re.IGNORECASE),
+        re.compile(r"κεφ[αά]λαια\s+και\s+αποθεματικ[αά]", re.IGNORECASE),
+        re.compile(r"[ίι]δια\s+κεφ[αά]λαια(?!\s+μειοψ)", re.IGNORECASE),
     ],
     "cash": [
-        re.compile(r"ταμειακά\s+διαθέσιμα", re.IGNORECASE),
+        re.compile(r"ταμειακ[αά]\s+διαθ[εέ]σιμα", re.IGNORECASE),
     ],
     "short_term_liabilities": [
-        re.compile(r"σύνολο\s+βραχυπρόθεσμ", re.IGNORECASE),
-        re.compile(r"βραχυπρόθεσμες\s+υποχρεώσεις", re.IGNORECASE),
+        re.compile(r"σ[υύ]νολο\s+βραχυπρ[οό]θεσμ", re.IGNORECASE),
+        re.compile(r"βραχυπρ[οό]θεσμες\s+υποχρε[ωώ]σεις", re.IGNORECASE),
     ],
     "long_term_liabilities": [
-        re.compile(r"σύνολο\s+μακροπρόθεσμ", re.IGNORECASE),
-        re.compile(r"μακροπρόθεσμες\s+υποχρεώσεις", re.IGNORECASE),
+        re.compile(r"σ[υύ]νολο\s+μακροπρ[οό]θεσμ", re.IGNORECASE),
+        re.compile(r"μακροπρ[οό]θεσμες\s+υποχρε[ωώ]σεις", re.IGNORECASE),
     ],
 }
 
