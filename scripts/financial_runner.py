@@ -55,13 +55,10 @@ RATE_INTERVAL  = 7.6          # seconds between every API call (keeps us ≤ 8/m
 REQUEST_TIMEOUT = 90
 BATCH_SIZE     = 500          # companies fetched from DB at a time
 
-# Only companies that are legally required to file financial statements
+# Only companies that are legally required to file financial statements.
+# DB stores abbreviations: ΑΕ, ΙΚΕ, ΕΠΕ  (~187k active companies)
 LEGAL_TYPE_FILTER = """
-    AND legal_type_descr ILIKE ANY(ARRAY[
-        '%ΑΝΩΝΥΜΗ ΕΤΑΙΡΕΙΑ%',
-        '%ΕΤΑΙΡΕΙΑ ΠΕΡΙΟΡΙΣΜΕΝΗΣ ΕΥΘΥΝΗΣ%',
-        '%ΙΔΙΩΤΙΚΗ ΚΕΦΑΛΑΙΟΥΧΙΚΗ ΕΤΑΙΡΕΙΑ%'
-    ])
+    AND legal_type_descr IN ('ΑΕ', 'ΙΚΕ', 'ΕΠΕ')
 """
 
 # ---------------------------------------------------------------------------

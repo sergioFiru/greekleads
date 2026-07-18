@@ -230,11 +230,7 @@ def main():
     legal_filter = ""
     if not args.all_legal_types:
         legal_filter = """
-            AND legal_type_descr ILIKE ANY(ARRAY[
-                '%ΑΝΩΝΥΜΗ ΕΤΑΙΡΕΙΑ%',
-                '%ΕΤΑΙΡΕΙΑ ΠΕΡΙΟΡΙΣΜΕΝΗΣ ΕΥΘΥΝΗΣ%',
-                '%ΙΔΙΩΤΙΚΗ ΚΕΦΑΛΑΙΟΥΧΙΚΗ ΕΤΑΙΡΕΙΑ%'
-            ])
+            AND legal_type_descr IN ('ΑΕ', 'ΙΚΕ', 'ΕΠΕ')
         """
 
     with conn.cursor() as cur:
