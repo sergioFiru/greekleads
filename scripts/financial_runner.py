@@ -269,25 +269,38 @@ def main():
     conn = get_conn()
     ensure_tables(conn)
 
-    # Quick count for context
+    # Startup counts
     with conn.cursor() as cur:
         cur.execute("SELECT COUNT(*) FROM financial_ar_gemi_scanned")
         already_done = cur.fetchone()[0]
         cur.execute("SELECT COUNT(*) FROM financial_docs WHERE downloaded_at IS NOT NULL")
         pdfs_stored = cur.fetchone()[0]
+        cur.execute(f"""
+            SELECT COUNT(*) FROM companies
+            WHERE status_descr = 'Ενεργή'
+            {LEGAL_TYPE_FILTER}
+        """)
+        total_target = cur.fetchone()[0]
+
+    remaining = max(total_target - already_done, 0)
+    pct_done  = already_done / total_target * 100 if total_target else 0
+    eta_days  = (remaining * RATE_INTERVAL) / 86400
 
     log.info("=" * 60)
     log.info("  FINANCIAL CRAWLER STARTING")
-    log.info("  Already scanned: %s companies", f"{already_done:,}")
-    log.info("  PDFs in R2:      %s", f"{pdfs_stored:,}")
-    log.info("  Rate limit:      8 req/min (%.1f s between calls)", RATE_INTERVAL)
+    log.info("  Target companies:  %s", f"{total_target:,}")
+    log.info("  Already scanned:   %s  (%.1f%%)", f"{already_done:,}", pct_done)
+    log.info("  Remaining:         %s", f"{remaining:,}")
+    log.info("  PDFs in R2:        %s", f"{pdfs_stored:,}")
+    log.info("  ETA (at 8 req/min): %.1f days", eta_days)
     log.info("=" * 60)
 
-    total_scanned  = 0
-    total_docs     = 0
-    total_dl       = 0
+    total_scanned      = 0
+    total_docs         = 0
+    total_dl           = 0
     consecutive_errors = 0
-    LOG_EVERY = 100  # log a progress line every N companies
+    session_start      = time.time()
+    LOG_EVERY          = 100  # log a progress line every N companies
 
     while True:
         # Fetch next batch of unscanned companies
@@ -318,11 +331,19 @@ def main():
                 consecutive_errors = 0
 
                 if total_scanned % LOG_EVERY == 0:
+                    overall_done = already_done + total_scanned
+                    pct          = overall_done / total_target * 100 if total_target else 0
+                    elapsed      = time.time() - session_start
+                    rate_per_hr  = total_scanned / elapsed * 3600 if elapsed > 0 else 0
+                    remaining_n  = total_target - overall_done
+                    eta_h        = remaining_n / rate_per_hr if rate_per_hr > 0 else 0
                     log.info(
-                        "progress  scanned=%s  docs_found=%s  downloaded=%s",
-                        f"{total_scanned:,}",
-                        f"{total_docs:,}",
-                        f"{total_dl:,}",
+                        "progress  %s/%s (%.1f%%)  "
+                        "session: scanned=%s docs=%s dl=%s  "
+                        "rate=%.0f/hr  eta=%.1fh",
+                        f"{overall_done:,}", f"{total_target:,}", pct,
+                        f"{total_scanned:,}", f"{total_docs:,}", f"{total_dl:,}",
+                        rate_per_hr, eta_h,
                     )
 
             except requests.HTTPError as e:
