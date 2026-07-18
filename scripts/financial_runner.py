@@ -275,6 +275,10 @@ def main():
         already_done = cur.fetchone()[0]
         cur.execute("SELECT COUNT(*) FROM financial_docs WHERE downloaded_at IS NOT NULL")
         pdfs_stored = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM companies")
+        total_companies = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM companies WHERE status_descr = 'Ενεργή'")
+        active_companies = cur.fetchone()[0]
         cur.execute(f"""
             SELECT COUNT(*) FROM companies
             WHERE status_descr = 'Ενεργή'
@@ -288,7 +292,9 @@ def main():
 
     log.info("=" * 60)
     log.info("  FINANCIAL CRAWLER STARTING")
-    log.info("  Target companies:  %s", f"{total_target:,}")
+    log.info("  All companies:     %s", f"{total_companies:,}")
+    log.info("  Active (Ενεργή):   %s", f"{active_companies:,}")
+    log.info("  AE/EPE/IKE target: %s", f"{total_target:,}")
     log.info("  Already scanned:   %s  (%.1f%%)", f"{already_done:,}", pct_done)
     log.info("  Remaining:         %s", f"{remaining:,}")
     log.info("  PDFs in R2:        %s", f"{pdfs_stored:,}")
