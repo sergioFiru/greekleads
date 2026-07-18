@@ -177,7 +177,7 @@ async def download_pdf(doc_id: int, ar_gemi: str, session: http_requests.Session
 
 # ── Per-company processing ───────────────────────────────────────────────────────
 
-DOWNLOAD_GAP = 5.0  # seconds between PDF download requests (rate-limit guard)
+DOWNLOAD_GAP = 2.5  # seconds between PDF download requests (rate-limit guard)
 
 async def process_company(
     ar_gemi: str,
