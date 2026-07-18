@@ -158,20 +158,48 @@ def upload_to_r2(s3, key: str, data: bytes):
     s3.put_object(Bucket=BUCKET, Key=key, Body=data, ContentType="application/pdf")
 
 
-# ── PDF download with retry on 429 ───────────────────────────────────────────────
+# ── File type detection ──────────────────────────────────────────────────────────
 
-async def download_pdf(doc_id: int, ar_gemi: str, session: http_requests.Session) -> bytes:
+_CT_EXT = {
+    "application/pdf": "pdf",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "application/vnd.ms-excel": "xls",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/msword": "doc",
+    "application/zip": "zip",
+}
+_MAGIC_EXT = [
+    (b"%PDF",         "pdf"),
+    (b"PK\x03\x04",  "xlsx"),   # zip-based: xlsx, docx — content-type distinguishes
+    (b"\xd0\xcf\x11\xe0", "xls"),  # legacy Office compound doc
+]
+
+def _detect_ext(content: bytes, content_type: str) -> str:
+    ct = (content_type or "").split(";")[0].strip().lower()
+    if ct in _CT_EXT:
+        return _CT_EXT[ct]
+    for magic, ext in _MAGIC_EXT:
+        if content[:len(magic)] == magic:
+            return ext
+    return "bin"
+
+
+# ── Document download with retry on 429 ─────────────────────────────────────────
+
+async def download_doc(doc_id: int, ar_gemi: str, session: http_requests.Session):
+    """Returns (content: bytes, ext: str), or (None, None) for empty responses."""
     url = f"{PORTAL}/api/download/financial/{doc_id}?companyId={ar_gemi}"
     for attempt in range(5):
         r = session.get(url, timeout=60)
         if r.status_code == 429:
-            wait = min(2 ** attempt, 30)  # 1, 2, 4, 8, 16 → cap at 30s
+            wait = min(2 ** attempt, 30)
             await asyncio.sleep(wait)
             continue
         r.raise_for_status()
-        if not r.content or r.content[:4] != b"%PDF":
-            raise ValueError(f"Not a PDF ({len(r.content)} bytes)")
-        return r.content
+        if not r.content:
+            return None, None  # file no longer exists — skip silently
+        ext = _detect_ext(r.content, r.headers.get("Content-Type", ""))
+        return r.content, ext
     raise Exception(f"429 after 5 retries: doc_id={doc_id}")
 
 
@@ -217,16 +245,19 @@ async def process_company(
                 if not doc_id:
                     continue
 
-                kak    = str(doc_id)
-                r2_key = f"financials/{ar_gemi}/{kak}.pdf"
+                kak = str(doc_id)
 
                 if not first_doc:
                     await asyncio.sleep(DOWNLOAD_GAP)
                 first_doc = False
 
                 try:
-                    pdf = await download_pdf(doc_id, ar_gemi, http_session)
-                    upload_to_r2(s3, r2_key, pdf)
+                    content, ext = await download_doc(doc_id, ar_gemi, http_session)
+                    if content is None:
+                        log.debug("ar_gemi=%s  doc_id=%s  empty — skipped", ar_gemi, doc_id)
+                        continue
+                    r2_key = f"financials/{ar_gemi}/{kak}.{ext}"
+                    upload_to_r2(s3, r2_key, content)
                     record_doc(conn, kak, ar_gemi, bal_date, r2_key)
                     docs_downloaded += 1
                 except Exception as e:
