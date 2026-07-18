@@ -154,8 +154,8 @@ def next_batch(conn):
               AND c.status_descr = 'Ενεργή'
               {LEGAL_TYPE_FILTER}
             ORDER BY c.ar_gemi
-            LIMIT %s
-        """, (BATCH_SIZE,))
+            LIMIT {BATCH_SIZE}
+        """)
         return [row[0] for row in cur.fetchall()]
 
 
