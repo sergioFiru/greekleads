@@ -177,6 +177,10 @@ Sections: Hero (dotted grid backdrop + LiveExhibit with crop marks) → Registry
 - [x] Railway live watcher fix — `runner.py` now reconnects per-job (was crashing every 10min on idle connection)
 - [x] `website_scanner` bot — scans new company websites for socials every 3 min, never rescans (`website_scanned_at` column)
 - [x] `scan_utils.py` — shared scan logic (extract_all, scan_site, PATTERNS) used by bot + bulk scraper
+- [x] Social URL bug fixes — removed erroneous `@` prefix from Instagram/Twitter URLs; fixed LinkedIn URLs missing `/company/` path (5,590 DB rows patched); regex updated so new scans are correct
+- [x] ΑΤΟΜΙΚΗ persons backfill — `sync_persons` now inserts `co_name_el` as `ΙΔΙΟΚΤΗΤΗΣ` for sole proprietorships; full backfill of 1,121,499 firms run directly via Python (Railway console LIMIT 100 workaround)
+- [x] Live company count — `/api/stats` endpoint (`COUNT(*)` on companies); home page fetches on mount (replaced hardcoded 1,284,940); search page switched from stale `pg_class.reltuples` to real count; `LiveExhibit` seeds counter from live DB value
+- [x] `.gitignore` encoding fix — file was UTF-16 so git never honoured the `.env` rule; rewritten as UTF-8; `scripts/.env` untracked
 
 ## What's Next
 
@@ -254,3 +258,7 @@ Scrape vrisko.gr for supplementary company data not available in GEMI (details T
 - 2026-07-07: Complete home page rewrite — AGORA design, 13 sections, scroll-snap, dark mode, particles.js
 - 2026-07-07: Fixed Railway live watcher idle connection crash — runner.py now calls get_conn() per-job
 - 2026-07-07: Built website_scanner bot — scans new firm URLs for socials (3 min interval, 20/batch, website_scanned_at tracks what's done)
+- 2026-07-13: Fixed social URL bugs — Instagram/Twitter `@` prefix removed; LinkedIn missing `/company/` path fixed (regex + 5,590 DB rows)
+- 2026-07-13: ΑΤΟΜΙΚΗ persons full backfill — 1,121,499 sole proprietor owners inserted into company_persons via direct Python connection (bypassing Railway console LIMIT 100)
+- 2026-07-13: Live company count — `/api/stats` route, home page dynamic fetch, search page real COUNT(*), LiveExhibit seeded from DB
+- 2026-07-13: Fixed scripts/.gitignore UTF-16 encoding → UTF-8; scripts/.env fully untracked
