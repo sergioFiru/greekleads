@@ -38,17 +38,55 @@ logging.basicConfig(
 log = logging.getLogger("pw_runner")
 
 # ── Config ──────────────────────────────────────────────────────────────────────
-WORKERS     = 3
-BATCH_SIZE  = 60      # companies fetched per DB refill (20 per worker)
+# All perf knobs are env vars so they can be tuned on Railway WITHOUT redeploying
+# code. Change the var, restart the service — it's resumable.
+WORKERS     = int(os.getenv("PW_WORKERS", "5"))     # parallel browser contexts
+BATCH_SIZE  = WORKERS * 20                            # companies per DB refill
 PORTAL      = "https://publicity.businessportal.gr"
 BUCKET      = os.getenv("R2_BUCKET", "greekleads-financials")
 NAV_TIMEOUT = 30_000  # ms per page navigation
-API_TIMEOUT = 25_000  # ms waiting for /api/company/details response
+API_TIMEOUT = int(os.getenv("PW_API_TIMEOUT_MS", "25000"))  # ms wait for details
+
+# GLOBAL download pacing — total downloads/sec across ALL workers, not per worker.
+# This is what actually protects against 429s: the portal sees the SUM of every
+# worker's requests, so throttling globally lets us raise WORKERS for parallelism
+# without multiplying portal load.
+# Tuning: watch the logs. If [FAIL] / "429" warnings appear, LOWER this. If none
+# appear for a while, raise it ~20% and watch again. 3 old workers at a 2.5s
+# per-worker gap ≈ 1.2 downloads/sec peak, so that is the safe starting point.
+GLOBAL_DL_RATE = float(os.getenv("PW_DL_RATE", "1.2"))  # downloads per second
 
 _UA = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
+
+
+# ── Global download rate limiter ─────────────────────────────────────────────────
+
+class GlobalRateLimiter:
+    """
+    One shared token bucket for ALL workers. `acquire()` blocks just long enough
+    to keep the combined download rate at ~rate_per_sec, no matter how many
+    workers call it. Holding the lock across the sleep is intentional — it
+    serialises the *grant times* so requests come out evenly spaced instead of
+    in bursts (bursts are what trip rate limiters).
+    """
+
+    def __init__(self, rate_per_sec: float):
+        self._interval = (1.0 / rate_per_sec) if rate_per_sec > 0 else 0.0
+        self._lock = asyncio.Lock()
+        self._next = 0.0
+
+    async def acquire(self):
+        if self._interval <= 0:
+            return
+        async with self._lock:
+            now = time.monotonic()
+            wait = self._next - now
+            if wait > 0:
+                await asyncio.sleep(wait)
+            self._next = max(now, self._next) + self._interval
 
 # ── DB ───────────────────────────────────────────────────────────────────────────
 
@@ -205,14 +243,13 @@ async def download_doc(doc_id: int, ar_gemi: str, session: http_requests.Session
 
 # ── Per-company processing ───────────────────────────────────────────────────────
 
-DOWNLOAD_GAP = 2.5  # seconds between PDF download requests (rate-limit guard)
-
 async def process_company(
     ar_gemi: str,
     page,
     s3,
     conn,
     http_session: http_requests.Session,
+    limiter: GlobalRateLimiter,
 ) -> tuple:
     url = f"{PORTAL}/company/{ar_gemi}"
     financial_entries = []
@@ -236,7 +273,6 @@ async def process_company(
 
     docs_downloaded = 0
     docs_failed     = 0
-    first_doc       = True
     for period in financial_entries:
         for files in (period.get("FilesAndAuditors") or []):
             for doc in (files.get("balancesheet") or []):
@@ -247,9 +283,9 @@ async def process_company(
 
                 kak = str(doc_id)
 
-                if not first_doc:
-                    await asyncio.sleep(DOWNLOAD_GAP)
-                first_doc = False
+                # Global pacing across all workers (replaces the old per-worker
+                # fixed gap). This is the single 429 throttle for the whole crawl.
+                await limiter.acquire()
 
                 try:
                     content, ext = await download_doc(doc_id, ar_gemi, http_session)
@@ -283,6 +319,7 @@ async def worker(
     total_target: int,
     already_done: int,
     session_start: float,
+    limiter: GlobalRateLimiter,
 ):
     conn = get_conn()
     http_session = http_requests.Session()
@@ -310,7 +347,7 @@ async def worker(
         t0 = time.time()
         has_fail = False
         try:
-            docs, has_fail = await process_company(ar_gemi, page, s3, conn, http_session)
+            docs, has_fail = await process_company(ar_gemi, page, s3, conn, http_session, limiter)
         except Exception as e:
             log.error("worker-%d  ar_gemi=%s  unexpected: %s", worker_id, ar_gemi, e)
             docs     = 0
@@ -378,8 +415,11 @@ async def main():
     log.info("  Already scanned: %s", f"{already_done:,}")
     log.info("  Remaining:       %s", f"{max(total_target - already_done, 0):,}")
     log.info("  Workers:         %d", WORKERS)
+    log.info("  Global DL rate:  %.2f/sec  (%.0f/min)", GLOBAL_DL_RATE, GLOBAL_DL_RATE * 60)
+    log.info("  API timeout:     %d ms", API_TIMEOUT)
     log.info("=" * 60)
 
+    limiter = GlobalRateLimiter(GLOBAL_DL_RATE)
     stats = {"done": 0, "docs": 0}
     session_start = time.time()
 
@@ -405,7 +445,7 @@ async def main():
 
         worker_tasks = [
             asyncio.create_task(
-                worker(i + 1, queue, browser, s3, stats, total_target, already_done, session_start)
+                worker(i + 1, queue, browser, s3, stats, total_target, already_done, session_start, limiter)
             )
             for i in range(WORKERS)
         ]

@@ -527,22 +527,28 @@ export default function SearchPage() {
   const endRow   = total != null ? Math.min(page * 50, total) : 0
 
   return (
+    <>
+    <div className="sp-breadcrumb">
+      <Link href="/">Αρχική</Link>
+      <span>/</span>
+      <span>Κατάλογος εταιρειών</span>
+    </div>
     <div className="sp-layout">
 
       {/* ── SIDEBAR ── */}
       <aside className="sp-sidebar" ref={sidebarRef}>
         <div className="sp-sidebar-hd">
-          <span className="sp-sidebar-title">Filters</span>
+          <span className="sp-sidebar-title">Φίλτρα</span>
           {pills.length > 0 && (
-            <button className="sp-reset-btn" onClick={clearAll}>Reset</button>
+            <button className="sp-reset-btn" onClick={clearAll}>Καθαρισμός</button>
           )}
         </div>
 
-        <FilterGroup title="Data enrichment" defaultOpen active={filters.has_email || filters.has_phone || filters.has_website || filters.has_no_website}>
-          <CheckRow label="Verified email"  checked={filters.has_email}      onChange={() => setFilters(f => ({ ...f, has_email:      !f.has_email }))} />
-          <CheckRow label="Phone number"    checked={filters.has_phone}      onChange={() => setFilters(f => ({ ...f, has_phone:      !f.has_phone }))} />
-          <CheckRow label="Website"         checked={filters.has_website}    onChange={() => setFilters(f => ({ ...f, has_website:    !f.has_website,    has_no_website: false }))} />
-          <CheckRow label="No website"      checked={filters.has_no_website} onChange={() => setFilters(f => ({ ...f, has_no_website: !f.has_no_website, has_website:    false }))} />
+        <FilterGroup title="Στοιχεία επικοινωνίας" defaultOpen active={filters.has_email || filters.has_phone || filters.has_website || filters.has_no_website}>
+          <CheckRow label="Επαληθευμένο email"  checked={filters.has_email}      onChange={() => setFilters(f => ({ ...f, has_email:      !f.has_email }))} />
+          <CheckRow label="Τηλέφωνο"             checked={filters.has_phone}      onChange={() => setFilters(f => ({ ...f, has_phone:      !f.has_phone }))} />
+          <CheckRow label="Ιστότοπος"            checked={filters.has_website}    onChange={() => setFilters(f => ({ ...f, has_website:    !f.has_website,    has_no_website: false }))} />
+          <CheckRow label="Χωρίς ιστότοπο"       checked={filters.has_no_website} onChange={() => setFilters(f => ({ ...f, has_no_website: !f.has_no_website, has_website:    false }))} />
         </FilterGroup>
 
         <FilterGroup title="Κοινωνικά δίκτυα" active={filters.has_instagram || filters.has_facebook || filters.has_linkedin || filters.has_twitter || filters.has_tiktok || filters.has_youtube}>
@@ -564,7 +570,7 @@ export default function SearchPage() {
           ))}
         </FilterGroup>
 
-        <FilterGroup title="Location" defaultOpen active={filters.prefectures.length > 0}>
+        <FilterGroup title="Τοποθεσία" defaultOpen active={filters.prefectures.length > 0}>
           {topPrefs.map(p => (
             <CheckRow key={p} checked={filters.prefectures.includes(p)} onChange={() => togglePref(p)} label={p} />
           ))}
@@ -600,7 +606,7 @@ export default function SearchPage() {
           ))}
           {filterOptions.legal_types.length > TOP_LEGAL && !legalShowAll && (
             <button className="sp-show-all" onClick={() => setLegalShowAll(true)}>
-              Show all {filterOptions.legal_types.length} →
+              Εμφάνιση όλων {filterOptions.legal_types.length} →
             </button>
           )}
         </FilterGroup>
@@ -636,7 +642,7 @@ export default function SearchPage() {
           />
         </FilterGroup>
 
-        <FilterGroup title="Founded" defaultOpen active={!!(filters.year_from || filters.year_to)}>
+        <FilterGroup title="Έτος Ίδρυσης" defaultOpen active={!!(filters.year_from || filters.year_to)}>
           <div className="sp-year-row">
             <input className="sp-filter-input" placeholder="Από" value={filters.year_from} onChange={e => setFilters(f => ({ ...f, year_from: e.target.value }))} />
             <input className="sp-filter-input" placeholder="Έως" value={filters.year_to}   onChange={e => setFilters(f => ({ ...f, year_to:   e.target.value }))} />
@@ -718,8 +724,8 @@ export default function SearchPage() {
             {total != null && (
               <span className="sp-match-count">
                 <strong>{animatedTotal.toLocaleString('el-GR')}</strong>
-                {' companies match'}
-                {selected.size > 0 && <> · <strong>{selected.size}</strong> selected</>}
+                {' εταιρείες'}
+                {selected.size > 0 && <> · <strong>{selected.size}</strong> επιλεγμένα</>}
               </span>
             )}
           </div>
@@ -733,17 +739,17 @@ export default function SearchPage() {
             {/* Card header */}
             <div className="sp-card-header">
               <div className="sp-card-header-left">
-                <span className="sp-card-title">Results</span>
+                <span className="sp-card-title">Αποτελέσματα</span>
                 {total != null && !loading && total > 0 && (
                   <span className="sp-card-sub">
-                    Showing <span className="mono">{startRow}–{endRow}</span> of <span className="mono">{total.toLocaleString('el-GR')}</span>
+                    Εμφάνιση <span className="mono">{startRow}–{endRow}</span> από <span className="mono">{total.toLocaleString('el-GR')}</span>
                   </span>
                 )}
-                {loading && <span className="sp-card-sub">Searching…</span>}
-                {total === 0 && !loading && <span className="sp-card-sub">No results</span>}
+                {loading && <span className="sp-card-sub">Αναζήτηση…</span>}
+                {total === 0 && !loading && <span className="sp-card-sub">Κανένα αποτέλεσμα</span>}
               </div>
               <div className="sp-card-header-right">
-                <span className="sp-sort-label">Sort</span>
+                <span className="sp-sort-label">Ταξινόμηση</span>
                 <select
                   className="sp-sort-select"
                   value={sortBy}
@@ -795,9 +801,11 @@ export default function SearchPage() {
                           style={{ cursor: 'pointer' }}
                         />
                       </th>
-                      <th className="sp-th-company">Company</th>
-                      <th className="sp-th-enrich">Enrichment</th>
-                      <th className="sp-th-actions">Actions</th>
+                      <th className="sp-th-company">Εταιρεία</th>
+                      <th className="sp-th-legal">Νομική Μορφή</th>
+                      <th className="sp-th-enrich">Στοιχεία</th>
+                      <th className="sp-th-year">Ίδρυση</th>
+                      <th className="sp-th-actions">Ενέργειες</th>
                     </tr>
                   </thead>
                   <tbody key={resultsKey}>
@@ -815,17 +823,19 @@ export default function SearchPage() {
                             </div>
                           </div>
                         </td>
+                        <td className="sp-td-legal"><div className="sp-skel" style={{ height: 20, width: 52, borderRadius: 4 }} /></td>
                         <td><div className="sp-skel sp-skel-badges" /></td>
+                        <td className="sp-td-year"><div className="sp-skel" style={{ height: 12, width: 36, marginLeft: 'auto' }} /></td>
                         <td className="sp-td-actions"><div className="sp-skel sp-skel-actions" /></td>
                       </tr>
                     ))}
                     {!loading && sortedRows.length === 0 && (
                       <tr>
-                        <td colSpan={4}>
+                        <td colSpan={6}>
                           <div className="sp-empty">
                             {total === 0
-                              ? 'No results match the current filters'
-                              : 'Use filters or search to find companies'
+                              ? 'Δεν βρέθηκαν αποτελέσματα για τα επιλεγμένα φίλτρα'
+                              : 'Χρησιμοποιήστε φίλτρα ή αναζήτηση για να βρείτε εταιρείες'
                             }
                           </div>
                         </td>
@@ -837,9 +847,7 @@ export default function SearchPage() {
                       const initials = getInitials(c.co_name_el)
                       const isActive = c.status_descr?.toLowerCase().includes('ενεργ')
                       const meta     = [
-                        c.legal_type_descr ?? null,
                         c.municipality_descr || c.prefecture_descr || null,
-                        c.year_founded ? `Founded ${c.year_founded}` : null,
                       ].filter(Boolean).join(' · ')
 
                       return (
@@ -867,6 +875,12 @@ export default function SearchPage() {
                                 {meta && <div className="sp-co-meta">{meta}</div>}
                               </div>
                             </div>
+                          </td>
+
+                          <td className="sp-td-legal">
+                            {c.legal_type_descr && (
+                              <span className="sp-badge-legal">{c.legal_type_descr}</span>
+                            )}
                           </td>
 
                           <td className="sp-td-enrich" onClick={e => e.stopPropagation()}>
@@ -900,6 +914,10 @@ export default function SearchPage() {
                                 <span className="sp-badge sp-badge-inactive">Ανενεργή</span>
                               )}
                             </div>
+                          </td>
+
+                          <td className="sp-td-year">
+                            {c.year_founded ?? '—'}
                           </td>
 
                           <td className="sp-td-actions" onClick={e => e.stopPropagation()}>
@@ -937,7 +955,6 @@ export default function SearchPage() {
                   const meta     = [
                     c.legal_type_descr ?? null,
                     c.municipality_descr || c.prefecture_descr || null,
-                    c.year_founded ? String(c.year_founded) : null,
                   ].filter(Boolean).join(' · ')
 
                   return (
@@ -979,15 +996,15 @@ export default function SearchPage() {
               <div className="sp-footer-left">
                 {selected.size > 0 ? (
                   <>
-                    <span><span className="mono" style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{selected.size}</span> selected</span>
-                    <button className="sp-btn sp-btn-secondary sp-btn-sm" onClick={() => setSelected(new Set())}>Clear</button>
+                    <span><span className="mono" style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{selected.size}</span> επιλεγμένα</span>
+                    <button className="sp-btn sp-btn-secondary sp-btn-sm" onClick={() => setSelected(new Set())}>Καθαρισμός</button>
                     <button className="sp-btn sp-btn-secondary sp-btn-sm">
                       <Icon name="bookmark" size={12} />
-                      Save as list
+                      Αποθήκευση λίστας
                     </button>
                   </>
                 ) : (
-                  <span>Select rows to export or save as a list</span>
+                  <span>Επιλέξτε γραμμές για εξαγωγή CSV</span>
                 )}
               </div>
               <div className="sp-footer-right">
@@ -1021,7 +1038,7 @@ export default function SearchPage() {
                   onClick={exportSelected}
                 >
                   <Icon name="download" size={13} />
-                  Export selected ({selected.size})
+                  Εξαγωγή ({selected.size})
                 </button>
               </div>
             </div>
@@ -1039,5 +1056,6 @@ export default function SearchPage() {
         onApply={applyScoutRecipe}
       />
     </div>
+    </>
   )
 }

@@ -4,10 +4,10 @@ import { usePathname } from 'next/navigation'
 import BrandMark from './BrandMark'
 
 const links = [
-  { href: '/',        label: 'Home' },
-  { href: '/search',  label: 'Companies' },
-  { href: '/people',  label: 'People' },
-  { href: '/pricing', label: 'Pricing' },
+  { href: '/',        label: 'Αρχική' },
+  { href: '/search',  label: 'Εταιρείες' },
+  { href: '/people',  label: 'Στελέχη' },
+  { href: '/pricing', label: 'Τιμές' },
 ]
 
 export default function TopNav({ totalCompanies }: { totalCompanies?: number }) {
@@ -17,7 +17,7 @@ export default function TopNav({ totalCompanies }: { totalCompanies?: number }) 
     <nav className="topnav">
       <Link href="/" className="brand" style={{ textDecoration: 'none' }}>
         <span className="brand-mark"><BrandMark size={20} /></span>
-        <span className="brand-word">GREEKLEADS</span>
+        <span className="brand-word">GreekLeads</span>
       </Link>
 
       <div className="nav-links">
@@ -47,10 +47,10 @@ export default function TopNav({ totalCompanies }: { totalCompanies?: number }) 
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 16 }}>
-        <Link href="/sign-in" className="btn btn-nav">Σύνδεση</Link>
-        <Link href="/sign-up" className="btn btn-primary" style={{ padding: '5px 14px', fontSize: 12.5 }}>
-          Ξεκινήστε δωρεάν
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginLeft: 16 }}>
+        <Link href="/sign-in" className="btn btn-nav" style={{ fontWeight: 600, color: '#16233B' }}>Σύνδεση</Link>
+        <Link href="/sign-up" className="btn btn-primary btn-cta" style={{ padding: '9px 16px', fontSize: 13.5 }}>
+          Δοκιμάστε δωρεάν
         </Link>
       </div>
     </nav>

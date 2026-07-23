@@ -325,7 +325,7 @@ function OverviewTab({
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
                   {activeSocials.map(s => (
                     <a key={s.key} href={ensureHttp(company[s.key]!)} target="_blank" rel="noopener noreferrer"
-                      className="icon-btn" style={{ width: 'auto', padding: '0 10px', fontSize: 12, height: 28 }}>
+                      className="social-pill">
                       {s.label}
                     </a>
                   ))}

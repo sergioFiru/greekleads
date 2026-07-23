@@ -3,10 +3,10 @@ export const dynamic = 'force-dynamic'
 import { Suspense } from 'react'
 import TopNav from '@/components/TopNav'
 import PeopleSearch from '@/components/PeopleSearch'
-import { query } from '@/lib/db'
+import { query, queryOne } from '@/lib/db'
 
 export const metadata = {
-  title: 'Αναζήτηση Προσώπων — GreekLeads',
+  title: 'Αναζήτηση Στελεχών — GreekLeads',
 }
 
 async function getAreas(): Promise<string[]> {
@@ -25,12 +25,21 @@ async function getAreas(): Promise<string[]> {
   }
 }
 
+async function getTotalCompanies(): Promise<number> {
+  try {
+    const row = await queryOne<{ total: string }>('SELECT COUNT(*)::text AS total FROM companies')
+    return parseInt(row?.total ?? '0', 10)
+  } catch {
+    return 0
+  }
+}
+
 export default async function PeoplePage() {
-  const areas = await getAreas()
+  const [areas, total] = await Promise.all([getAreas(), getTotalCompanies()])
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <TopNav />
-      <Suspense><PeopleSearch areas={areas} /></Suspense>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+      <TopNav totalCompanies={total} />
+      <Suspense><PeopleSearch areas={areas} totalCompanies={total} /></Suspense>
     </div>
   )
 }

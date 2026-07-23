@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import Script from 'next/script'
 import Icon from '@/components/Icon'
 import TopNav from '@/components/TopNav'
 
@@ -229,6 +228,42 @@ function ScoutChips({ label, items }: { label: string; items: string[] }) {
 }
 
 // ── LIVE EXHIBIT ─────────────────────────────────────────────────────
+interface HomeStats {
+  companies?: number
+  active?: number
+  withContact?: number
+  withSocial?: number
+}
+
+// The live registry feed, moved out of the hero into its own band so the
+// search bar is the only focal point above the fold.
+function LiveFeedSection({ totalCompanies }: { totalCompanies: number }) {
+  return (
+    <section className="home-screen hero-feed">
+      <div className="hero-feed-inner">
+        <div className="hero-feed-hd">
+          <div>
+            <h2 className="hero-feed-title">Ζωντανή ροή μητρώου</h2>
+            <p className="hero-feed-sub">
+              Νέες εγγραφές και μεταβολές, όπως καταχωρούνται στο ΓΕΜΗ.
+            </p>
+          </div>
+          <Link
+            href="/search"
+            style={{
+              fontSize: 13, fontWeight: 600, color: '#1B4B8F',
+              textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5,
+            }}
+          >
+            Εξερευνήστε το μητρώο <Icon name="chevron-right" size={12} />
+          </Link>
+        </div>
+        <LiveExhibit initialCount={totalCompanies} />
+      </div>
+    </section>
+  )
+}
+
 function LiveExhibit({ initialCount }: { initialCount: number }) {
   const [tick, setTick] = useState(0)
   const [counter, setCounter] = useState(initialCount)
@@ -263,7 +298,7 @@ function LiveExhibit({ initialCount }: { initialCount: number }) {
             boxShadow: '0 0 0 3px rgba(62,181,122,0.22)',
             animation: 'agora-pulse 1.6s ease-in-out infinite',
           }} />
-          <span style={{ fontSize: 11.5, fontWeight: 500, letterSpacing: '0.06em' }}>LIVE · ΓΕΜΗ STREAM</span>
+          <span style={{ fontSize: 11.5, fontWeight: 500, letterSpacing: '0.06em' }}>ΖΩΝΤΑΝΗ ΡΟΗ ΓΕΜΗ</span>
         </div>
         <span style={{ fontSize: 10.5, color: 'var(--nav-text-muted)', fontFamily: 'var(--font-mono)' }}>
           2026-07-02 · 04:12 EET
@@ -275,15 +310,15 @@ function LiveExhibit({ initialCount }: { initialCount: number }) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
       }}>
         <div>
-          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Companies indexed</div>
+          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Καταχωρημένες επιχειρήσεις</div>
           <div className="mono" style={{
             fontSize: 26, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '-0.01em',
             fontVariantNumeric: 'tabular-nums', marginTop: 2,
           }}>{counter.toLocaleString('en-US')}</div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Last 24h</div>
-          <div className="mono" style={{ fontSize: 15, fontWeight: 500, color: 'var(--gemi-text)', marginTop: 2 }}>+1,284 records</div>
+          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Τελευταίες 24 ώρες</div>
+          <div className="mono" style={{ fontSize: 15, fontWeight: 500, color: 'var(--gemi-text)', marginTop: 2 }}>+1.284 εγγραφές</div>
         </div>
       </div>
 
@@ -318,9 +353,9 @@ function LiveExhibit({ initialCount }: { initialCount: number }) {
       }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <Icon name="verified" size={11} stroke={1.6} style={{ color: 'var(--gemi-text)' }} />
-          Source · <span className="mono" style={{ color: 'var(--text-primary)' }}>business.gov.gr/gemi</span>
+          Πηγή · <span className="mono" style={{ color: 'var(--text-primary)' }}>business.gov.gr/gemi</span>
         </span>
-        <span className="mono" style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>stream · 14 events/min</span>
+        <span className="mono" style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>ροή · 14 γεγονότα/λεπτό</span>
       </div>
     </div>
   )
@@ -441,177 +476,447 @@ function CropMarks() {
 }
 
 // ── HERO ─────────────────────────────────────────────────────────────
-function Hero({ onNavigate, totalCompanies }: { onNavigate: (r: string) => void; totalCompanies: number }) {
-  const [query, setQuery] = useState('')
-  const [focused, setFocused] = useState(false)
 
-  const SUGGESTIONS = [
-    { type: 'company', primary: 'Pelagos Maritime Group', secondary: 'A.E. · Piraeus · ΓΕΜΗ 044238900100', icon: 'building' },
-    { type: 'person',  primary: 'Dimitrios Konstantinou', secondary: '4 companies · Managing Director, shareholder', icon: 'users' },
-    { type: 'filter',  primary: 'Restaurants in Athens with Instagram, no website', secondary: '612 companies', icon: 'filter' },
-    { type: 'filter',  primary: 'Software firms in Thessaloniki with verified email', secondary: '248 companies', icon: 'filter' },
-  ]
-  const filtered = query ? SUGGESTIONS.filter(s => s.primary.toLowerCase().includes(query.toLowerCase())) : SUGGESTIONS
+interface Suggestion {
+  ar_gemi: string
+  name: string
+  legal_type: string | null
+  place: string | null
+  status: string | null
+}
+
+interface NewFirm {
+  ar_gemi: string
+  name: string
+  legal_type: string
+  city: string
+  ts: number          // epoch ms of registration
+}
+
+interface ScoutResult {
+  filters: {
+    prefectures: string[]
+    legal_types: string[]
+    has_email: boolean
+    has_phone: boolean
+    has_website: boolean
+    has_no_website: boolean
+    statuses: string[]
+    activities: string[]
+  }
+  explanation: string
+  summary: string
+  result_count: number
+  activity_keywords: string[]
+}
+
+// Must match SearchPage's KAD_SESSION_KEY / KAD_URL_MAX — the hero writes the
+// handoff that SearchPage reads.
+const SCOUT_KAD_KEY = 'gl_kad_filter'
+const SCOUT_KAD_URL_MAX = 5
+
+const SCOUT_EXAMPLES = [
+  'Πουλάω λογισμικό σε λογιστικά γραφεία',
+  'Ανακαινίσεις σε ξενοδοχεία στην Κρήτη',
+  'Καφέ χονδρικής σε εστιατόρια και μπαρ',
+]
+
+// PLACEHOLDER DATA — swap for the live watcher feed.
+// new_firms_watcher.py already polls ΓΕΜΗ every 10 min; when that is exposed
+// over a socket/SSE, replace useFakeNewFirms() with the live subscription.
+// The NewFirm shape above is what the real feed should emit.
+const FAKE_NEW_FIRMS: Array<Omit<NewFirm, 'ts'>> = [
+  { ar_gemi: '181240301000', name: 'ΑΙΓΑΙΟ ΤΕΧΝΙΚΗ ΙΚΕ',            legal_type: 'ΙΚΕ',     city: 'ΠΕΙΡΑΙΑΣ' },
+  { ar_gemi: '181239802000', name: 'ΚΑΛΛΙΣΤΩ ΤΡΟΦΙΜΑ ΑΕ',           legal_type: 'ΑΕ',      city: 'ΘΕΣΣΑΛΟΝΙΚΗ' },
+  { ar_gemi: '181238105000', name: 'ΔΕΛΦΟΙ ΣΥΜΒΟΥΛΕΥΤΙΚΗ ΟΕ',       legal_type: 'ΟΕ',      city: 'ΑΘΗΝΑ' },
+  { ar_gemi: '181237409000', name: 'ΜΕΛΤΕΜΙ ΤΟΥΡΙΣΤΙΚΗ ΙΚΕ',        legal_type: 'ΙΚΕ',     city: 'ΡΟΔΟΣ' },
+  { ar_gemi: '181236703000', name: 'ΠΑΠΠΑΣ ΓΕΩΡΓΙΟΣ',               legal_type: 'ΑΤΟΜΙΚΗ', city: 'ΛΑΡΙΣΑ' },
+  { ar_gemi: '181235908000', name: 'ΟΛΥΜΠΟΣ ΕΝΕΡΓΕΙΑΚΗ ΑΕ',         legal_type: 'ΑΕ',      city: 'ΚΑΤΕΡΙΝΗ' },
+  { ar_gemi: '181235204000', name: 'ΚΡΗΤΙΚΑ ΑΓΡΟΤΙΚΑ ΙΚΕ',          legal_type: 'ΙΚΕ',     city: 'ΗΡΑΚΛΕΙΟ' },
+  { ar_gemi: '181234607000', name: 'ΝΑΥΣΙΚΑ ΝΑΥΤΙΛΙΑΚΗ ΕΠΕ',        legal_type: 'ΕΠΕ',     city: 'ΠΕΙΡΑΙΑΣ' },
+  { ar_gemi: '181233901000', name: 'ΖΑΓΟΡΙ ΞΕΝΩΝΕΣ ΙΚΕ',            legal_type: 'ΙΚΕ',     city: 'ΙΩΑΝΝΙΝΑ' },
+  { ar_gemi: '181233205000', name: 'ΑΤΤΙΚΗ ΨΗΦΙΑΚΗ ΑΕ',             legal_type: 'ΑΕ',      city: 'ΑΘΗΝΑ' },
+]
+
+function useFakeNewFirms(visible = 5) {
+  const [items, setItems] = useState<NewFirm[]>([])
+  const idx = useRef(0)
+
+  useEffect(() => {
+    const now = Date.now()
+    // Seed with a few already-aged entries so the panel is never empty.
+    setItems(
+      FAKE_NEW_FIRMS.slice(0, visible).map((f, i) => ({ ...f, ts: now - (i + 1) * 96_000 }))
+    )
+    idx.current = visible
+
+    const t = setInterval(() => {
+      const next = FAKE_NEW_FIRMS[idx.current % FAKE_NEW_FIRMS.length]
+      idx.current += 1
+      setItems(prev => [{ ...next, ts: Date.now() }, ...prev].slice(0, visible))
+    }, 5200)
+    return () => clearInterval(t)
+  }, [visible])
+
+  return items
+}
+
+function agoLabel(ts: number, now: number): string {
+  const s = Math.max(0, Math.round((now - ts) / 1000))
+  if (s < 10) return 'τώρα'
+  if (s < 60) return `${s}δ`
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m}λ`
+  return `${Math.round(m / 60)}ω`
+}
+
+function Hero({ totalCompanies, stats }: { totalCompanies: number; stats: HomeStats }) {
+  const router = useRouter()
+  const [mode, setMode]     = useState<'scout' | 'manual'>('scout')
+  const [query, setQuery]   = useState('')
+  const [open, setOpen]     = useState(false)
+  const [items, setItems]   = useState<Suggestion[]>([])
+  const [busy, setBusy]     = useState(false)
+  const [cursor, setCursor] = useState(-1)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const seqRef = useRef(0)
+
+  // Scout mode
+  const [brief, setBrief]     = useState('')
+  const [scouting, setScouting] = useState(false)
+  const [recipe, setRecipe]   = useState<ScoutResult | null>(null)
+  const [scoutErr, setScoutErr] = useState<string | null>(null)
+
+  const newFirms = useFakeNewFirms(5)
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 10_000)
+    return () => clearInterval(t)
+  }, [])
+
+  const trimmed = query.trim()
+
+  // Company typeahead — companies only.
+  useEffect(() => {
+    if (trimmed.length < 3) { setItems([]); setBusy(false); return }
+    setBusy(true)
+    const seq = ++seqRef.current
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/suggest?q=${encodeURIComponent(trimmed)}`)
+        const d = await r.json()
+        if (seq !== seqRef.current) return   // drop stale keystroke responses
+        setItems(d.results ?? [])
+      } catch {
+        if (seq === seqRef.current) setItems([])
+      } finally {
+        if (seq === seqRef.current) setBusy(false)
+      }
+    }, 180)
+    return () => clearTimeout(t)
+  }, [trimmed])
+
+  useEffect(() => {
+    if (!open) return
+    const h = (e: MouseEvent) => {
+      if (!boxRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+
+  const goToSearch = () =>
+    router.push(trimmed ? `/search?name=${encodeURIComponent(trimmed)}` : '/search')
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') { setOpen(false); return }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setOpen(true); setCursor(c => Math.min(c + 1, items.length - 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor(c => Math.max(c - 1, -1)) }
+    else if (e.key === 'Enter') {
+      if (cursor >= 0 && items[cursor]) router.push(`/etaireies/${items[cursor].ar_gemi}`)
+      else goToSearch()
+    }
+  }
+
+  // ── Scout ──
+  const runScout = async () => {
+    const text = brief.trim()
+    if (text.length < 8 || scouting) return
+    setScouting(true); setScoutErr(null); setRecipe(null)
+    try {
+      const r = await fetch('/api/scout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: text }] }),
+      })
+      const d = await r.json()
+      if (d.error) { setScoutErr(d.error); return }
+      if (!d.filters) { setScoutErr('Ο Scout δεν κατάλαβε το αίτημα. Δοκίμασε πιο συγκεκριμένη περιγραφή.'); return }
+      setRecipe(d as ScoutResult)
+    } catch {
+      setScoutErr('Κάτι πήγε στραβά. Δοκίμασε ξανά.')
+    } finally {
+      setScouting(false)
+    }
+  }
+
+  // Hand Scout's filters to /search. The resolved KAD list routinely runs to
+  // hundreds of values, which would blow the URL length limit, so SearchPage
+  // reads them from sessionStorage when `has_kad=1` is present.
+  const openScoutResults = () => {
+    if (!recipe) return
+    const f = recipe.filters
+    const p = new URLSearchParams()
+    ;(f.statuses?.length ? f.statuses : ['Ενεργή']).forEach(s => p.append('status', s))
+    f.prefectures?.forEach(s => p.append('prefecture', s))
+    f.legal_types?.forEach(s => p.append('legal_type', s))
+    if (f.has_email)      p.set('email', '1')
+    if (f.has_phone)      p.set('phone', '1')
+    if (f.has_website)    p.set('website', '1')
+    if (f.has_no_website) p.set('no_website', '1')
+
+    const acts = f.activities ?? []
+    if (acts.length > SCOUT_KAD_URL_MAX) {
+      try {
+        sessionStorage.setItem(SCOUT_KAD_KEY, JSON.stringify(acts))
+        p.set('has_kad', '1')
+      } catch {
+        // sessionStorage unavailable — fall back to the broader segment rather
+        // than a URL that would 431.
+      }
+    } else {
+      acts.forEach(a => p.append('kad', a))
+    }
+    router.push(`/search?${p.toString()}`)
+  }
+
+  const showDrop = open && trimmed.length >= 3
+  const active   = stats.active || 0
+  const contact  = stats.withContact || 0
 
   return (
-    <section className="hero-band home-screen" style={{ position: 'relative', overflow: 'hidden' }}>
-      <HeroBackdrop />
-      <ParticlesBackdrop />
+    <section className="hs">
+      <div className="hs-inner">
 
-      <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1, width: '100%' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.05fr 0.95fr', gap: 56, alignItems: 'center' }}>
+        {/* ── LEFT ── */}
+        <div>
+          <div className="hs-brand">
+            <span className="hs-brand-mark">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <rect x="2" y="2" width="9" height="9" fill="#fff" opacity="0.55" />
+                <rect x="13" y="13" width="9" height="9" fill="#fff" />
+              </svg>
+            </span>
+            <span className="hs-brand-name">GreekLeads</span>
+            <span className="hs-brand-tag">Επιχειρηματικό μητρώο</span>
+          </div>
 
-          {/* LEFT */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 22, flexWrap: 'wrap' }}>
-              <span className="badge badge-gemi" style={{ height: 22, padding: '0 9px' }}>
-                <Icon name="verified" size={11} stroke={1.6} />
-                Official ΓΕΜΗ data partner
+          <h1 className="hs-title">Βρες τους επόμενους<br />πελάτες σου.</h1>
+
+          <p className="hs-sub">
+            Κάθε ελληνική επιχείρηση, έτοιμη για προσέγγιση.
+          </p>
+
+          <div className="hs-modes" role="tablist">
+            <button
+              className="hs-mode"
+              data-on={mode === 'scout' ? 'true' : 'false'}
+              onClick={() => setMode('scout')}
+              role="tab"
+              aria-selected={mode === 'scout'}
+            >
+              <Icon name="sparkle" size={13} />
+              Βρες μου πελάτες
+              <span className="hs-mode-badge">SCOUT AI</span>
+            </button>
+            <button
+              className="hs-mode"
+              data-on={mode === 'manual' ? 'true' : 'false'}
+              onClick={() => { setMode('manual'); setRecipe(null); setScoutErr(null) }}
+              role="tab"
+              aria-selected={mode === 'manual'}
+            >
+              <Icon name="search" size={13} />
+              Αναζήτηση εταιρείας
+            </button>
+          </div>
+
+          <div className="hs-search" ref={boxRef}>
+            <div className="hs-field">
+              <span className="hs-ico">
+                <Icon name={mode === 'scout' ? 'sparkle' : 'search'} size={19} />
               </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--text-secondary)' }}>
-                <span style={{ width: 4, height: 4, borderRadius: 2, background: 'var(--text-muted)', display: 'inline-block' }} />
-                <span className="mono" style={{ color: 'var(--text-primary)' }}>14</span> records ingested in the last minute
-              </span>
-            </div>
 
-            <h1 style={{ margin: 0, fontSize: 64, lineHeight: 1.02, letterSpacing: '-0.03em', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Every Greek company.<br />
-              Everyone behind them.<br />
-              <span style={{ color: 'var(--accent)' }}>One connected map.</span>
-            </h1>
+              {mode === 'scout' ? (
+                <textarea
+                  className="hs-input-scout"
+                  placeholder="Περίγραψε τι πουλάς και σε ποιους…"
+                  value={brief}
+                  onChange={e => setBrief(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runScout() }
+                  }}
+                  rows={1}
+                  aria-label="Περιγραφή πελατών για τον Scout"
+                />
+              ) : (
+                <input
+                  className="hs-input"
+                  placeholder="Αναζήτησε επιχείρηση, ΓΕΜΗ ή ΑΦΜ…"
+                  value={query}
+                  onChange={e => { setQuery(e.target.value); setOpen(true); setCursor(-1) }}
+                  onFocus={() => setOpen(true)}
+                  onKeyDown={onKeyDown}
+                  autoComplete="off"
+                  aria-label="Αναζήτηση επιχείρησης"
+                />
+              )}
 
-            <p style={{ fontSize: 16.5, lineHeight: 1.55, color: 'var(--text-secondary)', marginTop: 22, maxWidth: 548 }}>
-              AGORA turns the official ΓΕΜΗ registry — 1.28M companies and 4.1M of their
-              directors, shareholders, and reps — into a searchable network. Follow the
-              people, find them on social, and push qualified leads straight to your stack.
-            </p>
-
-            <div style={{ marginTop: 26, position: 'relative', maxWidth: 560 }}>
-              <span style={{ position: 'absolute', left: 16, top: 18, color: 'var(--text-muted)' }}>
-                <Icon name="search" size={16} />
-              </span>
-              <input
-                className="focus-ring"
-                placeholder="Search a company, a person, or describe who you want…"
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                onFocus={() => setFocused(true)}
-                onBlur={() => setTimeout(() => setFocused(false), 150)}
-                style={{
-                  width: '100%', height: 54, padding: '0 130px 0 44px', fontSize: 15,
-                  background: 'var(--surface)', border: '1px solid var(--hero-input-border)',
-                  borderRadius: 10, fontFamily: 'var(--font-sans)', color: 'var(--text-primary)',
-                  boxShadow: 'var(--hero-float-shadow)',
-                }}
-              />
-              <button
-                className="btn btn-primary"
-                style={{ position: 'absolute', right: 6, top: 8, height: 36, padding: '0 16px', fontSize: 13 }}
-                onClick={() => onNavigate('search')}
-              >
-                Search free <Icon name="arrow-up-right" size={12} />
-              </button>
-
-              {focused && filtered.length > 0 && (
-                <div className="card" style={{
-                  position: 'absolute', top: 58, left: 0, right: 0, padding: 6,
-                  zIndex: 20, boxShadow: '0 12px 32px rgba(26,35,50,0.08)', background: 'var(--surface)',
-                }}>
-                  <div style={{ padding: '6px 10px', fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Suggestions</div>
-                  {filtered.map((s, i) => (
-                    <div key={i} onClick={() => onNavigate('search')} style={{
-                      padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 10,
-                      borderRadius: 6, cursor: 'pointer',
-                    }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'var(--row-hover)' }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
-                    >
-                      <span style={{
-                        width: 26, height: 26, borderRadius: 5, flexShrink: 0,
-                        background: s.type === 'company' ? 'var(--accent-light)' : 'var(--subtle-bg)',
-                        color: s.type === 'company' ? 'var(--li-text)' : 'var(--text-secondary)',
-                        border: s.type === 'company' ? '0.5px solid var(--li-border)' : '0.5px solid var(--border)',
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      }}>
-                        <Icon name={s.icon} size={12} />
-                      </span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{s.primary}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{s.secondary}</div>
-                      </div>
-                      <span style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.type}</span>
-                      <Icon name="chevron-right" size={12} style={{ color: 'var(--text-muted)' }} />
-                    </div>
-                  ))}
-                </div>
+              {mode === 'scout' ? (
+                <button
+                  className="hs-btn"
+                  onClick={runScout}
+                  disabled={scouting || brief.trim().length < 8}
+                  style={scouting || brief.trim().length < 8 ? { opacity: .55, cursor: 'not-allowed' } : undefined}
+                >
+                  {scouting ? 'Ψάχνει…' : 'Βρες πελάτες'}
+                </button>
+              ) : (
+                <button className="hs-btn" onClick={goToSearch}>Αναζήτηση</button>
               )}
             </div>
 
-            <div style={{ marginTop: 16, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12.5, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ width: 6, height: 6, borderRadius: 3, background: '#3EB57A', boxShadow: '0 0 0 3px rgba(62,181,122,0.18)', display: 'inline-block' }} />
-                25 free company exports a month — no card needed
-              </span>
-              <span style={{ width: 1, height: 12, background: 'var(--border)', display: 'inline-block' }} />
-              <button onClick={() => onNavigate('pricing')} style={{
-                background: 'none', border: 'none', padding: 0,
-                color: 'var(--accent)', fontSize: 12.5, fontWeight: 500,
-                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
-              }}>See pricing <Icon name="chevron-right" size={11} /></button>
-            </div>
+            {mode === 'manual' && showDrop && (
+              <div className="hs-drop">
+                {items.length > 0 ? items.map((s, i) => {
+                  const col      = colorFor(s.ar_gemi)
+                  const isActive = s.status?.toLowerCase().includes('ενεργ')
+                  const meta     = [s.legal_type, s.place].filter(Boolean).join(' · ')
+                  return (
+                    <Link
+                      key={s.ar_gemi}
+                      href={`/etaireies/${s.ar_gemi}`}
+                      className="hs-row"
+                      data-cursor={i === cursor ? 'true' : 'false'}
+                      onMouseEnter={() => setCursor(i)}
+                    >
+                      <span className="hs-row-logo" style={{ background: col.bg, color: col.fg, border: `1px solid ${col.border}` }}>
+                        {initialOf(s.name)}
+                      </span>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span className="hs-row-name">{s.name}</span>
+                        {meta && <span className="hs-row-meta">{meta}</span>}
+                      </span>
+                      <span
+                        className="hs-tag"
+                        style={isActive
+                          ? { background: '#E8F6EE', color: '#136B3E', border: '1px solid #BEE4CC' }
+                          : { background: '#F1EFE7', color: '#8A93A3', border: '1px solid #E2E0D6' }}
+                      >
+                        {isActive ? 'Ενεργή' : 'Ανενεργή'}
+                      </span>
+                    </Link>
+                  )
+                }) : (
+                  <div className="hs-empty">
+                    {busy ? 'Αναζήτηση…' : `Καμία επιχείρηση για «${trimmed}»`}
+                  </div>
+                )}
+                <a className="hs-foot" onClick={goToSearch}>
+                  <Icon name="search" size={13} />
+                  Όλα τα αποτελέσματα για «{trimmed}»
+                </a>
+              </div>
+            )}
+          </div>
 
-            <div style={{ marginTop: 30, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Search across</span>
-              {[
-                { l: '1.28M companies', icon: 'building' },
-                { l: '4.1M people',     icon: 'users' },
-                { l: 'Social profiles', icon: 'instagram' },
-                { l: 'Verified contacts', icon: 'mail' },
-              ].map((chip, i) => (
-                <span key={i} className="hero-chip">
-                  <Icon name={chip.icon} size={11} stroke={1.6} style={{ color: 'var(--accent)' }} />
-                  {chip.l}
-                </span>
+          {/* ── Scout: examples / working / result ── */}
+          {mode === 'scout' && !recipe && !scouting && !scoutErr && (
+            <div className="hs-examples">
+              <span className="hs-examples-l">Δοκίμασε:</span>
+              {SCOUT_EXAMPLES.map(x => (
+                <button key={x} className="hs-example" onClick={() => setBrief(x)}>{x}</button>
               ))}
             </div>
-          </div>
+          )}
 
-          {/* RIGHT — live exhibit */}
-          <div style={{ position: 'relative' }}>
-            <CropMarks />
-            <div style={{ position: 'relative', zIndex: 1 }}>
-              <LiveExhibit initialCount={totalCompanies} />
-            </div>
-          </div>
-        </div>
-
-        {/* Stats strip at bottom of hero */}
-        <div style={{
-          marginTop: 44, paddingTop: 28, borderTop: '1px solid var(--border)',
-          display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0,
-        }}>
-          {[
-            { value: '1,284,940', label: 'Active legal entities',      note: '100% of ΓΕΜΗ',         icon: 'building',  tint: '#3B82C4' },
-            { value: '4,108,420', label: 'Directors & shareholders',    note: 'fully cross-linked',    icon: 'users',     tint: '#6F5FCB' },
-            { value: '326,400',   label: 'With social profiles',        note: 'IG · FB · X · TikTok', icon: 'instagram', tint: '#C13584' },
-            { value: '188,440',   label: 'Verified emails & phones',    note: 'SMTP + carrier checked',icon: 'verified',  tint: '#1F8A5B' },
-          ].map((s, i) => (
-            <div key={i} style={{ padding: '0 26px', borderLeft: i === 0 ? 'none' : '1px solid var(--border)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
-                <span style={{
-                  width: 24, height: 24, borderRadius: 6, flexShrink: 0,
-                  background: 'var(--accent-light)', color: s.tint,
-                  border: '0.5px solid var(--border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <Icon name={s.icon} size={13} stroke={1.7} />
-                </span>
-                <span className="mono" style={{ fontSize: 24, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>{s.value}</span>
+          {mode === 'scout' && scouting && (
+            <div className="hs-scout">
+              <div className="hs-scout-busy">
+                <span className="hs-spin" />
+                Ο Scout διαβάζει 1,6 εκατ. επιχειρήσεις και επιλέγει κλάδους…
               </div>
-              <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{s.label}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>{s.note}</div>
             </div>
-          ))}
+          )}
+
+          {mode === 'scout' && scoutErr && !scouting && (
+            <div className="hs-scout">
+              <div className="hs-scout-err">{scoutErr}</div>
+            </div>
+          )}
+
+          {mode === 'scout' && recipe && !scouting && (
+            <div className="hs-scout">
+              <div className="hs-scout-hd">
+                <Icon name="sparkle" size={12} />
+                Ο Scout βρήκε
+              </div>
+              <div className="hs-scout-body">
+                <div>
+                  <div className="hs-scout-n">{recipe.result_count.toLocaleString('el-GR')}</div>
+                  <div className="hs-scout-l">πιθανοί πελάτες</div>
+                  {recipe.summary && <div className="hs-scout-sum">{recipe.summary}</div>}
+                </div>
+                <button className="hs-scout-cta" onClick={openScoutResults}>
+                  Δες τη λίστα
+                  <Icon name="arrow-up-right" size={14} />
+                </button>
+              </div>
+              {recipe.explanation && (
+                <div className="hs-scout-why">{recipe.explanation}</div>
+              )}
+            </div>
+          )}
+
+          <div className="hs-stats">
+            <span><b>{(active || totalCompanies).toLocaleString('el-GR')}</b> ενεργές επιχειρήσεις</span>
+            <span className="hs-stats-dot">·</span>
+            <span><b>{contact.toLocaleString('el-GR')}</b> με στοιχεία επικοινωνίας</span>
+            <span className="hs-stats-dot">·</span>
+            <span className="hs-stats-gemi">
+              <Icon name="verified" size={13} stroke={1.9} />
+              Επίσημα δεδομένα ΓΕΜΗ
+            </span>
+          </div>
         </div>
+
+        {/* ── RIGHT: live registrations ── */}
+        <aside className="hs-feed">
+          <div className="hs-feed-hd">
+            <span className="hs-feed-dot" />
+            <span className="hs-feed-t">Νέες εγγραφές</span>
+          </div>
+          <div className="hs-feed-list">
+            {newFirms.map((f, i) => (
+              <Link
+                key={`${f.ar_gemi}-${f.ts}`}
+                href={`/etaireies/${f.ar_gemi}`}
+                className="hs-feed-item"
+                data-new={i === 0 ? 'true' : 'false'}
+              >
+                <span className="hs-feed-body">
+                  <span className="hs-feed-name">{f.name}</span>
+                  <span className="hs-feed-meta">{f.legal_type} · {f.city}</span>
+                </span>
+                <span className="hs-feed-time">{agoLabel(f.ts, now)}</span>
+              </Link>
+            ))}
+          </div>
+          <Link className="hs-feed-ft" href="/search">
+            Δες όλες τις νέες εγγραφές
+            <Icon name="chevron-right" size={12} />
+          </Link>
+        </aside>
       </div>
     </section>
   )
@@ -624,9 +929,9 @@ function ProductPreview({ onNavigate }: { onNavigate: (r: string) => void }) {
       <div className="screen-inner">
         <SectionHeader
           index="01"
-          eyebrow="Company search"
-          title="A research-grade table, not a list of bookmarks."
-          body="Filter all 1.28M ΓΕΜΗ entities by industry (ΚΑΔ), prefecture, legal form, company status, and whether they have a verified email, phone, website, or social presence. Every column sorts. Every row exports clean."
+          eyebrow="Αναζήτηση εταιρειών"
+          title="Μια πλήρης λίστα εταιρειών, όχι απλά σελιδοδείκτες."
+          body="Φιλτράρετε 1,28 εκατ. εταιρείες του ΓΕΜΗ ανά κλάδο (ΚΑΔ), νομό, νομική μορφή και κατάσταση. Κάθε στήλη ταξινομείται. Κάθε αποτέλεσμα εξάγεται καθαρά."
         />
 
         <div style={{
@@ -721,10 +1026,10 @@ function ProductPreview({ onNavigate }: { onNavigate: (r: string) => void }) {
 // ── PEOPLE SECTION ───────────────────────────────────────────────────
 function PeopleDemo({ onNavigate }: { onNavigate: (r: string) => void }) {
   const companies = [
-    { name: 'Pelagos Maritime Group',      role: 'Managing Director',       own: '22.0%', status: 'active', dot: 'var(--gemi-text)'  },
-    { name: 'Nereus Logistics',            role: 'Shareholder',             own: '12.5%', status: 'active', dot: 'var(--gemi-text)'  },
-    { name: 'Aiolos Bulk Carriers A.E.',   role: 'Chairman of the Board',   own: null,    status: 'past',   dot: 'var(--warn-text)'  },
-    { name: 'Konstantinou Maritime EPE',   role: 'Sole Administrator',      own: null,    status: 'past',   dot: 'var(--danger)'     },
+    { name: 'Pelagos Maritime Group',      role: 'Διευθύνων Σύμβουλος',    own: '22.0%', status: 'active', dot: 'var(--gemi-text)'  },
+    { name: 'Nereus Logistics',            role: 'Μέτοχος',                 own: '12.5%', status: 'active', dot: 'var(--gemi-text)'  },
+    { name: 'Aiolos Bulk Carriers A.E.',   role: 'Πρόεδρος ΔΣ',            own: null,    status: 'past',   dot: 'var(--warn-text)'  },
+    { name: 'Konstantinou Maritime EPE',   role: 'Διαχειριστής',            own: null,    status: 'past',   dot: 'var(--danger)'     },
   ]
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden', boxShadow: '0 12px 36px rgba(26,35,50,0.06)' }}>
@@ -732,14 +1037,14 @@ function PeopleDemo({ onNavigate }: { onNavigate: (r: string) => void }) {
         <span style={{ width: 48, height: 48, borderRadius: 10, background: 'var(--accent-light)', color: 'var(--accent)', border: '0.5px solid var(--li-border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, fontWeight: 600 }}>DK</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 15, fontWeight: 600 }}>Dimitrios Konstantinou</span>
-            <span className="badge badge-neutral" style={{ fontWeight: 400 }}>Attiki</span>
+            <span style={{ fontSize: 15, fontWeight: 600 }}>Δημήτριος Κωνσταντίνου</span>
+            <span className="badge badge-neutral" style={{ fontWeight: 400 }}>Αττική</span>
           </div>
-          <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 2 }}>Managing Director · Pelagos Maritime Group</div>
+          <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 2 }}>Διευθύνων Σύμβουλος · Pelagos Maritime Group</div>
         </div>
         <div style={{ textAlign: 'right' }}>
           <div className="mono" style={{ fontSize: 18, fontWeight: 500 }}>4</div>
-          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>companies</div>
+          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>εταιρείες</div>
         </div>
       </div>
       <div>
@@ -749,7 +1054,7 @@ function PeopleDemo({ onNavigate }: { onNavigate: (r: string) => void }) {
             <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-primary)', flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</span>
             <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{c.role}</span>
             <span className="mono" style={{ fontSize: 11.5, color: c.own ? 'var(--text-primary)' : 'var(--text-muted)', width: 44, textAlign: 'right' }}>{c.own || '—'}</span>
-            <span className={`badge ${c.status === 'active' ? 'badge-active' : 'badge-neutral'}`} style={{ width: 52, justifyContent: 'center' }}>{c.status === 'active' ? 'Active' : 'Past'}</span>
+            <span className={`badge ${c.status === 'active' ? 'badge-active' : 'badge-neutral'}`} style={{ width: 52, justifyContent: 'center' }}>{c.status === 'active' ? 'Ενεργή' : 'Πρώην'}</span>
           </div>
         ))}
       </div>
@@ -777,18 +1082,18 @@ function PeopleSection({ onNavigate }: { onNavigate: (r: string) => void }) {
           <div>
             <SectionHeader
               index="02"
-              eyebrow="People · registry graph"
-              title="Follow the people behind the companies."
-              body="Search 4.1M directors, board members, and shareholders by name, ΑΦΜ, role, or company. Every person opens to a timeline of their roles across companies — plus a contact view that flags which email or phone looks personal."
+              eyebrow="Στελέχη · Μητρώο"
+              title="Ακολουθήστε τους ανθρώπους πίσω από τις επιχειρήσεις."
+              body="Αναζητήστε 4,1 εκατ. διευθυντές, μέλη ΔΣ και μετόχους με όνομα, ΑΦΜ, ρόλο ή επιχείρηση. Κάθε προφίλ δείχνει το χρονολόγιο των ρόλων του σε όλες τις εταιρείες."
             />
             <HomeBullets items={[
-              'Every officer and shareholder, past and present',
-              'A Gantt timeline of roles and ownership stakes',
-              'Reused personal contacts flagged across companies',
-              'Jump from any person straight to a company profile',
+              'Κάθε στέλεχος και μέτοχος, ενεργός ή πρώην',
+              'Χρονολόγιο ρόλων και ποσοστών συμμετοχής',
+              'Επισήμανση επαφών που φαίνονται προσωπικές',
+              'Απευθείας μετάβαση από στέλεχος σε εταιρεία',
             ]} />
             <button className="btn btn-secondary" style={{ marginTop: 24 }} onClick={() => onNavigate('people')}>
-              <Icon name="users" size={13} stroke={1.6} /> Search people <Icon name="arrow-up-right" size={12} />
+              <Icon name="users" size={13} stroke={1.6} /> Αναζήτηση στελεχών <Icon name="arrow-up-right" size={12} />
             </button>
           </div>
         </div>
@@ -800,18 +1105,18 @@ function PeopleSection({ onNavigate }: { onNavigate: (r: string) => void }) {
 // ── NETWORK SECTION ──────────────────────────────────────────────────
 function NetworkGraph({ onNavigate }: { onNavigate: (r: string) => void }) {
   const nodes: Record<string, { x: number; y: number; label: string; type: string; primary?: boolean }> = {
-    you:    { x: 90,  y: 150, label: 'D. Konstantinou', type: 'person',  primary: true },
+    you:    { x: 90,  y: 150, label: 'Δ. Κωνσταντίνου', type: 'person',  primary: true },
     pelagos:{ x: 300, y: 64,  label: 'Pelagos Maritime', type: 'company' },
     nereus: { x: 330, y: 150, label: 'Nereus Logistics',  type: 'company' },
     aiolos: { x: 300, y: 236, label: 'Aiolos Bulk A.E.',  type: 'company' },
-    other:  { x: 520, y: 150, label: 'M. Vlachou',        type: 'person' },
+    other:  { x: 520, y: 150, label: 'Μ. Βλάχου',         type: 'person' },
   }
   const edges: [string, string, string][] = [
-    ['you','pelagos','Managing Dir.'],
-    ['you','nereus','Shareholder'],
-    ['you','aiolos','Chairman'],
-    ['other','pelagos','Board'],
-    ['other','aiolos','Board'],
+    ['you','pelagos','Διευθ. Σύμβουλος'],
+    ['you','nereus','Μέτοχος'],
+    ['you','aiolos','Πρόεδρος'],
+    ['other','pelagos','ΔΣ'],
+    ['other','aiolos','ΔΣ'],
   ]
   return (
     <div style={{ background: 'var(--app-bg)' }}>
@@ -862,32 +1167,32 @@ function NetworkSection({ onNavigate }: { onNavigate: (r: string) => void }) {
           <div>
             <SectionHeader
               index="03"
-              eyebrow="Connected data"
-              title="The connections are the product."
-              body="Every company links to its people. Every person links to their other companies. Follow those edges and patterns surface on their own — shared directors reveal corporate groups, one board seat becomes several warm introductions."
+              eyebrow="Συνδεδεμένα δεδομένα"
+              title="Οι συνδέσεις είναι το προϊόν."
+              body="Κάθε επιχείρηση συνδέεται με τα στελέχη της. Κάθε στέλεχος συνδέεται με τις άλλες επιχειρήσεις του. Κοινά μέλη ΔΣ αποκαλύπτουν ομίλους εταιρειών."
             />
             <HomeBullets items={[
-              'Company → its directors & shareholders',
-              'Person → every other company they touch',
-              'Shared directors reveal corporate groups',
-              'One board seat becomes several warm intros',
+              'Επιχείρηση → στελέχη & μέτοχοι',
+              'Στέλεχος → κάθε άλλη επιχείρησή του',
+              'Κοινά στελέχη αποκαλύπτουν ομίλους',
+              'Μία θέση σε ΔΣ γίνεται πολλές επαφές',
             ]} />
             <button className="btn btn-secondary" style={{ marginTop: 24 }} onClick={() => onNavigate('people')}>
-              <Icon name="network" size={13} stroke={1.6} /> Explore the graph <Icon name="arrow-up-right" size={12} />
+              <Icon name="network" size={13} stroke={1.6} /> Δείτε τον χάρτη <Icon name="arrow-up-right" size={12} />
             </button>
           </div>
           <div className="card" style={{ padding: 0, overflow: 'hidden', boxShadow: '0 12px 36px rgba(26,35,50,0.06)' }}>
             <div style={{ padding: '11px 16px', borderBottom: '0.5px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                 <Icon name="network" size={14} stroke={1.7} style={{ color: 'var(--accent)' }} />
-                Relationship map
+                Χάρτης σχέσεων
               </span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>1 person · 3 companies · 5 shared links</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>1 άτομο · 3 εταιρείες · 5 σύνδεσμοι</span>
             </div>
             <NetworkGraph onNavigate={onNavigate} />
             <div style={{ padding: '11px 16px', background: 'var(--subtle-bg2)', borderTop: '0.5px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: 'var(--text-secondary)' }}>
               <span className="badge badge-amber" style={{ height: 18 }}><Icon name="sparkle" size={10} stroke={1.6} />Insight</span>
-              Konstantinou and Vlachou share <span className="mono" style={{ color: 'var(--text-primary)' }}>2</span> boards — likely a corporate group.
+              Κωνσταντίνου και Βλάχου μοιράζονται <span className="mono" style={{ color: 'var(--text-primary)' }}>2</span> ΔΣ — πιθανός όμιλος εταιρειών.
             </div>
           </div>
         </div>
@@ -905,18 +1210,18 @@ function ScoutSection({ onNavigate }: { onNavigate: (r: string) => void }) {
           <div>
             <SectionHeader
               index="04"
-              eyebrow="Scout · AI search"
-              title="Ask in plain Greek or English. Scout sets the filters."
-              body={'No ΚΑΔ codes, no filter syntax. Describe who you want — “restaurants in Athens with Instagram but no website” — and Scout reads the industry, geography, legal form, and the data signals you need, then applies them to your search live.'}
+              eyebrow="Scout · Αναζήτηση με ΤΝ"
+              title="Ρωτήστε στα Ελληνικά ή στα Αγγλικά."
+              body="Χωρίς κωδικούς ΚΑΔ, χωρίς σύνταξη φίλτρων. Περιγράψτε ποιον ψάχνετε και το Scout ρυθμίζει αυτόματα κλάδο, γεωγραφία, νομική μορφή και τα κριτήρια που χρειάζεστε."
             />
             <HomeBullets items={[
-              'Understands Greek and English, plain language',
-              'Maps your words to ΚΑΔ codes and prefectures',
-              'Reads data signals — social, website, email, phone',
-              'Applies filters live; refine by replying',
+              'Κατανοεί Ελληνικά και Αγγλικά, απλή γλώσσα',
+              'Αντιστοιχίζει λόγια σε ΚΑΔ και νομούς',
+              'Διαβάζει ενδείξεις: κοινωνικά, email, τηλέφωνο',
+              'Εφαρμόζει τα φίλτρα άμεσα στην αναζήτηση',
             ]} />
             <button className="btn btn-secondary" style={{ marginTop: 24 }} onClick={() => onNavigate('search')}>
-              <Icon name="sparkle" size={13} stroke={1.6} /> Try Scout <Icon name="arrow-up-right" size={12} />
+              <Icon name="sparkle" size={13} stroke={1.6} /> Δοκιμάστε το Scout <Icon name="arrow-up-right" size={12} />
             </button>
           </div>
 
@@ -928,7 +1233,7 @@ function ScoutSection({ onNavigate }: { onNavigate: (r: string) => void }) {
                 <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}>
                   Scout <span className="badge badge-amber" style={{ height: 16, fontSize: 9.5 }}>AI</span>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Prospecting agent · sets your filters</div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Βοηθός αναζήτησης πελατών</div>
               </div>
             </div>
             <div style={{ padding: '16px 14px', display: 'flex', flexDirection: 'column', gap: 14, background: 'var(--subtle-bg2)' }}>
@@ -941,24 +1246,24 @@ function ScoutSection({ onNavigate }: { onNavigate: (r: string) => void }) {
                 <ScoutGlyph size={24} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, lineHeight: 1.55, color: 'var(--text-primary)' }}>
-                    Got it — restaurants in Attiki, active on Instagram, no website on file. Filters applied.
+                    Εντάξει — εστιατόρια στην Αττική, ενεργά στο Instagram, χωρίς ιστότοπο. Φίλτρα εφαρμόστηκαν.
                   </div>
                   <div style={{ border: '0.5px solid var(--li-border)', borderRadius: 8, overflow: 'hidden', marginTop: 8, background: 'var(--surface)' }}>
                     <div style={{ padding: '9px 12px', background: 'var(--accent-light)', borderBottom: '0.5px solid var(--li-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--li-text)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Search recipe</span>
-                      <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>≈ <span className="mono" style={{ color: 'var(--text-primary)', fontWeight: 500 }}>612</span> match</span>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--li-text)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Σύνθεση αναζήτησης</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>≈ <span className="mono" style={{ color: 'var(--text-primary)', fontWeight: 500 }}>612</span> αποτελέσματα</span>
                     </div>
                     <div style={{ padding: '12px 12px 6px' }}>
-                      <ScoutChips label="Industry"   items={['Food & Beverage (ΚΑΔ 56)']} />
-                      <ScoutChips label="Prefecture" items={['Attiki']} />
-                      <ScoutChips label="Has"        items={['Instagram']} />
-                      <ScoutChips label="Missing"    items={['Website']} />
+                      <ScoutChips label="Κλάδος"    items={['Τρόφιμα & Ποτά (ΚΑΔ 56)']} />
+                      <ScoutChips label="Νομός"     items={['Αττική']} />
+                      <ScoutChips label="Έχει"      items={['Instagram']} />
+                      <ScoutChips label="Λείπει"    items={['Website']} />
                     </div>
                     <div style={{ padding: '2px 12px 12px', display: 'flex', flexDirection: 'column', gap: 5 }}>
                       {[
-                        ['Industry.',   '"Εστιατόρια" mapped to ΚΑΔ 56 — food service.'],
-                        ['Geography.', '"Αθήνα" resolved to the Attiki prefecture.'],
-                        ['Signals.',    'Has an Instagram profile; no website on record.'],
+                        ['Κλάδος.',     '"Εστιατόρια" → ΚΑΔ 56 — υπηρεσίες εστίασης.'],
+                        ['Γεωγραφία.', '"Αθήνα" → νομός Αττικής.'],
+                        ['Ενδείξεις.',  'Έχει Instagram· δεν έχει ιστότοπο στο αρχείο.'],
                       ].map((r, i) => (
                         <div key={i} style={{ display: 'flex', gap: 7, fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
                           <Icon name="check" size={11} stroke={2} style={{ color: 'var(--gemi-text)', marginTop: 2, flexShrink: 0 }} />
@@ -1016,18 +1321,18 @@ function SocialSection({ onNavigate }: { onNavigate: (r: string) => void }) {
           <div>
             <SectionHeader
               index="05"
-              eyebrow="Social enrichment"
-              title="Find businesses where they actually show up."
-              body="We scan company websites to attach their social profiles — Instagram, Facebook, X, TikTok, and YouTube. Filter for companies by where they're active online, then reach them on the channel they actually check."
+              eyebrow="Κοινωνικά δίκτυα"
+              title="Βρείτε επιχειρήσεις εκεί που εμφανίζονται."
+              body="Σαρώνουμε ιστοσελίδες εταιρειών για να συνδέσουμε τα κοινωνικά τους προφίλ — Instagram, Facebook, X, TikTok και YouTube. Φιλτράρετε ανά παρουσία στα δίκτυα."
             />
             <HomeBullets items={[
-              'Profiles matched from each company\'s own site',
-              'Filter by presence — e.g. has Instagram, no website',
-              'Spot consumer brands by their social footprint',
-              'Reach owners where email never lands',
+              'Προφίλ από την ιστοσελίδα κάθε εταιρείας',
+              'Φίλτρο παρουσίας — π.χ. έχει Instagram, χωρίς ιστότοπο',
+              'Εντοπίστε καταναλωτικές επιχειρήσεις',
+              'Επικοινωνήστε από το κανάλι που ελέγχουν',
             ]} />
             <button className="btn btn-secondary" style={{ marginTop: 24 }} onClick={() => onNavigate('search')}>
-              <Icon name="instagram" size={13} /> Filter by social <Icon name="arrow-up-right" size={12} />
+              <Icon name="instagram" size={13} /> Φίλτρο κοινωνικών <Icon name="arrow-up-right" size={12} />
             </button>
           </div>
         </div>
@@ -1051,17 +1356,17 @@ function ExportSection({ onNavigate }: { onNavigate: (r: string) => void }) {
       <div className="screen-inner">
         <SectionHeader
           index="06" center
-          eyebrow="Export & connections"
-          title="The sourcing layer for your outreach stack."
-          body="Find and qualify leads in AGORA, then export to CSV or push them straight into the tools your team already runs. AGORA finds the leads; your stack works them."
+          eyebrow="Εξαγωγή & Συνδέσεις"
+          title="Ο πυρήνας αναζήτησης για το stack σας."
+          body="Βρείτε leads στο GreekLeads και εξάγετε σε CSV ή στα εργαλεία που ήδη χρησιμοποιείτε. Το GreekLeads βρίσκει τους leads· το stack σας τους επεξεργάζεται."
         />
 
         <div style={{ marginTop: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 28, flexWrap: 'wrap' }}>
           <div className="card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
             <BrandMark size={26} />
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.12em' }}>AGORA</div>
-              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Qualified leads</div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>GreekLeads</div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Επιλεγμένα leads</div>
             </div>
           </div>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)' }}>
@@ -1081,7 +1386,7 @@ function ExportSection({ onNavigate }: { onNavigate: (r: string) => void }) {
 
         <div style={{ marginTop: 22, textAlign: 'center', display: 'flex', gap: 16, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-            <Icon name="download" size={13} stroke={1.6} /> CSV / XLSX export on every plan
+            <Icon name="download" size={13} stroke={1.6} /> CSV εξαγωγή σε κάθε πλάνο
           </span>
           <span style={{ width: 3, height: 3, borderRadius: 2, background: 'var(--border-strong)', display: 'inline-block' }} />
           <button onClick={() => onNavigate('lists')} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent)', fontSize: 12.5, fontWeight: 500, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -1098,34 +1403,34 @@ function UseCases() {
   const cases = [
     {
       who: 'Sales & SDR teams',
-      title: 'Build territory plans without guesswork.',
-      body: 'Slice the Greek market by industry, prefecture, and size. Pull verified contacts, then export qualified accounts to your CRM.',
-      points: ['Industry + region account maps', 'Verified emails & phones', 'Export to HubSpot, Salesforce, Pipedrive'],
+      title: 'Χτίστε σχέδια αγοράς χωρίς εικασίες.',
+      body: 'Κόψτε την ελληνική αγορά ανά κλάδο, νομό και μέγεθος. Πάρτε επαληθευμένες επαφές και εξάγετε λογαριασμούς στο CRM σας.',
+      points: ['Χάρτες λογαριασμών ανά κλάδο & περιοχή', 'Επαληθευμένα emails & τηλέφωνα', 'Εξαγωγή σε HubSpot, Salesforce, Pipedrive'],
       icon: 'users',
     },
     {
       who: 'Agencies & outreach',
-      title: 'Reach owners where they actually are.',
-      body: 'Find businesses by their social footprint — great for local and consumer brands — and push lists straight into your sequencing tool.',
-      points: ['Filter by social presence', 'Owner & decision-maker contacts', 'Push to Instantly, Apollo, Lemlist'],
+      title: 'Βρείτε ιδιοκτήτες εκεί που βρίσκονται.',
+      body: 'Βρείτε επιχειρήσεις μέσω των κοινωνικών τους δικτύων — ιδανικό για τοπικές και καταναλωτικές εταιρείες — και εξάγετε λίστες στο εργαλείο αλληλογραφίας σας.',
+      points: ['Φίλτρο κοινωνικής παρουσίας', 'Επαφές ιδιοκτητών & αποφασισάντων', 'Εξαγωγή σε Instantly, Apollo, Lemlist'],
       icon: 'share',
     },
     {
-      who: 'M&A & research',
-      title: 'Screen targets at registry depth.',
-      body: 'Filter by financials and shareholder structure, then follow the network — shared directors, common owners, corporate groups.',
-      points: ['3-year financial history', 'Shareholder & officer graph', 'Map corporate groups'],
+      who: 'M&A & έρευνα',
+      title: 'Αξιολογήστε στόχους σε βάθος μητρώου.',
+      body: 'Φιλτράρετε με βάση οικονομικά στοιχεία και μετοχική δομή, και ακολουθήστε το δίκτυο — κοινά στελέχη, κοινοί μέτοχοι, εταιρικοί όμιλοι.',
+      points: ['3χρονο ιστορικό οικονομικών', 'Γράφος μετόχων & στελεχών', 'Χαρτογράφηση εταιρικών ομίλων'],
       icon: 'network',
     },
   ]
   return (
     <section className="home-screen" style={{ background: 'var(--surface)' }}>
       <div className="screen-inner">
-        <SectionHeader index="07" center eyebrow="Who it's for" title="One platform. Three jobs to be done." />
+        <SectionHeader index="07" center eyebrow="Για ποιους είναι" title="Μία πλατφόρμα. Τρεις ρόλοι." />
         <div style={{ marginTop: 32, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
           {cases.map((c, i) => (
             <div key={i} className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>For {c.who}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{c.who}</span>
               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em', lineHeight: 1.3 }}>{c.title}</h3>
               <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55 }}>{c.body}</p>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1153,24 +1458,24 @@ function UseCases() {
 // ── SECTORS TEASER ───────────────────────────────────────────────────
 function SectorsTeaser({ onNavigate }: { onNavigate: (r: string) => void }) {
   const sectors = [
-    { label: 'Shipping & Logistics',        companies: 8420,  revenue: 28.4, growth: 4.2  },
-    { label: 'Tourism & Hospitality',       companies: 41280, revenue: 22.2, growth: 9.6  },
-    { label: 'Construction & Real Estate',  companies: 24120, revenue: 18.9, growth: 6.1  },
-    { label: 'Food & Beverage',             companies: 31840, revenue: 14.2, growth: 3.4  },
-    { label: 'Manufacturing',               companies: 14820, revenue: 12.8, growth: 2.1  },
-    { label: 'Retail & Consumer',           companies: 62140, revenue: 11.4, growth: 1.8  },
-    { label: 'Energy & Utilities',          companies: 1820,  revenue: 9.8,  growth: 11.4 },
-    { label: 'Pharma & Health',             companies: 6240,  revenue: 6.1,  growth: 5.8  },
-    { label: 'Software & IT',              companies: 9418,  revenue: 3.8,  growth: 18.2 },
-    { label: 'Finance & Insurance',         companies: 3120,  revenue: 3.2,  growth: 4.4  },
+    { label: 'Ναυτιλία & Logistics',        companies: 8420,  revenue: 28.4, growth: 4.2  },
+    { label: 'Τουρισμός & Φιλοξενία',      companies: 41280, revenue: 22.2, growth: 9.6  },
+    { label: 'Κατασκευές & Ακίνητα',       companies: 24120, revenue: 18.9, growth: 6.1  },
+    { label: 'Τρόφιμα & Ποτά',             companies: 31840, revenue: 14.2, growth: 3.4  },
+    { label: 'Μεταποίηση',                 companies: 14820, revenue: 12.8, growth: 2.1  },
+    { label: 'Λιανεμπόριο & Καταναλωτικά', companies: 62140, revenue: 11.4, growth: 1.8  },
+    { label: 'Ενέργεια & Κοινής Ωφέλειας', companies: 1820,  revenue: 9.8,  growth: 11.4 },
+    { label: 'Φαρμακευτικά & Υγεία',       companies: 6240,  revenue: 6.1,  growth: 5.8  },
+    { label: 'Λογισμικό & IT',             companies: 9418,  revenue: 3.8,  growth: 18.2 },
+    { label: 'Χρηματοοικονομικά & Ασφάλειες', companies: 3120,  revenue: 3.2,  growth: 4.4  },
   ]
   return (
     <section className="home-screen" style={{ background: 'var(--page-bg)' }}>
       <div className="screen-inner">
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
-          <SectionHeader index="08" eyebrow="Every sector of the Greek economy" title="Macro at a glance. Drill into any cell." compact />
+          <SectionHeader index="08" eyebrow="Κάθε κλάδος της ελληνικής οικονομίας" title="Μακρο ανάλυση. Εξερεύνηση σε κάθε κελί." compact />
           <button className="btn btn-secondary" onClick={() => onNavigate('sectors')}>
-            Explore sectors <Icon name="arrow-up-right" size={12} />
+            Εξερεύνηση κλάδων <Icon name="arrow-up-right" size={12} />
           </button>
         </div>
 
@@ -1178,10 +1483,10 @@ function SectorsTeaser({ onNavigate }: { onNavigate: (r: string) => void }) {
           <table className="data-table">
             <thead>
               <tr>
-                <th style={{ paddingLeft: 18 }}>Sector</th>
-                <th style={{ textAlign: 'right' }}>Companies</th>
-                <th style={{ textAlign: 'right' }}>Aggregate revenue</th>
-                <th style={{ textAlign: 'right', paddingRight: 18 }}>YoY growth</th>
+                <th style={{ paddingLeft: 18 }}>Κλάδος</th>
+                <th style={{ textAlign: 'right' }}>Εταιρείες</th>
+                <th style={{ textAlign: 'right' }}>Συνολικά έσοδα</th>
+                <th style={{ textAlign: 'right', paddingRight: 18 }}>Ετήσια μεταβολή</th>
               </tr>
             </thead>
             <tbody>
@@ -1234,40 +1539,40 @@ function SourceCard({ tag, tagColor, title, desc, stats, icon }: {
 
 function Foundation() {
   return (
-    <section className="home-screen hero-band">
+    <section className="home-screen" style={{ background: 'var(--page-bg)' }}>
       <div className="screen-inner">
         <SectionHeader
           index="09"
-          eyebrow="Built on ΓΕΜΗ"
-          title="Anchored in the official registry. Not scraped guesswork."
-          body="Everything starts with the General Electronic Commercial Registry — the legal source of truth for every Greek company. On top of that spine we layer social profiles and verified contacts, so each record traces back to an official filing."
+          eyebrow="Βασισμένο στο ΓΕΜΗ"
+          title="Αγκυρωμένο στο επίσημο μητρώο. Όχι εικασίες."
+          body="Όλα ξεκινούν από το Γενικό Εμπορικό Μητρώο — την επίσημη πηγή αλήθειας για κάθε ελληνική επιχείρηση. Πάνω σε αυτή τη βάση προσθέτουμε κοινωνικά προφίλ και επαληθευμένες επαφές."
         />
         <div style={{ marginTop: 32, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
           <SourceCard
-            tag="Source of truth" tagColor="gemi" title="ΓΕΜΗ registry" icon="verified"
-            desc="Daily sync with the General Electronic Commercial Registry: legal status, incorporation date, registered capital and history, official address, ΚΑΔ activities, and every named director and shareholder."
-            stats={[{ k: 'Coverage', v: '100%' }, { k: 'Latency', v: '< 24h' }, { k: 'Fields', v: '47' }]}
+            tag="Πηγή αλήθειας" tagColor="gemi" title="Μητρώο ΓΕΜΗ" icon="verified"
+            desc="Ημερήσιος συγχρονισμός με το ΓΕΜΗ: νομική κατάσταση, ίδρυση, καταχωρημένο κεφάλαιο, διεύθυνση, ΚΑΔ δραστηριότητες και κάθε διευθυντής ή μέτοχος."
+            stats={[{ k: 'Κάλυψη', v: '100%' }, { k: 'Καθυστέρηση', v: '< 24ω' }, { k: 'Πεδία', v: '47' }]}
           />
           <SourceCard
-            tag="Enrichment" tagColor="li" title="Social profiles" icon="instagram"
-            desc="We scan each company's own website to attach its public social accounts — Instagram, Facebook, X, TikTok, and YouTube — so you can find and reach businesses where they're actually active."
-            stats={[{ k: 'Companies', v: '326k' }, { k: 'Platforms', v: '5' }, { k: 'Refresh', v: 'Weekly' }]}
+            tag="Εμπλουτισμός" tagColor="li" title="Κοινωνικά προφίλ" icon="instagram"
+            desc="Σαρώνουμε κάθε εταιρική ιστοσελίδα για να συνδέσουμε δημόσιους κοινωνικούς λογαριασμούς — Instagram, Facebook, X, TikTok και YouTube."
+            stats={[{ k: 'Εταιρείες', v: '326χ' }, { k: 'Πλατφόρμες', v: '5' }, { k: 'Ανανέωση', v: 'Εβδομαδιαία' }]}
           />
           <SourceCard
-            tag="Enrichment" tagColor="neutral" title="Verified contact data" icon="mail"
-            desc="Work emails and phone numbers are verified through SMTP handshakes and carrier lookups before exposure. Reused personal contacts are flagged across companies; bounced records auto-suppress."
-            stats={[{ k: 'Email accuracy', v: '94.1%' }, { k: 'Phone accuracy', v: '88.6%' }, { k: 'Suppression', v: 'Active' }]}
+            tag="Εμπλουτισμός" tagColor="neutral" title="Επαληθευμένα στοιχεία" icon="mail"
+            desc="Emails και τηλέφωνα επαληθεύονται μέσω SMTP και carrier lookups. Επαναχρησιμοποιημένες προσωπικές επαφές σημαίνονται σε εταιρείες· αναπηδώντες αρχεία αποκλείονται."
+            stats={[{ k: 'Ακρίβεια email', v: '94,1%' }, { k: 'Ακρίβεια τηλ.', v: '88,6%' }, { k: 'Αποκλεισμός', v: 'Ενεργός' }]}
           />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 24, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-muted)' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
             <Icon name="verified" size={13} stroke={1.6} style={{ color: 'var(--gemi-text)' }} />
-            Source · <span className="mono" style={{ color: 'var(--text-secondary)' }}>business.gov.gr/gemi</span>
+            Πηγή · <span className="mono" style={{ color: 'var(--text-secondary)' }}>business.gov.gr/gemi</span>
           </span>
           <span style={{ width: 3, height: 3, borderRadius: 2, background: 'var(--border-strong)', display: 'inline-block' }} />
-          <span>EU data residency · Athens & Frankfurt</span>
+          <span>Φιλοξενία EU · Αθήνα & Frankfurt</span>
           <span style={{ width: 3, height: 3, borderRadius: 2, background: 'var(--border-strong)', display: 'inline-block' }} />
-          <span>GDPR-compliant · opt-out registry</span>
+          <span>Συμμόρφωση GDPR · μητρώο εξαίρεσης</span>
         </div>
       </div>
     </section>
@@ -1277,17 +1582,17 @@ function Foundation() {
 // ── PRICING TEASER ───────────────────────────────────────────────────
 function PricingTeaser({ onNavigate }: { onNavigate: (r: string) => void }) {
   const plans = [
-    { name: 'Free',       price: '€0',     blurb: 'Explore the registry. 25 exports a month, forever.',          cta: 'Start free',         ctaStyle: 'secondary', highlight: false },
-    { name: 'Business',   price: '€149',   blurb: 'Verified contacts, social, financials + 2,500 credits.',      cta: 'Start 14-day trial', ctaStyle: 'primary',   highlight: true  },
-    { name: 'Enterprise', price: 'Custom', blurb: 'Volume credits, SSO, REST API, dedicated success.',            cta: 'Talk to sales',      ctaStyle: 'secondary', highlight: false },
+    { name: 'Δωρεάν',     price: '€0',     blurb: 'Εξερευνήστε το μητρώο. 25 εξαγωγές τον μήνα, για πάντα.',   cta: 'Ξεκινήστε δωρεάν',  ctaStyle: 'secondary', highlight: false },
+    { name: 'Business',   price: '€149',   blurb: 'Επαληθευμένες επαφές, κοινωνικά, οικονομικά + 2.500 πόντοι.', cta: 'Δοκιμή 14 ημερών',  ctaStyle: 'primary',   highlight: true  },
+    { name: 'Enterprise', price: 'Κατόπιν', blurb: 'Μεγάλος όγκος, SSO, REST API, αφιερωμένη υποστήριξη.',     cta: 'Επικοινωνήστε',      ctaStyle: 'secondary', highlight: false },
   ]
   return (
     <section className="home-screen" style={{ background: 'var(--surface)' }}>
       <div className="screen-inner">
         <SectionHeader
-          index="10" center eyebrow="Pricing"
-          title="Pay for credits, not seats you don't fill."
-          body="Every plan includes the full registry. Paid tiers add enrichment depth and export volume."
+          index="10" center eyebrow="Τιμές"
+          title="Πληρώστε για πόντους, όχι για θέσεις που δεν χρησιμοποιείτε."
+          body="Κάθε πλάνο περιλαμβάνει πλήρη πρόσβαση στο μητρώο. Τα επί πληρωμή επίπεδα προσθέτουν εμπλουτισμό και όγκο εξαγωγών."
         />
         <div style={{ marginTop: 28, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
           {plans.map(p => (
@@ -1302,13 +1607,13 @@ function PricingTeaser({ onNavigate }: { onNavigate: (r: string) => void }) {
                   background: 'var(--accent)', color: '#fff',
                   fontSize: 10, fontWeight: 500, padding: '3px 9px', borderRadius: 4,
                   letterSpacing: '0.06em', textTransform: 'uppercase',
-                }}>Most popular</span>
+                }}>Δημοφιλές</span>
               )}
               <div style={{ fontSize: 14, fontWeight: 600 }}>{p.name}</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
                 <span className="mono" style={{ fontSize: 28, fontWeight: 500 }}>{p.price}</span>
                 {p.price.startsWith('€') && p.price !== '€0' && (
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/ user / month</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/ χρήστη / μήνα</span>
                 )}
               </div>
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, minHeight: 36 }}>{p.blurb}</div>
@@ -1321,7 +1626,7 @@ function PricingTeaser({ onNavigate }: { onNavigate: (r: string) => void }) {
         </div>
         <div style={{ marginTop: 16, textAlign: 'center' }}>
           <button className="btn btn-ghost" style={{ color: 'var(--accent)' }} onClick={() => onNavigate('pricing')}>
-            See full feature comparison →
+            Δείτε πλήρη σύγκριση χαρακτηριστικών →
           </button>
         </div>
       </div>
@@ -1335,19 +1640,19 @@ function BottomCTA({ onNavigate }: { onNavigate: (r: string) => void }) {
     <section className="home-screen" style={{ background: 'var(--page-bg)' }}>
       <div className="screen-inner" style={{ maxWidth: 1080, position: 'relative', background: 'var(--nav-bg)', borderRadius: 12, padding: '56px 48px', overflow: 'hidden' }}>
         <div style={{ maxWidth: 560, position: 'relative', zIndex: 2 }}>
-          <span style={{ fontSize: 11, color: 'var(--nav-text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Start free</span>
+          <span style={{ fontSize: 11, color: 'var(--nav-text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Δωρεάν εγγραφή</span>
           <h2 style={{ margin: '10px 0 14px', fontSize: 32, fontWeight: 600, color: 'var(--nav-text-active)', letterSpacing: '-0.02em', lineHeight: 1.15 }}>
-            Your next 25 prospects are one search away.
+            Τα επόμενα 25 leads σας είναι μία αναζήτηση μακριά.
           </h2>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--nav-text-muted)', lineHeight: 1.55 }}>
-            Create an account, run an unlimited search, and export your first 25 companies — every month, on the house.
+            Δημιουργήστε λογαριασμό, κάντε απεριόριστη αναζήτηση και εξάγετε τις πρώτες 25 εταιρείες — κάθε μήνα, δωρεάν.
           </p>
           <div style={{ display: 'flex', gap: 8, marginTop: 22 }}>
             <button className="btn" style={{ background: 'var(--cta-light)', color: 'var(--cta-light-text)', fontWeight: 500, height: 38, padding: '0 18px' }} onClick={() => onNavigate('search')}>
-              Create free account <Icon name="arrow-up-right" size={13} />
+              Δωρεάν λογαριασμός <Icon name="arrow-up-right" size={13} />
             </button>
             <button className="btn" style={{ background: 'transparent', color: 'var(--nav-text-active)', border: '0.5px solid rgba(232,237,245,0.24)', height: 38, padding: '0 18px' }} onClick={() => onNavigate('pricing')}>
-              See pricing
+              Δείτε τις τιμές
             </button>
           </div>
         </div>
@@ -1392,41 +1697,41 @@ function HomeFooter({ onNavigate }: { onNavigate: (r: string) => void }) {
           <div>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 12, color: 'var(--text-primary)' }}>
               <BrandMark size={20} />
-              <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.14em' }}>AGORA</span>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>GreekLeads</span>
             </div>
             <div style={{ lineHeight: 1.55, maxWidth: 280 }}>
-              Greek business intelligence for sales, advisory, and research teams.
+              Ελληνική επιχειρηματική ευφυΐα για ομάδες πωλήσεων, συμβούλους και ερευνητές.
             </div>
             <div style={{ marginTop: 14, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
-              Agora Data Systems IKE · ΓΕΜΗ 164920018000 · Athens
+              GreekLeads · Δεδομένα από ΓΕΜΗ · Αθήνα
             </div>
           </div>
 
-          <FooterCol title="Product" onNavigate={onNavigate} links={[
-            { l: 'Company search', href: '/search' },
-            { l: 'People search',  href: '/people' },
-            { l: 'Lists & exports',href: '/search' },
-            { l: 'Sectors',        href: '/search' },
-            { l: 'Scout AI',       href: '/search' },
+          <FooterCol title="Προϊόν" onNavigate={onNavigate} links={[
+            { l: 'Αναζήτηση εταιρειών', href: '/search' },
+            { l: 'Αναζήτηση στελεχών',  href: '/people' },
+            { l: 'Λίστες & εξαγωγές',   href: '/search' },
+            { l: 'Κλάδοι',              href: '/search' },
+            { l: 'Scout AI',            href: '/search' },
           ]} />
-          <FooterCol title="Use cases" onNavigate={onNavigate} links={[
-            { l: 'Sales prospecting', href: '/' },
-            { l: 'Agency outreach',   href: '/' },
-            { l: 'M&A & research',    href: '/' },
-            { l: 'Market mapping',    href: '/search' },
+          <FooterCol title="Χρήσεις" onNavigate={onNavigate} links={[
+            { l: 'Εύρεση leads',       href: '/' },
+            { l: 'Outreach αντιπροσ.', href: '/' },
+            { l: 'M&A & έρευνα',       href: '/' },
+            { l: 'Ανάλυση αγοράς',     href: '/search' },
           ]} />
-          <FooterCol title="Company" onNavigate={onNavigate} links={[
-            { l: 'Pricing',  href: '/pricing' },
-            { l: 'About',    href: '/' },
-            { l: 'Press',    href: '/' },
-            { l: 'Careers',  href: '/' },
-            { l: 'Contact',  href: '/' },
+          <FooterCol title="Εταιρεία" onNavigate={onNavigate} links={[
+            { l: 'Τιμές',      href: '/pricing' },
+            { l: 'Σχετικά',    href: '/' },
+            { l: 'Τύπος',      href: '/' },
+            { l: 'Καριέρα',    href: '/' },
+            { l: 'Επικοινωνία',href: '/' },
           ]} />
-          <FooterCol title="Legal" onNavigate={onNavigate} links={[
-            { l: 'Terms of service',    href: '/' },
-            { l: 'Privacy policy',      href: '/' },
-            { l: 'GDPR & data sources', href: '/' },
-            { l: 'Opt-out registry',    href: '/' },
+          <FooterCol title="Νομικά" onNavigate={onNavigate} links={[
+            { l: 'Όροι χρήσης',        href: '/' },
+            { l: 'Πολιτική απορρήτου', href: '/' },
+            { l: 'GDPR & πηγές',       href: '/' },
+            { l: 'Μητρώο εξαίρεσης',   href: '/' },
           ]} />
         </div>
 
@@ -1435,11 +1740,11 @@ function HomeFooter({ onNavigate }: { onNavigate: (r: string) => void }) {
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
           fontSize: 11.5, color: 'var(--text-muted)',
         }}>
-          <div>© 2026 Agora Data Systems IKE. All rights reserved.</div>
+          <div>© 2026 GreekLeads · Δεδομένα από ΓΕΜΗ</div>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 14 }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <span style={{ width: 6, height: 6, borderRadius: 3, background: '#3EB57A', boxShadow: '0 0 0 3px rgba(62,181,122,0.18)', display: 'inline-block' }} />
-              All systems operational
+              Όλα τα συστήματα λειτουργούν
             </span>
             <span>EN</span>
             <span>·</span>
@@ -1455,11 +1760,15 @@ function HomeFooter({ onNavigate }: { onNavigate: (r: string) => void }) {
 export default function HomePage() {
   const router = useRouter()
   const [totalCompanies, setTotalCompanies] = useState(1_670_000)
+  const [stats, setStats] = useState<HomeStats>({})
 
   useEffect(() => {
     fetch('/api/stats')
       .then(r => r.json())
-      .then(d => { if (d.companies) setTotalCompanies(d.companies) })
+      .then(d => {
+        if (d.companies) setTotalCompanies(d.companies)
+        setStats(d)
+      })
       .catch(() => {})
   }, [])
 
@@ -1477,13 +1786,9 @@ export default function HomePage() {
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <Script
-        src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"
-        strategy="afterInteractive"
-      />
       <TopNav totalCompanies={totalCompanies} />
       <div className="home-scroll">
-        <Hero onNavigate={navigate} totalCompanies={totalCompanies} />
+        <Hero totalCompanies={totalCompanies} stats={stats} />
         <ProductPreview onNavigate={navigate} />
         <PeopleSection onNavigate={navigate} />
         <NetworkSection onNavigate={navigate} />

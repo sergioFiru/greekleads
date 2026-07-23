@@ -223,11 +223,20 @@ export async function POST(req: NextRequest) {
     const validPrefectures = (rawFilters.prefectures ?? []).filter((p: string) => PREFECTURES.includes(p))
     const validLegalTypes  = (rawFilters.legal_types  ?? []).filter((l: string) => LEGAL_TYPES.includes(l))
 
-    // Resolve keyword fragments → actual primary_kad values via ILIKE
+    // Resolve keyword fragments → actual primary_kad values.
+    //
+    // Word-START matching (Postgres `\m`), NOT substring ILIKE. Greek stems sit
+    // inside unrelated words, and plain '%ΣΚΑΦ%' was catastrophically wrong:
+    //   ΕΡΓΑΣΙΕΣ ΕΚΣΚΑΦΩΝ  (excavation, 13.207 firms)  ← matched
+    //   ΑΕΡΟΣΚΑΦΩΝ         (aircraft)                  ← matched
+    // A "yacht rental" query returned ~50.000 companies when the real charter
+    // market is ~4.000. `\mΣΚΑΦ` matches ΣΚΑΦΩΝ / ΣΚΑΦΟΥΣ but not ΕΚΣΚΑΦΩΝ.
     let activities: string[] = []
     if (activityKeywords.length > 0) {
-      const conditions = activityKeywords.map((_, idx) => `primary_kad ILIKE $${idx + 1}`).join(' OR ')
-      const patterns   = activityKeywords.map(k => `%${k}%`)
+      const conditions = activityKeywords.map((_, idx) => `primary_kad ~* $${idx + 1}`).join(' OR ')
+      // Escape regex metacharacters — keywords like "Κοιν.Σ.Επ." would
+      // otherwise be interpreted as a pattern.
+      const patterns = activityKeywords.map(k => '\\m' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
       const rows = await query<{ primary_kad: string }>(
         `SELECT DISTINCT primary_kad FROM companies WHERE (${conditions}) AND primary_kad IS NOT NULL LIMIT 5000`,
         patterns

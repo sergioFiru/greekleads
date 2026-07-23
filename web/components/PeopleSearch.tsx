@@ -50,7 +50,46 @@ const STATUS_OPTIONS = [
   { label: 'Παλαιός', value: 'past' },
 ]
 
-export default function PeopleSearch({ areas }: { areas: string[] }) {
+// What the dataset covers — static copy, no query needed
+const CAPABILITIES = [
+  {
+    title: 'Διοικητικά στελέχη',
+    text: 'Διευθύνοντες σύμβουλοι, πρόεδροι ΔΣ, διαχειριστές και νόμιμοι εκπρόσωποι.',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Μετοχική σύνθεση',
+    text: 'Μέτοχοι και εταίροι με ποσοστά συμμετοχής, όπως δηλώνονται στο ΓΕΜΗ.',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21.21 15.89A10 10 0 1 1 8 2.83" /><path d="M22 12A10 10 0 0 0 12 2v10z" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Διασυνδέσεις',
+    text: 'Κοινά στελέχη μεταξύ εταιρειών — δείτε ποιος συνδέεται με ποιον.',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+        <path d="m8.59 13.51 6.83 3.98" /><path d="m15.41 6.51-6.82 3.98" />
+      </svg>
+    ),
+  },
+]
+
+export default function PeopleSearch({
+  areas,
+  totalCompanies,
+}: {
+  areas: string[]
+  totalCompanies?: number
+}) {
   const searchParams = useSearchParams()
   const router       = useRouter()
 
@@ -61,6 +100,7 @@ export default function PeopleSearch({ areas }: { areas: string[] }) {
   const [results, setResults] = useState<PersonResult[] | null>(null)
   const [loading, setLoading] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const inputRef    = useRef<HTMLInputElement>(null)
 
   // Sync state → URL so back navigation restores the search
   useEffect(() => {
@@ -101,89 +141,73 @@ export default function PeopleSearch({ areas }: { areas: string[] }) {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
   }, [q, area, count, status, search])
 
-  const hasQuery = q.trim().length >= 3
+  const hasQuery    = q.trim().length >= 3
+  const filterCount = [area, count, status].filter(Boolean).length
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      {/* Search header */}
-      <div style={{
-        background: 'var(--card-bg)',
-        borderBottom: '1px solid var(--border)',
-        padding: '40px 24px 24px',
-      }}>
-        <div style={{ maxWidth: 680, margin: '0 auto' }}>
-          <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 6 }}>
-            Αναζήτηση Προσώπων
-          </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 20 }}>
-            Διευθυντές, μέτοχοι, εκπρόσωποι σε 1.67M εταιρείες ΓΕΜΗ
+    <div className="ps-page">
+
+      {/* ── HERO ─────────────────────────────────────────────── */}
+      <div className="ps-hero">
+        <div className="ps-hero-inner">
+          <span className="ps-eyebrow">
+            <span className="ps-eyebrow-dot" />
+            Επίσημα δεδομένα ΓΕΜΗ
+          </span>
+
+          <h1 className="ps-title">Αναζήτηση Στελεχών</h1>
+          <p className="ps-sub">
+            Διευθυντές, μέτοχοι και νόμιμοι εκπρόσωποι σε{' '}
+            <strong>
+              {totalCompanies ? totalCompanies.toLocaleString('el-GR') : '1.670.000'}
+            </strong>{' '}
+            εταιρείες του Γενικού Εμπορικού Μητρώου.
           </p>
 
           {/* Search input */}
-          <div style={{ position: 'relative' }}>
-            <svg
-              width="18" height="18" viewBox="0 0 24 24" fill="none"
-              stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-              style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
-            >
-              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-            </svg>
+          <div className="ps-searchbar">
+            <span className="ps-search-icon">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+              </svg>
+            </span>
             <input
+              ref={inputRef}
+              className="ps-search-input"
               type="text"
               value={q}
               onChange={e => setQ(e.target.value)}
-              placeholder="Όνομα, email ή τηλέφωνο..."
+              placeholder="Όνομα στελέχους, email ή τηλέφωνο…"
               autoFocus
-              style={{
-                width: '100%',
-                height: 48,
-                paddingLeft: 42,
-                paddingRight: 16,
-                fontSize: 16,
-                border: '1px solid var(--border-strong)',
-                borderRadius: 8,
-                background: '#fff',
-                color: 'var(--text-primary)',
-                outline: 'none',
-                transition: 'border-color .12s, box-shadow .12s',
-              }}
-              onFocus={e => {
-                e.currentTarget.style.borderColor = 'var(--accent)'
-                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(37,99,168,0.12)'
-              }}
-              onBlur={e => {
-                e.currentTarget.style.borderColor = 'var(--border-strong)'
-                e.currentTarget.style.boxShadow = 'none'
-              }}
+              onKeyDown={e => { if (e.key === 'Escape') setQ('') }}
             />
+            {q && (
+              <button
+                className="ps-search-clear"
+                onClick={() => { setQ(''); inputRef.current?.focus() }}
+                aria-label="Καθαρισμός"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
 
           {/* Filters */}
-          <div style={{ display: 'flex', gap: 12, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-            {/* Area select */}
+          <div className="ps-filters">
             <select
+              className="ps-select"
+              data-active={area ? 'true' : 'false'}
               value={area}
               onChange={e => setArea(e.target.value)}
-              style={{
-                height: 34,
-                padding: '0 28px 0 10px',
-                fontSize: 13,
-                border: '1px solid var(--border)',
-                borderRadius: 6,
-                background: '#fff',
-                color: area ? 'var(--text-primary)' : 'var(--text-secondary)',
-                cursor: 'pointer',
-                appearance: 'none',
-                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'right 8px center',
-              }}
             >
               <option value="">Όλη η Ελλάδα</option>
               {areas.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
 
-            {/* Count segmented */}
             <SegmentedControl
               label="Εταιρείες"
               options={COUNT_OPTIONS}
@@ -191,47 +215,67 @@ export default function PeopleSearch({ areas }: { areas: string[] }) {
               onChange={setCount}
             />
 
-            {/* Status segmented */}
             <SegmentedControl
               label=""
               options={STATUS_OPTIONS}
               value={status}
               onChange={setStatus}
             />
+
+            {filterCount > 0 && (
+              <button
+                className="ps-seg-btn"
+                style={{ border: '1px solid #E2E0D6', borderRadius: 7, background: '#fff' }}
+                onClick={() => { setArea(''); setCount(''); setStatus('') }}
+              >
+                Καθαρισμός ({filterCount})
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Results area */}
-      <div style={{ flex: 1, background: 'var(--app-bg)', padding: '24px', overflowY: 'auto' }}>
-        <div style={{ maxWidth: 680, margin: '0 auto' }}>
-          {!hasQuery && (
-            <EmptyState onExampleClick={name => setQ(name)} />
-          )}
+      {/* ── RESULTS ──────────────────────────────────────────── */}
+      <div className="ps-results">
+        <div className="ps-results-inner">
 
-          {hasQuery && loading && (
-            <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-muted)', fontSize: 14 }}>
-              Αναζήτηση...
-            </div>
-          )}
+          {!hasQuery && <EmptyState onExampleClick={name => setQ(name)} />}
+
+          {hasQuery && loading && <SkeletonList />}
 
           {hasQuery && !loading && results !== null && results.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '48px 0' }}>
-              <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-                Δεν βρέθηκαν αποτελέσματα για &ldquo;<strong>{q}</strong>&rdquo;
+            <div className="ps-none">
+              <span className="ps-none-icon">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                </svg>
+              </span>
+              <p className="ps-none-title">Δεν βρέθηκαν στελέχη για «{q.trim()}»</p>
+              <p className="ps-none-text">
+                Δοκιμάστε το επώνυμο μόνο του, ή χαλαρώστε τα φίλτρα.
               </p>
             </div>
           )}
 
-          {results && results.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-                {results.length} αποτελέσματα
-              </p>
-              {results.map(p => (
-                <PersonResultCard key={p.person_name} person={p} />
-              ))}
-            </div>
+          {hasQuery && !loading && results && results.length > 0 && (
+            <>
+              <div className="ps-results-hd">
+                <span className="ps-results-count">
+                  {results.length} {results.length === 1 ? 'στέλεχος' : 'στελέχη'}{' '}
+                  <span>για «{q.trim()}»</span>
+                </span>
+                {results.length >= 20 && (
+                  <span className="ps-results-hint">Εμφανίζονται τα 20 πιο σχετικά</span>
+                )}
+              </div>
+
+              <div className="ps-list">
+                {results.map((p, i) => (
+                  <PersonResultCard key={p.person_name} person={p} index={i} />
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -248,31 +292,16 @@ function SegmentedControl({
   onChange: (v: string) => void
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      {label && <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{label}:</span>}
-      <div style={{
-        display: 'flex',
-        background: '#fff',
-        border: '1px solid var(--border)',
-        borderRadius: 6,
-        overflow: 'hidden',
-      }}>
-        {options.map((opt, i) => (
+    <div className="ps-seg">
+      {label && <span className="ps-seg-label">{label}:</span>}
+      <div className="ps-seg-group">
+        {options.map(opt => (
           <button
             key={opt.value}
+            className="ps-seg-btn"
+            data-active={value === opt.value ? 'true' : 'false'}
+            data-default={opt.value === '' ? 'true' : 'false'}
             onClick={() => onChange(opt.value)}
-            style={{
-              padding: '5px 10px',
-              fontSize: 12.5,
-              fontWeight: value === opt.value ? 600 : 400,
-              background: value === opt.value ? 'var(--accent)' : 'transparent',
-              color: value === opt.value ? '#fff' : 'var(--text-secondary)',
-              border: 'none',
-              borderLeft: i > 0 ? '1px solid var(--border)' : 'none',
-              cursor: 'pointer',
-              transition: 'background .1s, color .1s',
-              whiteSpace: 'nowrap',
-            }}
           >
             {opt.label}
           </button>
@@ -282,184 +311,133 @@ function SegmentedControl({
   )
 }
 
+function SkeletonList() {
+  return (
+    <>
+      <div className="ps-results-hd">
+        <span className="ps-skel" style={{ height: 13, width: 150, display: 'block' }} />
+      </div>
+      <div className="ps-list">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="ps-card" style={{ cursor: 'default' }}>
+            <span className="ps-skel ps-skel-avatar" />
+            <div className="ps-body">
+              <span className="ps-skel" style={{ height: 14, width: '46%' }} />
+              <span className="ps-skel" style={{ height: 12, width: '68%' }} />
+              <div className="ps-chips">
+                <span className="ps-skel" style={{ height: 19, width: 104, borderRadius: 5 }} />
+                <span className="ps-skel" style={{ height: 19, width: 82,  borderRadius: 5 }} />
+              </div>
+            </div>
+            <div className="ps-stat">
+              <span className="ps-skel" style={{ height: 21, width: 26 }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
 function EmptyState({ onExampleClick }: { onExampleClick: (name: string) => void }) {
   return (
-    <div style={{ textAlign: 'center', padding: '56px 24px' }}>
-      <div style={{
-        width: 52, height: 52,
-        borderRadius: '50%',
-        background: 'var(--accent-light)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        margin: '0 auto 16px',
-      }}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-          stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-          <circle cx="9" cy="7" r="4" />
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-        </svg>
+    <div className="ps-empty">
+      <div className="ps-empty-card">
+        <p className="ps-empty-title">Αναζητήστε ένα στέλεχος</p>
+        <p className="ps-empty-text">
+          Πληκτρολογήστε ονοματεπώνυμο για να δείτε σε ποιες εταιρείες συμμετέχει,
+          με ποιον ρόλο και για πόσο διάστημα. Μπορείτε επίσης να αναζητήσετε με
+          email ή τηλέφωνο εταιρείας.
+        </p>
+
+        <div className="ps-example-label">Δοκιμάστε</div>
+        <div className="ps-examples">
+          {EXAMPLE_NAMES.map(name => (
+            <button key={name} className="ps-example" onClick={() => onExampleClick(name)}>
+              <span className="ps-example-avatar" style={{ background: avatarColor(name) }}>
+                {initials(name)}
+              </span>
+              {name}
+            </button>
+          ))}
+        </div>
       </div>
-      <p style={{ fontWeight: 600, fontSize: 15, marginBottom: 6 }}>Αναζητήστε ένα πρόσωπο</p>
-      <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 20 }}>
-        Πληκτρολογήστε το όνομα ενός διευθυντή, μετόχου ή εκπροσώπου
-      </p>
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-        {EXAMPLE_NAMES.map(name => (
-          <button
-            key={name}
-            onClick={() => onExampleClick(name)}
-            style={{
-              padding: '6px 12px',
-              fontSize: 12.5,
-              fontWeight: 500,
-              background: '#fff',
-              border: '1px solid var(--border)',
-              borderRadius: 20,
-              cursor: 'pointer',
-              color: 'var(--text-secondary)',
-              transition: 'border-color .1s, color .1s',
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.borderColor = 'var(--accent)'
-              e.currentTarget.style.color = 'var(--accent)'
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.borderColor = 'var(--border)'
-              e.currentTarget.style.color = 'var(--text-secondary)'
-            }}
-          >
-            {name}
-          </button>
+
+      <div className="ps-caps">
+        {CAPABILITIES.map(c => (
+          <div key={c.title} className="ps-cap">
+            <span className="ps-cap-icon">{c.icon}</span>
+            <div className="ps-cap-title">{c.title}</div>
+            <div className="ps-cap-text">{c.text}</div>
+          </div>
         ))}
       </div>
     </div>
   )
 }
 
-function PersonResultCard({ person }: { person: PersonResult }) {
+function PersonResultCard({ person, index }: { person: PersonResult; index: number }) {
   const color = avatarColor(person.person_name)
-  const ini = initials(person.person_name)
-  const isActive = person.active_count > 0
+  const ini   = initials(person.person_name)
 
-  // Deduplicate by ar_gemi (person may have multiple roles in same company)
+  // Deduplicate by ar_gemi (person may hold multiple roles in the same company)
   const uniqueCompanies = person.companies.filter(
     (c, i, arr) => arr.findIndex(x => x.ar_gemi === c.ar_gemi) === i
   )
-  const chips = uniqueCompanies.slice(0, 4)
+  const chips     = uniqueCompanies.slice(0, 3)
   const remaining = uniqueCompanies.length - chips.length
+  const allPast   = person.active_count === 0
 
   return (
     <Link
       href={`/people/${encodeURIComponent(person.person_name)}`}
-      style={{ textDecoration: 'none' }}
+      className="ps-card ps-anim"
+      style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }}
     >
-      <div
-        style={{
-          background: 'var(--card-bg)',
-          border: '1px solid var(--border)',
-          borderRadius: 8,
-          padding: '14px 16px',
-          display: 'flex',
-          gap: 14,
-          alignItems: 'flex-start',
-          cursor: 'pointer',
-          transition: 'border-color .12s, box-shadow .12s',
-        }}
-        onMouseEnter={e => {
-          const el = e.currentTarget
-          el.style.borderColor = 'var(--accent)'
-          el.style.boxShadow = '0 2px 8px rgba(37,99,168,0.08)'
-        }}
-        onMouseLeave={e => {
-          const el = e.currentTarget
-          el.style.borderColor = 'var(--border)'
-          el.style.boxShadow = 'none'
-        }}
-      >
-        {/* Avatar */}
-        <div style={{
-          width: 44, height: 44, borderRadius: '50%',
-          background: color,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#fff', fontSize: 14, fontWeight: 700,
-          flexShrink: 0,
-          letterSpacing: '0.02em',
-        }}>
-          {ini}
-        </div>
+      <span className="ps-avatar" style={{ background: color }}>{ini}</span>
 
-        {/* Content */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-            <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
-              {person.person_name}
-            </span>
-            {person.prefectures?.length > 0 && (
-              <span style={{
-                fontSize: 11, color: 'var(--text-secondary)',
-                background: 'var(--app-bg)', border: '0.5px solid var(--border)',
-                borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap',
-              }}>
-                {person.prefectures.slice(0, 2).join(', ')}
-              </span>
-            )}
-          </div>
-
-          {person.primary_role && person.primary_company && (
-            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
-              {person.primary_role}{' '}
-              <span style={{ color: 'var(--text-muted)' }}>σε</span>{' '}
-              {person.primary_company}
-            </p>
+      <div className="ps-body">
+        <div className="ps-name-row">
+          <span className="ps-name">{person.person_name}</span>
+          {person.prefectures?.length > 0 && (
+            <span className="ps-region">{person.prefectures.slice(0, 2).join(' · ')}</span>
           )}
+        </div>
 
-          {/* Company chips */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {chips.map(c => {
-              const chipActive = c.status === 'Ενεργή'
-              return (
-                <span key={c.ar_gemi} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                  padding: '2px 8px',
-                  background: 'var(--app-bg)',
-                  border: '0.5px solid var(--border)',
-                  borderRadius: 4,
-                  fontSize: 11.5,
-                  color: 'var(--text-secondary)',
-                  maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
-                  <span style={{
-                    width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-                    background: chipActive ? '#3EB57A' : '#C5C3BE',
-                  }} />
-                  {c.name}
-                </span>
-              )
-            })}
-            {remaining > 0 && (
-              <span style={{
-                padding: '2px 8px', background: 'var(--app-bg)',
-                border: '0.5px solid var(--border)', borderRadius: 4,
-                fontSize: 11.5, color: 'var(--text-muted)',
-              }}>
-                +{remaining} ακόμα
+        {person.primary_role && person.primary_company && (
+          <p className="ps-role">
+            <b>{person.primary_role}</b> <em>σε</em> {person.primary_company}
+          </p>
+        )}
+
+        {chips.length > 0 && (
+          <div className="ps-chips">
+            {chips.map(c => (
+              <span key={c.ar_gemi} className="ps-chip" title={c.name}>
+                <span
+                  className="ps-chip-dot"
+                  style={{ background: c.status === 'Ενεργή' ? '#2E9E5B' : '#C5C3BE' }}
+                />
+                <span className="ps-chip-text">{c.name}</span>
               </span>
+            ))}
+            {remaining > 0 && (
+              <span className="ps-chip ps-chip-more">+{remaining} ακόμα</span>
             )}
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Company count + status */}
-        <div style={{ flexShrink: 0, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-          <span style={{
-            fontSize: 18, fontWeight: 700, color: isActive ? 'var(--accent)' : 'var(--text-muted)',
-          }}>
-            {person.company_count}
-          </span>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            εταιρ.
-          </span>
-        </div>
+      <div className="ps-stat">
+        <span className="ps-stat-num" data-dim={allPast ? 'true' : 'false'}>
+          {person.company_count}
+        </span>
+        <span className="ps-stat-lbl">
+          {person.company_count === 1 ? 'εταιρεία' : 'εταιρείες'}
+        </span>
+        {person.active_count > 0 && (
+          <span className="ps-stat-active">{person.active_count} ενεργ.</span>
+        )}
       </div>
     </Link>
   )

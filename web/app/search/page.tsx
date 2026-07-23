@@ -21,7 +21,7 @@ async function getTotalCompanies(): Promise<number> {
 export default async function Search() {
   const total = await getTotalCompanies()
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       <TopNav totalCompanies={total} />
       <Suspense><SearchPage /></Suspense>
     </div>

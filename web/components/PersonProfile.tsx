@@ -437,7 +437,7 @@ export default function PersonProfileComponent({ profile }: { profile: PersonPro
         background: 'var(--card-bg)', borderBottom: '0.5px solid var(--border)',
         fontSize: 12, color: 'var(--text-secondary)',
       }}>
-        <Link href="/people" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Πρόσωπα</Link>
+        <Link href="/people" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Στελέχη</Link>
         <svg width="11" height="11" viewBox="0 0 16 16" fill="none" style={{ color: 'var(--text-muted)', flexShrink: 0 }}>
           <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
