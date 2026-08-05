@@ -18,6 +18,7 @@ interface Company {
   email: string | null
   phone: string | null
   url: string | null
+  discovered_url: string | null
   instagram_url: string | null
   facebook_url: string | null
   linkedin_url: string | null
@@ -904,6 +905,11 @@ export default function SearchPage() {
                                   <Icon name="globe" size={10} stroke={1.6} />
                                 </span>
                               )}
+                              {!c.url && c.discovered_url && (
+                                <span className="sp-badge sp-badge-found" title={`Ιστότοπος βρέθηκε από το GreekLeads: ${c.discovered_url}`} style={{ padding: '0 4px' }}>
+                                  <span className="gl-mark">GL</span>
+                                </span>
+                              )}
                               {SOCIAL_PLATFORMS.some(p => c[p.key]) && (
                                 <span style={{ width: '0.5px', height: 12, background: 'var(--border)', flexShrink: 0 }} />
                               )}
@@ -980,6 +986,7 @@ export default function SearchPage() {
                         {c.email && <span className="sp-badge sp-badge-neutral" title={c.email}><Icon name="mail" size={9} stroke={1.6} /></span>}
                         {c.phone && <span className="sp-badge sp-badge-neutral" title={c.phone}><Icon name="phone" size={9} stroke={1.6} /></span>}
                         {c.url && <span className="sp-badge sp-badge-neutral" title={c.url}><Icon name="globe" size={9} stroke={1.6} /></span>}
+                        {!c.url && c.discovered_url && <span className="sp-badge sp-badge-found" title={`Ιστότοπος βρέθηκε από το GreekLeads: ${c.discovered_url}`} style={{ padding: '0 4px' }}><span className="gl-mark" style={{ width: 13, height: 13 }}>GL</span></span>}
                         {SOCIAL_PLATFORMS.map(p => c[p.key] ? (
                           <Icon key={p.key} name={p.icon} size={12} style={{ color: p.color, flexShrink: 0 }} />
                         ) : null)}

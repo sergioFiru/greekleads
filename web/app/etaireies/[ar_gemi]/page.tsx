@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { query, queryOne, queryWithTimeout } from '@/lib/db'
+import { brandTitles } from '@/lib/brand'
 import TopNav from '@/components/TopNav'
 import CompanyPage from '@/components/CompanyPage'
 import type { CompanyData, PersonRow, SimilarCompany } from '@/components/CompanyPage'
@@ -8,9 +9,9 @@ import type { CompanyData, PersonRow, SimilarCompany } from '@/components/Compan
 async function getCompany(ar_gemi: string): Promise<CompanyData | null> {
   return queryOne<CompanyData>(
     `SELECT
-      ar_gemi::text, afm, co_name_el, co_names_en, objective,
+      ar_gemi::text, afm, co_name_el, co_names_en, co_titles_el, co_titles_en, objective,
       city, street, street_number, zip_code, municipality_descr, prefecture_descr,
-      email, phone, fax, url, legal_type_descr, gemi_office_descr, status_descr,
+      email, phone, fax, url, discovered_url, website_source, legal_type_descr, gemi_office_descr, status_descr,
       is_branch, incorporation_date::text,
       activities, capital,
       linkedin_url, instagram_url, facebook_url, twitter_url, tiktok_url, youtube_url,
@@ -82,15 +83,17 @@ export async function generateMetadata({
 
   const name = company.co_name_el ?? `ΓΕΜΗ ${company.ar_gemi}`
   const city = company.city ?? company.prefecture_descr ?? 'Ελλάδα'
+  const brand = brandTitles(company.co_titles_el, company.co_name_el)[0]
+  const titleName = brand ? `${name} (${brand})` : name
   const desc =
     company.objective?.slice(0, 155) ??
-    `Πληροφορίες για ${name} — ΓΕΜΗ ${company.ar_gemi}, ${city}. Στοιχεία επικοινωνίας, διοικητικό συμβούλιο και δραστηριότητες.`
+    `Πληροφορίες για ${name}${brand ? ` (δ.τ. ${brand})` : ''} — ΓΕΜΗ ${company.ar_gemi}, ${city}. Στοιχεία επικοινωνίας, διοικητικό συμβούλιο και δραστηριότητες.`
 
   return {
-    title: `${name} | GreekLeads`,
+    title: `${titleName} | GreekLeads`,
     description: desc,
     openGraph: {
-      title: name,
+      title: titleName,
       description: desc,
       type: 'website',
       locale: 'el_GR',
@@ -116,15 +119,25 @@ export default async function CompanyPageRoute({
     getSimilar(ar_gemi, company.primary_kad, company.prefecture_descr),
   ])
 
+  // Trade names + English names → schema.org alternateName ("also known as").
+  // This is the canonical brand-capture signal, stronger than any body-text mention.
+  const altNames = Array.from(new Set([
+    ...brandTitles(company.co_titles_el, company.co_name_el),
+    ...brandTitles(company.co_titles_en, company.co_name_el),
+    ...(company.co_names_en ?? []).map(s => (s ?? '').trim()).filter(Boolean),
+  ]))
+
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: company.co_name_el,
+    legalName: company.co_name_el,
+    ...(altNames.length ? { alternateName: altNames.length === 1 ? altNames[0] : altNames } : {}),
     identifier: [
       { '@type': 'PropertyValue', name: 'ΓΕΜΗ', value: company.ar_gemi },
       ...(company.afm ? [{ '@type': 'PropertyValue', name: 'ΑΦΜ', value: company.afm }] : []),
     ],
-    ...(company.url ? { url: company.url } : {}),
+    ...(company.url ? { url: company.url } : company.discovered_url ? { url: company.discovered_url } : {}),
     ...(company.email ? { email: company.email } : {}),
     ...(company.phone ? { telephone: company.phone } : {}),
     ...(company.incorporation_date

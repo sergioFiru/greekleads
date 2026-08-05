@@ -3,6 +3,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import KadDonut from './KadDonut'
 import CompanyNetworkGraph from './CompanyNetworkGraph'
+import { brandTitles } from '@/lib/brand'
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -27,6 +28,8 @@ export interface CompanyData {
   afm: string | null
   co_name_el: string | null
   co_names_en: string[] | null
+  co_titles_el: string[] | null
+  co_titles_en: string[] | null
   objective: string | null
   city: string | null
   street: string | null
@@ -38,6 +41,8 @@ export interface CompanyData {
   phone: string | null
   fax: string | null
   url: string | null
+  discovered_url: string | null
+  website_source: string | null
   legal_type_descr: string | null
   gemi_office_descr: string | null
   status_descr: string | null
@@ -306,7 +311,15 @@ function OverviewTab({
                     style={{ color: 'var(--accent)', textDecoration: 'none', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {displayUrl(company.url)}
                   </a>
-                : null}
+                : company.discovered_url
+                  ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, maxWidth: '100%', overflow: 'hidden' }}>
+                      <span className="gl-found" style={{ flexShrink: 0 }}><span className="gl-mark">GL</span>βρέθηκε από το GreekLeads</span>
+                      <a href={ensureHttp(company.discovered_url)} target="_blank" rel="noopener noreferrer"
+                        style={{ color: 'var(--accent)', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {displayUrl(company.discovered_url)}
+                      </a>
+                    </span>
+                  : null}
             </KvRow>
             <KvRow label="Email">
               {company.email
@@ -584,6 +597,7 @@ export default function CompanyPage({
 
   const lc = logoColor(company.ar_gemi)
   const initials = getInitials(company.co_name_el ?? company.ar_gemi)
+  const brands = brandTitles(company.co_titles_el, company.co_name_el)
   const activities: KadActivity[] = Array.isArray(company.activities) ? company.activities : []
   const capital = formatCapital(company.capital)
   const isActive = company.status_descr?.toLowerCase().includes('ενεργ')
@@ -627,6 +641,12 @@ export default function CompanyPage({
                 <span className={`badge ${isActive ? 'badge-active' : 'badge-inactive'}`}>{company.status_descr ?? 'Άγνωστη'}</span>
                 {company.legal_type_descr && <span className="badge badge-neutral">{company.legal_type_descr}</span>}
               </div>
+              {brands.length > 0 && (
+                <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                  Διακριτικός τίτλος:{' '}
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{brands.join(' · ')}</span>
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 18 }}>
                 <span className="badge badge-gemi" style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
                   ΓΕΜΗ {company.ar_gemi}
@@ -682,13 +702,18 @@ export default function CompanyPage({
                     </a>
                   </div>
                 )}
-                {company.url && (
+                {(company.url || company.discovered_url) && (
                   <div>
                     <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Website</div>
-                    <a href={ensureHttp(company.url)} target="_blank" rel="noopener noreferrer"
-                      style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', textDecoration: 'none' }}>
-                      {displayUrl(company.url)}
-                    </a>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <a href={ensureHttp((company.url || company.discovered_url)!)} target="_blank" rel="noopener noreferrer"
+                        style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', textDecoration: 'none' }}>
+                        {displayUrl((company.url || company.discovered_url)!)}
+                      </a>
+                      {!company.url && company.discovered_url && (
+                        <span className="gl-found"><span className="gl-mark">GL</span>βρέθηκε από το GreekLeads</span>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

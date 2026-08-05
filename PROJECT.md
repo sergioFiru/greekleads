@@ -310,6 +310,7 @@ right rail with company count + active badge. Empty state explains the dataset
 - [ ] Sitemap.xml generation for SEO
 - [ ] LinkedIn enrichment bot (Phase 2)
 - [ ] Contact verification bot — SMTP email check, carrier phone lookup (Phase 2)
+- [ ] Tech-stack + marketing-stack scan (Phase 2) — see the dedicated Planned section below (webappanalyzer, backend-only ruleset, store results as a Pro filter)
 
 ---
 
@@ -449,6 +450,62 @@ Collect all financial statement PDFs from GEMI, store on Cloudflare R2, parse in
 
 ---
 
+## Planned: Tech-Stack + Marketing-Stack Scan (Phase 2 enrichment)
+
+Fingerprint the tech stack of every firm website we know (ΓΕΜΗ urls + our
+discovered ones) — a WhatWeb/Wappalyzer-style detector. Agreed 2026-07-24,
+deferred (build **after** the current business-logic/features work).
+
+**What it detects** — read from the HTML we *already download* in the scan
+pipeline (`scripts/discover_websites.py`, live `website_scanner`, `scan_utils`).
+Signals: `<meta name=generator>`, script src URLs (`cdn.shopify.com`,
+`wp-content/plugins/woocommerce`), HTTP headers (`X-Powered-By`, `Server`,
+platform `Set-Cookie` names). Two buckets, **both** wanted:
+1. **Platform / CMS / ecommerce** — WordPress, WooCommerce, Shopify, Wix,
+   Squarespace, Magento, PrestaShop, Joomla, Webflow, …
+2. **Marketing stack** — GTM, Meta Pixel, Google Analytics, …
+
+**Why it's valuable**
+- Another proprietary layer nobody mirroring ΓΕΜΗ has → a **sellable Pro
+  filter**: "every WooCommerce store in Greece", "Wix sites to upsell a real
+  store".
+- Marketing-stack signal cuts **both ways**: pixel + GTM + GA → spends on ads →
+  budget/sophistication → premium lead; a site with **no** tracking →
+  unsophisticated → prime target for a marketing agency.
+- Turns Scout's "ecommerce firms" from a **KAD guess** into a **detected fact**.
+
+**Data source — `enthec/webappanalyzer`** (the community fork maintaining
+Wappalyzer's fingerprints after Wappalyzer went commercial/closed Aug 2023;
+active, ~251 fingerprints as of 2026). Python wrapper option:
+`PigeonSec/py-wappalyzer` (uses enthec as base).
+
+⚠️ **LICENSE — GPLv3, not AGPL. Must respect:**
+- GPLv3 copyleft triggers on **distribution**, *not* on running as a network
+  service (the "SaaS gap" AGPL exists to close). So run the ruleset
+  **backend-only** (batch scanner) → **no obligation to open-source GreekLeads**;
+  full ruleset usable server-side.
+- ❌ **Never** bundle the fingerprint JSON/regexes into the Next.js frontend
+  shipped to browsers, and **never** expose an API returning the raw ruleset —
+  that is distribution → copyleft.
+- ✅ **Store only the RESULTS** ("firm X → Shopify + Meta Pixel"). Results are
+  **facts about third-party companies** — not copyrightable, not a derivative
+  work — so **populating our DB with them is fine**, and they're ours to index,
+  filter, gate behind Pro, and sell. (A GPL scanner no more makes its output GPL
+  than a GPL compiler makes your program GPL.)
+- Not legal advice; cheap to get a one-off "backend-only, results-in-DB"
+  confirmation before launch, but this is the mainstream GPLv3 reading.
+
+**Open decisions (when we build):**
+- [ ] Storage shape — normalized `technologies` set per company, categorized
+  (cms / ecommerce / analytics / payment / hosting / marketing)
+- [ ] Re-scan cadence — stacks change (Wix→Shopify); not one-and-done; dovetails
+  with the monitoring roadmap
+- [ ] Which filter categories to surface first
+
+This also feeds the **Digital adoption** statistics (Tier 3 of the stats page).
+
+---
+
 ## Planned: vrisko.gr Scrape
 
 Scrape vrisko.gr for supplementary company data not available in GEMI (details TBD). Implementation approach to be defined by user.
@@ -492,3 +549,4 @@ Scrape vrisko.gr for supplementary company data not available in GEMI (details T
 - 2026-07-20: Added `/api/suggest`; expanded `/api/stats` with real active/contact/social counts — the old hardcoded homepage figures were wrong (claimed 1.284.940 companies vs 1.672.7xx actual, and 326.400 "with social" vs 16.793 actual)
 - 2026-07-20: Discovered `'Inadequate Info'` placeholder + combined `ΔΗΜΟΣ / ΝΟΜΟΣ` format in `municipality_descr`; fixed in `/api/suggest`
 - 2026-07-20: Wrote `tools/add_name_index.py` (not yet run) after measuring name search at ~2.2s — the trigram index on `co_name_el` this doc previously claimed does not exist
+- 2026-07-24: Planned tech-stack + marketing-stack scan (Phase 2 enrichment) — verified `enthec/webappanalyzer` is GPLv3 (not AGPL); confirmed backend-only use doesn't trigger copyleft and detection results are storable facts; documented as a Pro-gated filter

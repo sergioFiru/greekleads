@@ -176,3 +176,107 @@ def scan_site(raw_url: str, session: requests.Session = None) -> dict:
         return {"error": "connection_error"}
     except Exception as e:
         return {"error": str(e)[:80]}
+
+
+# ---------------------------------------------------------------------------
+# Website discovery — probe a firm's EMAIL DOMAIN for a website ΓΕΜΗ doesn't
+# have. Shared by scripts/discover_websites.py (bulk one-off) and the live
+# website_scanner bot (pass 2). Premise: an active firm with no url but an
+# email on its own domain (info@acme.gr) very often hosts a site at that domain.
+# ---------------------------------------------------------------------------
+
+# Free / ISP / webmail domains — an email here tells us nothing about a website.
+FREEMAIL = {
+    "gmail.com", "googlemail.com", "yahoo.com", "yahoo.gr", "yahoo.co.uk",
+    "hotmail.com", "hotmail.gr", "hotmail.co.uk", "outlook.com", "outlook.com.gr",
+    "live.com", "msn.com", "icloud.com", "me.com", "mac.com", "aol.com",
+    "mail.com", "gmx.com", "gmx.net", "yandex.com", "yandex.ru", "protonmail.com",
+    "proton.me", "zoho.com", "hol.gr", "in.gr", "freemail.gr", "otenet.gr",
+    "ath.forthnet.gr", "forthnet.gr", "windowslive.com", "vodafone.gr",
+    "wind.gr", "cyta.gr", "hellasnet.gr", "internet.gr", "acn.gr",
+}
+
+_PARKED_SIGNS = [
+    "domain is for sale", "this domain may be for sale", "buy this domain",
+    "domain parking", "sedoparking", "parkingcrew", "bodis.com", "afternic",
+    "hugedomains", "domain for sale", "παρκαρισμ", "προς πώληση",
+]
+_PLACEHOLDER_SIGNS = [
+    "under construction", "coming soon", "υπό κατασκευή", "σύντομα κοντά σας",
+    "default web page", "apache2 ubuntu default", "welcome to nginx",
+    "iis windows", "index of /", "it works!", "test page for the apache",
+    "site not configured", "website coming soon", "plesk",
+]
+
+_EMAIL_DOMAIN_RE = re.compile(r"@([A-Za-z0-9.\-]+\.[A-Za-z]{2,})")
+
+
+def email_domain(email: str):
+    """First email's domain, lowercased. None if unusable or freemail."""
+    if not email:
+        return None
+    m = _EMAIL_DOMAIN_RE.search(email)
+    if not m:
+        return None
+    dom = m.group(1).lower().strip(".")
+    if dom in FREEMAIL or dom.count(".") > 3:
+        return None
+    return dom
+
+
+def classify_html(html: str) -> str:
+    """live | parked | placeholder — only 'live' is a real website."""
+    low = html[:20000].lower()
+    if any(s in low for s in _PARKED_SIGNS):
+        return "parked"
+    if any(s in low for s in _PLACEHOLDER_SIGNS):
+        return "placeholder"
+    if len(html.strip()) < 200:
+        return "placeholder"
+    return "live"
+
+
+def probe_domain(domain: str, session: requests.Session = None) -> dict:
+    """Try https then http on the bare domain.
+    Returns {status: live|parked|placeholder|no-response, url, harvest}.
+    harvest (socials/emails/phones) is populated only when status == 'live'.
+    """
+    if session is None:
+        session = _get_session()
+    for scheme in ("https://", "http://"):
+        base = normalize_url(scheme + domain)
+        if not base:
+            continue
+        try:
+            r = session.get(
+                base, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
+                allow_redirects=True, stream=True,
+            )
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError,
+                requests.exceptions.TooManyRedirects):
+            continue
+        except Exception:
+            continue
+
+        if r.status_code >= 400:
+            r.close()
+            continue
+
+        chunks, total = [], 0
+        try:
+            for c in r.iter_content(8192):
+                chunks.append(c)
+                total += len(c)
+                if total >= MAX_BYTES:
+                    break
+        except Exception:
+            pass
+        finally:
+            r.close()
+
+        html = b"".join(chunks).decode("utf-8", errors="ignore")
+        status = classify_html(html)
+        harvest = extract_all(html) if status == "live" else {}
+        return {"status": status, "url": str(r.url), "harvest": harvest}
+
+    return {"status": "no-response", "url": None, "harvest": {}}

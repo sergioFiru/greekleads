@@ -38,9 +38,9 @@ function buildWhere(f: SearchFilters): { sql: string; params: unknown[] } {
       words.forEach(w => params.push(`%${w}%`))
       const exactIdx = i++
       params.push(`%${name}%`)
-      conds.push(`((${wordConds}) OR c.email ILIKE $${exactIdx} OR c.phone ILIKE $${exactIdx} OR c.url ILIKE $${exactIdx} OR c.afm ILIKE $${exactIdx})`)
+      conds.push(`((${wordConds}) OR c.co_titles_el::text ILIKE $${exactIdx} OR c.email ILIKE $${exactIdx} OR c.phone ILIKE $${exactIdx} OR c.url ILIKE $${exactIdx} OR c.afm ILIKE $${exactIdx})`)
     } else {
-      conds.push(`(c.co_name_el ILIKE $${i} OR c.email ILIKE $${i} OR c.phone ILIKE $${i} OR c.url ILIKE $${i} OR c.afm ILIKE $${i})`)
+      conds.push(`(c.co_name_el ILIKE $${i} OR c.co_titles_el::text ILIKE $${i} OR c.email ILIKE $${i} OR c.phone ILIKE $${i} OR c.url ILIKE $${i} OR c.afm ILIKE $${i})`)
       i++
       params.push(`%${name}%`)
     }
@@ -137,6 +137,7 @@ export async function POST(req: NextRequest) {
         email: string | null
         phone: string | null
         url: string | null
+        discovered_url: string | null
         instagram_url: string | null
         facebook_url: string | null
         linkedin_url: string | null
@@ -155,6 +156,7 @@ export async function POST(req: NextRequest) {
            NULLIF(c.email, '') AS email,
            NULLIF(c.phone, '') AS phone,
            NULLIF(c.url,   '') AS url,
+           NULLIF(c.discovered_url, '') AS discovered_url,
            c.instagram_url, c.facebook_url, c.linkedin_url,
            c.twitter_url, c.tiktok_url, c.youtube_url
          FROM companies c

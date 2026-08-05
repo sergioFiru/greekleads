@@ -37,7 +37,7 @@ export default function TopNav({ totalCompanies }: { totalCompanies?: number }) 
 
       {totalCompanies != null && (
         <div className="nav-live">
-          <span className="mono" style={{ color: 'var(--nav-text-active)', fontSize: 12 }}>
+          <span className="mono" style={{ color: '#16233B', fontWeight: 600, fontSize: 12 }}>
             {totalCompanies.toLocaleString('el-GR')}
           </span>
           <span>εταιρείες</span>

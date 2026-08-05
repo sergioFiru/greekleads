@@ -12,7 +12,7 @@ export async function GET(
         `SELECT ar_gemi::text, afm, co_name_el, co_names_en, co_titles_el, co_titles_en,
                 legal_type_descr, status_descr,
                 prefecture_descr, municipality_descr, city, street, street_number, zip_code,
-                email, phone, fax, url, incorporation_date::text, primary_kad,
+                email, phone, fax, url, discovered_url, website_source, incorporation_date::text, primary_kad,
                 activities, capital, objective,
                 instagram_url, facebook_url, linkedin_url, twitter_url, tiktok_url, youtube_url
          FROM companies WHERE ar_gemi = $1::bigint`,
