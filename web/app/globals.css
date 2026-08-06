@@ -27,7 +27,7 @@
   /* Borders — warm gray */
   --border: #DDDBD5;
   --border-strong: #C8C6C0;
-  --row-divider: #EEEDE9;
+  --row-divider: #E5E1D6;
   --row-hover: #F7F6FF;
 
   /* ΓΕΜΗ badge */
@@ -43,6 +43,13 @@
   --inactive-bg: #FEF3F2;
   --inactive-text: #9B2335;
   --inactive-border: #F5C6CB;
+
+  /* Financials — loss-year tone. Deliberately NOT the --inactive red: paired
+     next to --gemi-text green in the same chart, red/green fails CVD
+     simulation (protan ΔE ~4, under the safety floor). Sign is carried by bar
+     position + hatch texture + an explicit label; this tone is just ink. */
+  --loss-ink: #6B4A42;
+  --loss-fill: #F3EFE9;
 
   /* Fonts */
   --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
@@ -1115,6 +1122,7 @@ input, select, textarea { font-family: inherit; }
   background: #fff;
   border: 1px solid #E2E0D6;
   border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(22, 35, 59, 0.05);
 }
 
 /* Generic filter pill */
@@ -1309,7 +1317,7 @@ input, select, textarea { font-family: inherit; }
   --text-muted: rgba(232,237,245,0.35);
   --border: rgba(232,237,245,0.08);
   --border-strong: rgba(232,237,245,0.15);
-  --row-divider: rgba(232,237,245,0.06);
+  --row-divider: rgba(232,237,245,0.12);
   --row-hover: rgba(232,237,245,0.04);
   --accent-light: rgba(37,99,168,0.22);
   --li-bg: rgba(37,99,168,0.18);
@@ -1323,6 +1331,8 @@ input, select, textarea { font-family: inherit; }
   --gemi-bg: rgba(10,102,64,0.18);
   --gemi-text: #5CC49A;
   --gemi-border: rgba(91,196,154,0.3);
+  --loss-ink: #D8B8AC;
+  --loss-fill: rgba(232,237,245,0.06);
 }
 
 :root[data-theme="dark"] body { background: var(--page-bg); }
@@ -1863,6 +1873,7 @@ input, select, textarea { font-family: inherit; }
   border: 1px solid #E2E0D6;
   border-radius: 8px;
   padding: 16px 18px;
+  box-shadow: 0 1px 2px rgba(22, 35, 59, 0.05);
 }
 .stat-card .stat-label { font-size: 11px; color: #8A93A3; margin-bottom: 6px; text-transform: none; letter-spacing: 0; }
 .stat-value { font-size: 19px; font-weight: 800; color: #16233B; letter-spacing: -0.01em; }
@@ -1873,7 +1884,7 @@ input, select, textarea { font-family: inherit; }
   gap: 16px;
   min-width: 0;
   padding: 8px 0;
-  border-top: 1px solid #F2F1EA;
+  border-top: 1px solid var(--row-divider);
   font-size: 13px;
   align-items: baseline;
 }
@@ -1882,6 +1893,102 @@ input, select, textarea { font-family: inherit; }
 .kv-val { color: #16233B; font-weight: 600; word-break: break-word; min-width: 0; text-align: right; }
 
 .section-label { font-size: 12px; font-weight: 700; color: #16233B; letter-spacing: 0; }
+
+/* ── Company page — horizontal tab bar (cp-*) ── */
+.cp-tabbar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.cp-tab {
+  display: flex; align-items: center; gap: 6px;
+  padding: 11px 16px;
+  font-family: inherit; font-size: 13.5px; font-weight: 600;
+  color: var(--text-secondary);
+  background: none; border: none; border-bottom: 2px solid transparent;
+  white-space: nowrap; cursor: pointer;
+  transition: color .12s, border-color .12s;
+}
+.cp-tab:hover { color: var(--text-primary); }
+.cp-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.cp-tab-count {
+  font-size: 11px; font-weight: 500;
+  background: var(--surface-subtle); color: var(--text-muted);
+  border: 1px solid var(--border);
+  padding: 1px 6px; border-radius: 10px;
+}
+.cp-tab.active .cp-tab-count { background: var(--accent-light); color: var(--accent); border-color: #C0D0E8; }
+.cp-tab-panel { display: flex; flex-direction: column; }
+
+/* ── Financials tab (cp-fin-*) ── */
+.cp-fin { display: flex; flex-direction: column; gap: 14px; }
+
+.cp-fin-placeholder {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--text-muted);
+  padding: 4px 2px;
+}
+.cp-fin-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong); flex-shrink: 0; }
+
+.cp-fin-found {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  padding: 4px 2px;
+}
+.cp-fin-found-copy { font-size: 13.5px; color: var(--text-primary); font-weight: 500; }
+.cp-fin-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--text-muted); color: #fff; border: none; border-radius: 6px;
+  font-family: inherit; font-size: 12.5px; font-weight: 600;
+  padding: 8px 14px; cursor: not-allowed; opacity: .55;
+}
+.cp-fin-soon {
+  font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  background: rgba(255,255,255,0.25); padding: 2px 6px; border-radius: 4px;
+}
+
+.cp-fin-delta { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 20px; }
+.cp-fin-delta.up { color: var(--gemi-text); background: var(--gemi-bg); }
+.cp-fin-delta.down { color: var(--loss-ink); background: var(--loss-fill); }
+.cp-fin-spark { height: 26px; margin-top: 6px; }
+.cp-fin-spark svg { width: 100%; height: 100%; display: block; }
+
+.cp-fin-chart-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.cp-fin-chart-title .unit { font-weight: 500; color: var(--text-muted); margin-left: 5px; }
+.cp-fin-chart { position: relative; height: 170px; padding-top: 22px; }
+.cp-fin-chart.profit { height: 176px; padding-top: 20px; }
+.cp-fin-bars { position: absolute; left: 0; right: 0; top: 22px; bottom: 26px; display: flex; align-items: flex-end; gap: 14px; padding: 0 4px; }
+/* profit chart reserves extra clearance below the bars box for the "Ζημιά" loss label,
+   which sits under a negative bar rather than above it */
+.cp-fin-chart.profit .cp-fin-bars { bottom: 44px; }
+.cp-fin-bar-col { flex: 1; position: relative; height: 100%; }
+.cp-fin-bar {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 46px; border-radius: 4px 4px 2px 2px; background: var(--accent);
+}
+.cp-fin-bar.profit-pos { background: var(--gemi-text); }
+.cp-fin-bar.profit-neg {
+  background: var(--loss-fill);
+  background-image: repeating-linear-gradient(135deg, var(--border-strong) 0 2px, transparent 2px 6px);
+  border: 1px solid var(--border-strong);
+  border-radius: 2px 2px 4px 4px;
+}
+.cp-fin-zero { position: absolute; left: 0; right: 0; height: 1px; background: var(--text-muted); opacity: .5; }
+.cp-fin-bar-val {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 600;
+  color: var(--text-secondary); white-space: nowrap;
+}
+.cp-fin-bar-val.loss { color: var(--loss-ink); }
+.cp-fin-axis { position: absolute; left: 0; right: 0; bottom: 0; height: 22px; display: flex; gap: 14px; padding: 0 4px; }
+.cp-fin-axis span { flex: 1; text-align: center; font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+.cp-fin-axis span.loss-yr { color: var(--loss-ink); font-weight: 600; font-family: inherit; }
+.cp-fin-divider { height: 1px; background: var(--row-divider); margin: 4px 0 10px; }
+
+.cp-fin-table-scroll { overflow-x: auto; margin: 0 -2px; }
+.cp-fin-provenance { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.cp-fin-provenance .cp-fin-dot { background: var(--gemi-text); }
 
 .data-table { width: 100%; border-collapse: collapse; }
 .data-table thead th {
@@ -1896,7 +2003,7 @@ input, select, textarea { font-family: inherit; }
   letter-spacing: 0.06em;
   white-space: nowrap;
 }
-.data-table tbody td { padding: 10px 14px; border-top: 0.5px solid var(--row-divider); vertical-align: middle; font-size: 13px; }
+.data-table tbody td { padding: 10px 14px; border-top: 1px solid var(--row-divider); vertical-align: middle; font-size: 13px; }
 .data-table tbody tr:first-child td { border-top: none; }
 .data-table tbody tr:hover { background: var(--row-hover); }
 

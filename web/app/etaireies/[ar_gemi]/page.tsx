@@ -4,7 +4,9 @@ import { query, queryOne, queryWithTimeout } from '@/lib/db'
 import { brandTitles } from '@/lib/brand'
 import TopNav from '@/components/TopNav'
 import CompanyPage from '@/components/CompanyPage'
-import type { CompanyData, PersonRow, SimilarCompany } from '@/components/CompanyPage'
+import type { CompanyData, PersonRow, SimilarCompany, FinancialsData } from '@/components/CompanyPage'
+
+const FINANCIAL_FILER_TYPES = new Set(['ΑΕ', 'ΙΚΕ', 'ΕΠΕ'])
 
 async function getCompany(ar_gemi: string): Promise<CompanyData | null> {
   return queryOne<CompanyData>(
@@ -72,6 +74,30 @@ async function getSimilar(
   }
 }
 
+async function getFinancials(ar_gemi: string): Promise<FinancialsData | null> {
+  // Legal-filing requirement (ΑΕ/ΙΚΕ/ΕΠΕ) is checked by the caller — this always
+  // queries, but the tab is only shown when that gate passes.
+  try {
+    return await queryOne<FinancialsData>(
+      `SELECT
+        s.docs_found, s.has_failures, s.scanned_at::text,
+        COALESCE(
+          (SELECT json_agg(row_to_json(fs) ORDER BY fs.fiscal_year DESC)
+           FROM (
+             SELECT fiscal_year, revenue, total_assets, equity, profit_before_tax, net_profit
+             FROM financial_statements WHERE ar_gemi = $1::bigint
+           ) fs),
+          '[]'::json
+        ) AS years
+      FROM financial_ar_gemi_scanned s
+      WHERE s.ar_gemi = $1::bigint`,
+      [ar_gemi]
+    )
+  } catch {
+    return null
+  }
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -114,9 +140,12 @@ export default async function CompanyPageRoute({
   const company = await getCompany(ar_gemi)
   if (!company) notFound()
 
-  const [persons, similar] = await Promise.all([
+  const showFinancials = !!company.legal_type_descr && FINANCIAL_FILER_TYPES.has(company.legal_type_descr)
+
+  const [persons, similar, financials] = await Promise.all([
     getPersons(ar_gemi),
     getSimilar(ar_gemi, company.primary_kad, company.prefecture_descr),
+    showFinancials ? getFinancials(ar_gemi) : Promise.resolve(null),
   ])
 
   // Trade names + English names → schema.org alternateName ("also known as").
@@ -163,7 +192,7 @@ export default async function CompanyPageRoute({
       />
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <TopNav />
-        <CompanyPage company={company} persons={persons} similar={similar} />
+        <CompanyPage company={company} persons={persons} similar={similar} financials={financials} />
       </div>
     </>
   )

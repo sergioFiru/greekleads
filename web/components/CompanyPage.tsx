@@ -84,6 +84,22 @@ export interface SimilarCompany {
   url: string | null
 }
 
+export interface FinancialYearRow {
+  fiscal_year: number
+  revenue: number | null
+  total_assets: number | null
+  equity: number | null
+  profit_before_tax: number | null
+  net_profit: number | null
+}
+
+export interface FinancialsData {
+  docs_found: number
+  has_failures: boolean
+  scanned_at: string | null
+  years: FinancialYearRow[]
+}
+
 // ── Helpers ────────────────────────────────────────────────────
 
 const LOGO_COLORS = [
@@ -123,6 +139,25 @@ function formatCapital(capital: CapitalEntry[] | null): string | null {
   const { capitalStock } = capital[0]
   if (!capitalStock) return null
   return `€${new Intl.NumberFormat('el-GR').format(capitalStock)}`
+}
+
+function formatEUR(n: number | null): string {
+  if (n == null) return '—'
+  return `${new Intl.NumberFormat('el-GR').format(Math.round(n))} €`
+}
+
+// Compact axis/bar labels: 5.120.000 → "5,12Μ", 389.000 → "389Κ"
+function formatCompact(n: number | null): string {
+  if (n == null) return '—'
+  const abs = Math.abs(n)
+  if (abs >= 1_000_000) return `${(n / 1_000_000).toLocaleString('el-GR', { maximumFractionDigits: 2 })}Μ`
+  if (abs >= 1_000) return `${Math.round(n / 1_000)}Κ`
+  return `${Math.round(n)}`
+}
+
+function pctDelta(curr: number | null, prev: number | null): number | null {
+  if (curr == null || prev == null || prev === 0) return null
+  return ((curr - prev) / Math.abs(prev)) * 100
 }
 
 function displayUrl(url: string): string {
@@ -363,7 +398,7 @@ function OverviewTab({
                       textDecoration: 'none', color: 'inherit',
                       display: 'flex', alignItems: 'center', gap: 12,
                       padding: '10px 0',
-                      borderTop: i > 0 ? '0.5px solid var(--row-divider)' : 'none',
+                      borderTop: i > 0 ? '1px solid var(--row-divider)' : 'none',
                     }}>
                     <div className="logo-initial lg"
                       style={{ background: lc.bg, color: lc.fg, border: `1px solid ${lc.border}`, flexShrink: 0 }}>
@@ -397,7 +432,7 @@ function OverviewTab({
                         textDecoration: 'none', color: 'inherit',
                         display: 'flex', alignItems: 'center', gap: 10,
                         padding: '10px 0',
-                        borderTop: i > 0 ? '0.5px solid var(--row-divider)' : 'none',
+                        borderTop: i > 0 ? '1px solid var(--row-divider)' : 'none',
                         minWidth: 0,
                       }}>
                       <div className="logo-initial lg"
@@ -515,7 +550,7 @@ function ActivitiesTab({ activities }: { activities: KadActivity[] }) {
         const isOld = act.type.startsWith('old_')
         const isMain = act.type === 'main'
         return (
-          <div key={i} style={{ padding: '16px 22px', borderTop: i > 0 ? '0.5px solid var(--row-divider)' : 'none', opacity: isOld ? 0.6 : 1 }}>
+          <div key={i} style={{ padding: '16px 22px', borderTop: i > 0 ? '1px solid var(--row-divider)' : 'none', opacity: isOld ? 0.6 : 1 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
               <span style={{
                 fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 4, flexShrink: 0, marginTop: 2,
@@ -541,6 +576,233 @@ function ActivitiesTab({ activities }: { activities: KadActivity[] }) {
     </div>
     </div>
   )
+}
+
+// ── Financials Tab ─────────────────────────────────────────────
+
+function sparkPoints(values: (number | null)[]): string | undefined {
+  const nums = values.filter((v): v is number => v != null)
+  if (nums.length < 2) return undefined
+  const min = Math.min(...nums)
+  const max = Math.max(...nums)
+  const range = max - min || 1
+  const n = values.length
+  const pts: string[] = []
+  values.forEach((v, i) => {
+    if (v == null) return
+    const x = (i / (n - 1)) * 100
+    const y = 25 - ((v - min) / range) * 22
+    pts.push(`${x.toFixed(2)},${y.toFixed(2)}`)
+  })
+  return pts.length >= 2 ? pts.join(' ') : undefined
+}
+
+function FinStatCard({
+  label, value, delta, spark, sparkColor,
+}: {
+  label: string
+  value: string
+  delta: number | null
+  spark?: string
+  sparkColor?: string
+}) {
+  return (
+    <div className="stat-card">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span className="stat-label">{label}</span>
+        {delta != null && (
+          <span className={`cp-fin-delta ${delta >= 0 ? 'up' : 'down'}`}>
+            {delta >= 0 ? '▲' : '▼'} {Math.abs(delta).toLocaleString('el-GR', { maximumFractionDigits: 1 })}%
+          </span>
+        )}
+      </div>
+      <div className="stat-value" style={{ fontFamily: 'var(--font-mono)' }}>{value}</div>
+      {spark && (
+        <div className="cp-fin-spark">
+          <svg viewBox="0 0 100 28" preserveAspectRatio="none">
+            <polygon points={`${spark} 100,28 0,28`} fill={sparkColor} opacity="0.1" />
+            <polyline points={spark} fill="none" stroke={sparkColor} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RetrievedFinancials({ years }: { years: FinancialYearRow[] }) {
+  // years arrives newest-first (for the table); charts read left-to-right chronologically.
+  const chrono = [...years].reverse()
+  const latest = years[0]
+  const prior = years[1]
+
+  const revenues = chrono.map(y => y.revenue ?? 0)
+  const revMax = Math.max(1, ...revenues)
+
+  const profits = chrono.map(y => y.net_profit ?? 0)
+  const maxPos = Math.max(0, ...profits)
+  const maxNeg = Math.max(0, ...profits.map(v => -v))
+  const profitRange = maxPos + maxNeg || 1
+  const baselinePct = (maxNeg / profitRange) * 100
+
+  return (
+    <div className="cp-fin">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <FinStatCard label="Κύκλος εργασιών" value={formatEUR(latest.revenue)}
+          delta={pctDelta(latest.revenue, prior?.revenue ?? null)} />
+        <FinStatCard label="Καθαρά κέρδη" value={formatEUR(latest.net_profit)}
+          delta={pctDelta(latest.net_profit, prior?.net_profit ?? null)} />
+        <FinStatCard label="Σύνολο ενεργητικού" value={formatEUR(latest.total_assets)}
+          delta={pctDelta(latest.total_assets, prior?.total_assets ?? null)}
+          spark={sparkPoints(chrono.map(y => y.total_assets))} sparkColor="var(--accent)" />
+        <FinStatCard label="Ίδια κεφάλαια" value={formatEUR(latest.equity)}
+          delta={pctDelta(latest.equity, prior?.equity ?? null)}
+          spark={sparkPoints(chrono.map(y => y.equity))} sparkColor="var(--gemi-text)" />
+      </div>
+
+      <div className="card" style={{ padding: '20px 22px 18px' }}>
+        <div className="cp-fin-chart-title" style={{ marginBottom: 2 }}>
+          Κύκλος εργασιών <span className="unit">(€)</span>
+        </div>
+        <div className="cp-fin-chart">
+          <div className="cp-fin-bars">
+            {chrono.map((y, i) => (
+              <div key={y.fiscal_year} className="cp-fin-bar-col">
+                <div className="cp-fin-bar-val" style={{ bottom: `calc(${(revenues[i] / revMax) * 100}% + 5px)` }}>
+                  {formatCompact(y.revenue)}
+                </div>
+                <div className="cp-fin-bar" style={{ bottom: 0, height: `${(revenues[i] / revMax) * 100}%` }} />
+              </div>
+            ))}
+          </div>
+          <div className="cp-fin-axis">
+            {chrono.map(y => <span key={y.fiscal_year}>{y.fiscal_year}</span>)}
+          </div>
+        </div>
+
+        <div className="cp-fin-divider" />
+
+        <div className="cp-fin-chart-title" style={{ marginBottom: 2 }}>
+          Καθαρά κέρδη <span className="unit">(€) — γραμμή μηδέν = ισοσκελισμός</span>
+        </div>
+        <div className="cp-fin-chart profit">
+          <div className="cp-fin-bars">
+            <div className="cp-fin-zero" style={{ bottom: `${baselinePct}%` }} />
+            {chrono.map((y, i) => {
+              const v = profits[i]
+              const isLoss = v < 0
+              const barH = (Math.abs(v) / profitRange) * 100
+              const bottom = isLoss ? baselinePct - barH : baselinePct
+              return (
+                <div key={y.fiscal_year} className="cp-fin-bar-col">
+                  {!isLoss && (
+                    <div className="cp-fin-bar-val" style={{ bottom: `calc(${bottom + barH}% + 5px)` }}>
+                      {formatCompact(y.net_profit)}
+                    </div>
+                  )}
+                  <div
+                    className={`cp-fin-bar ${isLoss ? 'profit-neg' : 'profit-pos'}`}
+                    style={{ bottom: `${bottom}%`, height: `${barH}%` }}
+                  />
+                  {isLoss && (
+                    <div className="cp-fin-bar-val loss" style={{ top: `calc(${100 - bottom}% + 6px)` }}>
+                      Ζημιά {formatCompact(y.net_profit)}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <div className="cp-fin-axis">
+            {chrono.map(y => (
+              <span key={y.fiscal_year} className={(y.net_profit ?? 0) < 0 ? 'loss-yr' : undefined}>
+                {y.fiscal_year}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ padding: '20px 22px 18px' }}>
+        <div className="cp-fin-chart-title" style={{ marginBottom: 12 }}>Πλήρες ιστορικό, ανά οικονομική χρήση</div>
+        <div className="cp-fin-table-scroll">
+          <table className="data-table" style={{ minWidth: 620 }}>
+            <thead>
+              <tr>
+                <th>Χρήση</th>
+                <th style={{ textAlign: 'right' }}>Κύκλος εργασιών</th>
+                <th style={{ textAlign: 'right' }}>Κέρδη προ φόρων</th>
+                <th style={{ textAlign: 'right' }}>Καθαρά κέρδη</th>
+                <th style={{ textAlign: 'right' }}>Περιθώριο</th>
+                <th style={{ textAlign: 'right' }}>Σύνολο ενεργητικού</th>
+                <th style={{ textAlign: 'right' }}>Ίδια κεφάλαια</th>
+              </tr>
+            </thead>
+            <tbody>
+              {years.map(y => {
+                const margin = y.revenue && y.net_profit != null ? (y.net_profit / y.revenue) * 100 : null
+                const neg = (y.net_profit ?? 0) < 0
+                return (
+                  <tr key={y.fiscal_year}>
+                    <td style={{ fontWeight: 600 }}>{y.fiscal_year}</td>
+                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{formatEUR(y.revenue)}</td>
+                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: (y.profit_before_tax ?? 0) < 0 ? 'var(--loss-ink)' : undefined }}>{formatEUR(y.profit_before_tax)}</td>
+                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: neg ? 'var(--loss-ink)' : undefined }}>{formatEUR(y.net_profit)}</td>
+                    <td style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>{margin != null ? `${margin.toLocaleString('el-GR', { maximumFractionDigits: 1 })}%` : '—'}</td>
+                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{formatEUR(y.total_assets)}</td>
+                    <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{formatEUR(y.equity)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="cp-fin-provenance">
+          <span className="cp-fin-dot" />
+          Πηγή: Δημοσιευμένες οικονομικές καταστάσεις ΓΕΜΗ
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FinancialsTab({ data }: { data: FinancialsData | null }) {
+  if (!data) {
+    return (
+      <div className="card" style={{ padding: '20px 22px' }}>
+        <div className="cp-fin-placeholder">
+          <span className="cp-fin-dot" />
+          Δεν έχει ελεγχθεί ακόμη για δημόσια οικονομικά στοιχεία.
+        </div>
+      </div>
+    )
+  }
+
+  if (data.docs_found === 0) {
+    return (
+      <div className="card" style={{ padding: '20px 22px' }}>
+        <div className="cp-fin-placeholder">
+          <span className="cp-fin-dot" />
+          Δεν βρέθηκαν δημόσια οικονομικά στοιχεία στο ΓΕΜΗ για αυτή την επιχείρηση.
+        </div>
+      </div>
+    )
+  }
+
+  if (data.years.length === 0) {
+    return (
+      <div className="card" style={{ padding: '20px 22px' }}>
+        <div className="cp-fin-found">
+          <span className="cp-fin-found-copy">Διαθέσιμα δημόσια οικονομικά στοιχεία.</span>
+          <button className="cp-fin-btn" disabled>
+            Ανάκτηση οικονομικών στοιχείων
+            <span className="cp-fin-soon">Σύντομα</span>
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return <RetrievedFinancials years={data.years} />
 }
 
 // ── Similar Tab ────────────────────────────────────────────────
@@ -583,16 +845,20 @@ function SimilarTab({ similar }: { similar: SimilarCompany[] }) {
 
 // ── Main Component ─────────────────────────────────────────────
 
+const FINANCIAL_FILER_TYPES = new Set(['ΑΕ', 'ΙΚΕ', 'ΕΠΕ'])
+
 export default function CompanyPage({
   company,
   persons,
   similar,
+  financials,
 }: {
   company: CompanyData
   persons: PersonRow[]
   similar: SimilarCompany[]
+  financials?: FinancialsData | null
 }) {
-  type TabId = 'overview' | 'people' | 'activities' | 'similar' | 'network'
+  type TabId = 'overview' | 'people' | 'activities' | 'financials' | 'similar' | 'network'
   const [activeTab, setActiveTab] = useState<TabId>('overview')
 
   const lc = logoColor(company.ar_gemi)
@@ -602,11 +868,13 @@ export default function CompanyPage({
   const capital = formatCapital(company.capital)
   const isActive = company.status_descr?.toLowerCase().includes('ενεργ')
   const mainActivity = activities.find(a => a.type === 'main')
+  const showFinancials = !!company.legal_type_descr && FINANCIAL_FILER_TYPES.has(company.legal_type_descr)
 
   const tabs: { id: TabId; label: string; count?: number }[] = [
     { id: 'overview', label: 'Επισκόπηση' },
     ...(persons.length > 0 ? [{ id: 'people' as TabId, label: 'Άνθρωποι', count: persons.length }] : []),
     ...(activities.length > 0 ? [{ id: 'activities' as TabId, label: 'Δραστηριότητες', count: activities.length }] : []),
+    ...(showFinancials ? [{ id: 'financials' as TabId, label: 'Οικονομικά' }] : []),
     ...(similar.length > 0 ? [{ id: 'similar' as TabId, label: 'Παρόμοιες' }] : []),
     ...(persons.length > 0 ? [{ id: 'network' as TabId, label: 'Δίκτυο' }] : []),
   ]
@@ -721,61 +989,35 @@ export default function CompanyPage({
           </div>
         </div>
 
-        {/* Body: left nav + right content */}
-        <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+        {/* ── Horizontal tab bar ── */}
+        <nav className="cp-tabbar">
+          {tabs.map(tab => {
+            const active = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`cp-tab${active ? ' active' : ''}`}
+              >
+                <span>{tab.label}</span>
+                {tab.count != null && <span className="cp-tab-count">{tab.count}</span>}
+              </button>
+            )
+          })}
+        </nav>
 
-          {/* ── Left sidebar nav ── */}
-          <div style={{ width: 200, flexShrink: 0, position: 'sticky', top: 16 }}>
-            <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {tabs.map(tab => {
-                const active = activeTab === tab.id
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      width: '100%', textAlign: 'left',
-                      padding: '9px 14px', borderRadius: 7,
-                      background: active ? 'var(--accent-light)' : 'transparent',
-                      color: active ? 'var(--accent)' : 'var(--text-secondary)',
-                      fontWeight: active ? 600 : 400,
-                      border: active ? '1px solid #C0D0E8' : '1px solid transparent',
-                      cursor: 'pointer', fontSize: 13,
-                      transition: 'background .1s, color .1s',
-                    }}
-                  >
-                    <span>{tab.label}</span>
-                    {tab.count != null && (
-                      <span style={{
-                        fontSize: 11, fontWeight: 500,
-                        background: active ? 'rgba(26,74,138,0.12)' : 'var(--surface-subtle)',
-                        color: active ? 'var(--accent)' : 'var(--text-muted)',
-                        border: `0.5px solid ${active ? '#C0D0E8' : 'var(--border)'}`,
-                        padding: '1px 6px', borderRadius: 10,
-                      }}>
-                        {tab.count}
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-            </nav>
-          </div>
-
-          {/* ── Right content ── */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {activeTab === 'overview' && (
-              <OverviewTab company={company} persons={persons} similar={similar} activities={activities} />
-            )}
-            {activeTab === 'people' && <PeopleTab persons={persons} />}
-            {activeTab === 'activities' && activities.length > 0 && <ActivitiesTab activities={activities} />}
-            {activeTab === 'similar' && <SimilarTab similar={similar} />}
-            {activeTab === 'network' && (
-              <CompanyNetworkGraph arGemi={company.ar_gemi} companyName={company.co_name_el ?? company.ar_gemi} />
-            )}
-          </div>
-
+        {/* ── Content ── */}
+        <div className="cp-tab-panel">
+          {activeTab === 'overview' && (
+            <OverviewTab company={company} persons={persons} similar={similar} activities={activities} />
+          )}
+          {activeTab === 'people' && <PeopleTab persons={persons} />}
+          {activeTab === 'activities' && activities.length > 0 && <ActivitiesTab activities={activities} />}
+          {activeTab === 'financials' && <FinancialsTab data={financials ?? null} />}
+          {activeTab === 'similar' && <SimilarTab similar={similar} />}
+          {activeTab === 'network' && (
+            <CompanyNetworkGraph arGemi={company.ar_gemi} companyName={company.co_name_el ?? company.ar_gemi} />
+          )}
         </div>
       </div>
     </main>
