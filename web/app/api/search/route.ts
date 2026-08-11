@@ -129,6 +129,7 @@ export async function POST(req: NextRequest) {
       query<{
         ar_gemi: string
         co_name_el: string
+        co_titles_el: string[] | null
         legal_type_descr: string
         prefecture_descr: string
         municipality_descr: string
@@ -148,6 +149,7 @@ export async function POST(req: NextRequest) {
         `SELECT
            c.ar_gemi,
            c.co_name_el,
+           c.co_titles_el,
            c.legal_type_descr,
            c.prefecture_descr,
            c.municipality_descr,

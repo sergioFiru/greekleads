@@ -7,6 +7,15 @@ interface CompanyChip {
   ar_gemi: string
   name: string
   status: string
+  matched_email?: string | null
+  matched_phone?: string | null
+}
+
+// Same detection used server-side (web/app/api/people/search/route.ts) to decide
+// which search path ran — re-derived here so the UI knows whether to show the
+// "why this result matched" contact line.
+function isContactQuery(raw: string): boolean {
+  return raw.includes('@') || /^[+\d][\d\s()+-]{4,}$/.test(raw)
 }
 
 interface PersonResult {
@@ -99,8 +108,25 @@ export default function PeopleSearch({
   const [status, setStatus] = useState(() => searchParams.get('status') ?? '')
   const [results, setResults] = useState<PersonResult[] | null>(null)
   const [loading, setLoading] = useState(false)
+  // Separate from `results` on purpose: `results` flips to [] the instant a search
+  // resolves empty, but we don't want to SHOW "not found" that instantly — a normal
+  // pause mid-typing (e.g. right after the "@" in an email, before the domain) would
+  // otherwise flash a real "not found" message for a string the user hasn't finished
+  // typing yet. showEmpty only flips true after a short settle delay, and gets
+  // cancelled immediately (not on the next debounce cycle) by every keystroke.
+  const [showEmpty, setShowEmpty] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef    = useRef<HTMLInputElement>(null)
+  // Guards against the classic debounced-search race: without this, an earlier,
+  // slower request can resolve AFTER a newer one and overwrite its results —
+  // this is exactly what caused results to visibly flicker between stale and
+  // current sets while typing. A stale response is simply ignored once a newer
+  // request has started. (Tried AbortController first to also cancel the
+  // stale network request outright — dropped it, it made Next's dev overlay
+  // throw a visible "signal is aborted" runtime error on every supersede,
+  // which was worse than the bandwidth it saved. This guard alone is
+  // sufficient for correctness.)
+  const requestIdRef = useRef(0)
 
   // Sync state → URL so back navigation restores the search
   useEffect(() => {
@@ -115,27 +141,45 @@ export default function PeopleSearch({
   const search = useCallback(async (query: string, area: string, count: string, status: string) => {
     if (!query.trim() || query.trim().length < 2) {
       setResults(null)
+      setShowEmpty(false)
       return
     }
+
+    const requestId = ++requestIdRef.current
+
     setLoading(true)
     try {
       const raw = query.trim()
-      const isEmailOrPhone = raw.includes('@') || /^[+\d][\d\s()+-]{4,}$/.test(raw)
+      const isEmailOrPhone = isContactQuery(raw)
       const p = new URLSearchParams({ q: isEmailOrPhone ? raw : raw.toUpperCase() })
       if (area)   p.set('area', area)
       if (count)  p.set('count', count)
       if (status) p.set('status', status)
       const res = await fetch(`/api/people/search?${p}`)
       const data = await res.json()
-      setResults(data.results ?? [])
+      if (requestId !== requestIdRef.current) return // a newer search has since started — drop this response
+      const found = data.results ?? []
+      setResults(found)
+      if (found.length === 0) {
+        // Only actually show "not found" if nothing newer has started by then —
+        // gives a beat for the user to keep typing before we call it empty.
+        setTimeout(() => {
+          if (requestId === requestIdRef.current) setShowEmpty(true)
+        }, 400)
+      }
     } catch {
+      if (requestId !== requestIdRef.current) return
       setResults([])
     } finally {
-      setLoading(false)
+      if (requestId === requestIdRef.current) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
+    // Every keystroke immediately hides a stale "not found" message — don't wait
+    // for a full new debounce+fetch cycle to clear it, that's the gap that let a
+    // mid-typing pause look like a dead end.
+    setShowEmpty(false)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => search(q, area, count, status), 350)
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
@@ -243,7 +287,7 @@ export default function PeopleSearch({
 
           {hasQuery && loading && <SkeletonList />}
 
-          {hasQuery && !loading && results !== null && results.length === 0 && (
+          {hasQuery && !loading && results !== null && results.length === 0 && showEmpty && (
             <div className="ps-none">
               <span className="ps-none-icon">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none"
@@ -272,7 +316,7 @@ export default function PeopleSearch({
 
               <div className="ps-list">
                 {results.map((p, i) => (
-                  <PersonResultCard key={p.person_name} person={p} index={i} />
+                  <PersonResultCard key={p.person_name} person={p} index={i} searchTerm={q.trim()} />
                 ))}
               </div>
             </>
@@ -376,7 +420,21 @@ function EmptyState({ onExampleClick }: { onExampleClick: (name: string) => void
   )
 }
 
-function PersonResultCard({ person, index }: { person: PersonResult; index: number }) {
+// Wraps the searched substring in <mark> so it's visually obvious *why* this
+// email/phone matched, not just that it did.
+function Highlighted({ value, needle }: { value: string; needle: string }) {
+  const idx = value.toLowerCase().indexOf(needle.toLowerCase())
+  if (idx === -1) return <>{value}</>
+  return (
+    <>
+      {value.slice(0, idx)}
+      <mark className="ps-match-hl">{value.slice(idx, idx + needle.length)}</mark>
+      {value.slice(idx + needle.length)}
+    </>
+  )
+}
+
+function PersonResultCard({ person, index, searchTerm }: { person: PersonResult; index: number; searchTerm: string }) {
   const color = avatarColor(person.person_name)
   const ini   = initials(person.person_name)
 
@@ -387,6 +445,16 @@ function PersonResultCard({ person, index }: { person: PersonResult; index: numb
   const chips     = uniqueCompanies.slice(0, 3)
   const remaining = uniqueCompanies.length - chips.length
   const allPast   = person.active_count === 0
+
+  // Shows exactly which contact value matched and why this person is in the
+  // results. The backend now populates matched_email/matched_phone whenever a
+  // company's contact info happens to contain the search term, regardless of
+  // which path found the person — a NAME match can still be "because of" an
+  // email (e.g. "barnadavid98" matches BARNA PAUL-DAVID by name, but his email
+  // is literally barnadavid98@gmail.com) — so this isn't gated on isContactQuery
+  // anymore, just on whether the backend actually found a matching value.
+  const matchedEmails = Array.from(new Set(uniqueCompanies.map(c => c.matched_email).filter((v): v is string => !!v)))
+  const matchedPhones = Array.from(new Set(uniqueCompanies.map(c => c.matched_phone).filter((v): v is string => !!v)))
 
   return (
     <Link
@@ -407,6 +475,21 @@ function PersonResultCard({ person, index }: { person: PersonResult; index: numb
         {person.primary_role && person.primary_company && (
           <p className="ps-role">
             <b>{person.primary_role}</b> <em>σε</em> {person.primary_company}
+          </p>
+        )}
+
+        {(matchedEmails.length > 0 || matchedPhones.length > 0) && (
+          <p className="ps-matched">
+            {matchedEmails.map(v => (
+              <span key={v} className="ps-matched-item">
+                Email: <Highlighted value={v} needle={searchTerm} />
+              </span>
+            ))}
+            {matchedPhones.map(v => (
+              <span key={v} className="ps-matched-item">
+                Τηλ.: <Highlighted value={v} needle={searchTerm} />
+              </span>
+            ))}
           </p>
         )}
 

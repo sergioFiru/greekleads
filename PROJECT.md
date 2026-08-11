@@ -419,34 +419,70 @@ directly.
 
 ---
 
-## Planned: Financial Statements (Phase 2)
+## Financial Statements (Phase 2) — in progress
 
-Collect all financial statement PDFs from GEMI, store on Cloudflare R2, parse into structured financial data (revenue, profit, assets, equity), surface in the web app.
+Collect financial statement documents, store on Cloudflare R2, extract structured
+numbers (revenue, profit, assets, equity) with Gemini, surface them on company
+pages. Status as of 2026-08-06:
 
-**API:** `GEMI_FINANCIAL_API_KEY` (second key, separate from polling key `GEMI_API_KEY`)
-**Endpoint:** `GET /companies/{ar_gemi}/documents` → filter `decisionSubjectID` in `[4, 8, 78, 79]`
-**Download:** `GET /downloadFile?key=assemblyDecision&elementId={kak}`
+**Collection — Playwright crawler, not the GEMI API.** The original
+`GEMI_FINANCIAL_API_KEY` / 8-req/min plan was replaced by
+`scripts/playwright_svc/financial_playwright.py`, a headless-Chromium crawler
+against `publicity.businessportal.gr` (much faster: ~500+/hr vs ~60-70/hr).
+Target = active ΑΕ/ΙΚΕ/ΕΠΕ (188,230 — the legal-filing-requirement companies).
+**Paused since 2026-07-24** to cut Railway cost (no native pause — the
+deployment was removed; fully resumable via the `financial_ar_gemi_scanned`
+table). Progress frozen at **36,544/188,230 scanned (19.4%)**, **252,448
+documents already in R2** (all PDF so far — the crawler also detects
+xlsx/xls/doc but none have appeared yet), 10,401 companies confirmed to have
+filings, 26,143 confirmed not to, 151,686 still unknown.
 
-**Architecture (two-phase):**
-1. **Download phase** — bulk script downloads all PDFs and stores to Cloudflare R2. Resumable via a `financial_docs` DB table tracking (ar_gemi, kak, r2_key, downloaded_at). Rate-limited to 8 req/min.
-2. **Parse phase** — separate script reads PDFs from R2, extracts numbers, writes to `financial_statements` DB table. Re-runnable without re-downloading.
+**Existence-only sweep (2026-08-06)** — a separate LOCAL script,
+`scripts/one_time/financial_existence_scan.py`, checks the 151,686 unknown
+companies without downloading anything (skips the download-rate-limiter
+bottleneck entirely, so it's far faster — hours not weeks). Writes into the
+same `financial_ar_gemi_scanned` table the Railway crawler uses. **Does not
+touch `financial_playwright.py`** — kept as a separate file on purpose (editing
+the deployed crawler in place for a one-off task was tried and reverted, see
+`[[feedback_script_execution]]`). User is running this now.
 
-**Why two phases:** Parser is still being refined; separating download from parse means a parser fix = re-run locally, not re-download weeks of PDFs.
+**Extraction — AI-only, via OpenRouter, not pdfplumber/regex.**
+`scripts/financial_ai_extractor.py`: PDFs go straight to `google/gemini-2.5-flash`
+as native file input (Gemini reads scanned and digital pages alike, no OCR step
+needed); xlsx gets its cells dumped to plain text via `openpyxl` first (Gemini
+has no native spreadsheet vision, unlike PDF — confirmed against Google's own
+docs) and then goes through the same prompt. One JSON-schema prompt either way,
+Greek-number-format-aware, asks for exactly the 6 fields the live
+`financial_statements` table already has: `fiscal_year, revenue, total_assets,
+equity, profit_before_tax, net_profit`. `max_tokens=8192` (Scout hit a
+truncation bug at 2048 from Gemini's "thinking" tokens — same fix applied
+here). The old regex parser (`analyze_financials.py` / `financial_parser.py`,
+~70-80% accuracy, silently 0% on the ~50% scanned-image docs) is superseded by
+this, not used.
 
-**Storage:** Cloudflare R2 (~$7/TB/month, free egress, S3-compatible)
+Test driver: `scripts/one_time/test_financial_ai_extraction.py` — pulls a few
+real R2 docs, runs extraction, prints results; `--write` optionally saves into
+`financial_statements` so results show up on the real company page. **Not yet
+run** — waiting on an OpenRouter balance top-up.
 
-**Parser approach (validated via test_financials.py / analyze_financials.py):**
-- `pdfplumber` extracts text from B.5/B.6 ELP format PDFs reliably
-- Automated filings ("Αυτοματοποιημένη Καταχώριση") parse cleanly; prefer over manual filings for same year
-- Known gaps to fix: net profit label varies by format, 2015-era filings may be scanned images
+**Not yet built:** the actual on-demand "Retrieve" backend (a small Railway
+HTTP service wrapping page-load + the AI extractor, called by the company-page
+button) and bulk backfill of the 252k already-downloaded docs — both
+deliberately deferred until the extractor's been validated on real documents.
 
-**Fields to extract:** revenue (Κύκλος εργασιών), total assets (Σύνολο ενεργητικού), equity (Κεφάλαια και αποθεματικά), profit before tax, net profit, fiscal year
+**Company-page UI — live.** `/etaireies/[ar_gemi]` has a real "Οικονομικά" tab
+(only shown for ΑΕ/ΙΚΕ/ΕΠΕ), four states driven by real DB data: unchecked /
+none found / found-but-not-retrieved (button visible, disabled, "Σύντομα" tag)
+/ retrieved (stat cards + YoY deltas + sparklines + two small-multiple bar
+charts, revenue and net profit kept on separate scales — never dual-axis + full
+history table). See `CompanyPage.tsx`'s `FinancialsTab`.
 
-**Steps before building:**
-- [ ] Set up Cloudflare R2 bucket + API token
-- [ ] Finalize parser (fix net profit pattern, handle manual filing format)
-- [ ] Create `financial_docs` and `financial_statements` DB tables
-- [ ] Build download bot + parse script
+**Legal-form filter caveat:** ΑΕ/ΙΚΕ/ΕΠΕ-only is a legal-category assumption
+(Greece's *κεφαλαιουχικές εταιρείες* have a ΓΕΜΗ publication requirement; ΟΕ/ΕΕ/
+ΑΤΟΜΙΚΗ don't) — reasonably solid under Greek company law, but **not
+empirically verified** against businessportal.gr. A verification attempt hit
+the API's session requirements + rate-limiting before getting a clean answer;
+not blocking, just an open unknown.
 
 ---
 
@@ -550,3 +586,8 @@ Scrape vrisko.gr for supplementary company data not available in GEMI (details T
 - 2026-07-20: Discovered `'Inadequate Info'` placeholder + combined `ΔΗΜΟΣ / ΝΟΜΟΣ` format in `municipality_descr`; fixed in `/api/suggest`
 - 2026-07-20: Wrote `tools/add_name_index.py` (not yet run) after measuring name search at ~2.2s — the trigram index on `co_name_el` this doc previously claimed does not exist
 - 2026-07-24: Planned tech-stack + marketing-stack scan (Phase 2 enrichment) — verified `enthec/webappanalyzer` is GPLv3 (not AGPL); confirmed backend-only use doesn't trigger copyleft and detection results are storable facts; documented as a Pro-gated filter
+- 2026-08-06: Site-wide card/divider depth polish (`.card` shadow, 1px row dividers replacing near-invisible 0.5px)
+- 2026-08-06: Company page redesign — left sidebar tab nav replaced with a horizontal top tab bar (`cp-tabbar`/`cp-tab`)
+- 2026-08-06: Built the "Οικονομικά" tab on `/etaireies/[ar_gemi]` — real 4-state UI (unchecked / none found / found-not-retrieved / retrieved with dynamic multi-year charts + history table) wired to `financial_ar_gemi_scanned` + `financial_statements`; verified against real ar_gemi examples for all 4 states
+- 2026-08-06: Built `scripts/one_time/financial_existence_scan.py` — local, existence-only sweep (no downloads) for the 151,686 not-yet-checked ΑΕ/ΙΚΕ/ΕΠΕ companies; kept fully separate from the deployed `financial_playwright.py` after an in-place edit was tried and reverted (see `[[feedback_script_execution]]`)
+- 2026-08-06: Built `scripts/financial_ai_extractor.py` — AI-only extraction (no pdfplumber/regex) via `google/gemini-2.5-flash` on OpenRouter; PDFs as native file input, xlsx bridged to text via `openpyxl` (Gemini has no native spreadsheet vision); plus a local test driver (`test_financial_ai_extraction.py`). Not yet run — pending an OpenRouter balance top-up

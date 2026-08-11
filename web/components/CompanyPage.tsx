@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import KadDonut from './KadDonut'
 import CompanyNetworkGraph from './CompanyNetworkGraph'
@@ -183,6 +183,15 @@ function yearsInOperation(date: string | null): string | null {
   return y > 0 ? `${y} χρόνια` : null
 }
 
+// dt_to is a term-end date, not a departure flag — a board member with a
+// *future* dt_to (e.g. a 3-year mandate that hasn't expired yet) is still
+// serving. Only a dt_to already in the past means "former".
+function isPersonActive(p: PersonRow): boolean {
+  if (!p.dt_to) return true
+  const end = new Date(p.dt_to)
+  return isNaN(end.getTime()) || end.getTime() > Date.now()
+}
+
 const ACTIVITY_TYPE_LABELS: Record<string, string> = {
   main: 'Κύρια',
   secondary: 'Δευτερεύουσα',
@@ -218,19 +227,17 @@ function KvRow({ label, children, mono }: { label: string; children: React.React
 function OverviewTab({
   company,
   persons,
-  similar,
   activities,
 }: {
   company: CompanyData
   persons: PersonRow[]
-  similar: SimilarCompany[]
   activities: KadActivity[]
 }) {
   const [objectiveExpanded, setObjectiveExpanded] = useState(false)
   const address = buildAddress(company)
   const capital = formatCapital(company.capital)
   const isActive = company.status_descr?.toLowerCase().includes('ενεργ')
-  const activePeople = persons.filter(p => !p.dt_to)
+  const activePeople = persons.filter(isPersonActive)
   const activeSocials = SOCIALS.filter(s => company[s.key])
   const mainActivity = activities.find(a => a.type === 'main')
 
@@ -419,45 +426,6 @@ function OverviewTab({
               })}
             </div>
           )}
-
-          {similar.length > 0 && (
-            <div className="card" style={{ padding: '20px 22px' }}>
-              <div className="section-label" style={{ marginBottom: 14 }}>Παρόμοιες εταιρείες</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                {similar.map((c, i) => {
-                  const lc = logoColor(c.ar_gemi)
-                  return (
-                    <Link key={c.ar_gemi} href={`/etaireies/${c.ar_gemi}`}
-                      style={{
-                        textDecoration: 'none', color: 'inherit',
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '10px 0',
-                        borderTop: i > 0 ? '1px solid var(--row-divider)' : 'none',
-                        minWidth: 0,
-                      }}>
-                      <div className="logo-initial lg"
-                        style={{ background: lc.bg, color: lc.fg, border: `1px solid ${lc.border}`, flexShrink: 0 }}>
-                        {getInitials(c.co_name_el ?? c.ar_gemi)}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {c.co_name_el ?? '—'}
-                        </div>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>
-                          {[c.legal_type_descr, c.city ?? c.prefecture_descr].filter(Boolean).join(' · ')}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                        {c.email && <span style={{ fontSize: 10, color: 'var(--active-text)', background: 'var(--active-bg)', border: '0.5px solid var(--active-border)', padding: '1px 5px', borderRadius: 3 }}>Email</span>}
-                        {c.phone && <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--surface-subtle)', border: '0.5px solid var(--border)', padding: '1px 5px', borderRadius: 3 }}>Τηλ.</span>}
-                        {c.url && <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--surface-subtle)', border: '0.5px solid var(--border)', padding: '1px 5px', borderRadius: 3 }}>Web</span>}
-                      </div>
-                    </Link>
-                  )
-                })}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -522,10 +490,12 @@ function PeopleTable({ rows, title }: { rows: PersonRow[]; title: string }) {
 }
 
 function PeopleTab({ persons }: { persons: PersonRow[] }) {
+  const active = persons.filter(isPersonActive)
+  const former = persons.filter(p => !isPersonActive(p))
   return (
     <>
-      <PeopleTable rows={persons.filter(p => !p.dt_to)} title={`Ενεργά μέλη (${persons.filter(p => !p.dt_to).length})`} />
-      <PeopleTable rows={persons.filter(p => p.dt_to)} title={`Πρώην μέλη (${persons.filter(p => p.dt_to).length})`} />
+      <PeopleTable rows={active} title={`Ενεργά μέλη (${active.length})`} />
+      <PeopleTable rows={former} title={`Πρώην μέλη (${former.length})`} />
     </>
   )
 }
@@ -843,6 +813,49 @@ function SimilarTab({ similar }: { similar: SimilarCompany[] }) {
   )
 }
 
+// ── Sticky section nav (scrollspy) ──────────────────────────────
+
+type SectionId = 'overview' | 'people' | 'activities' | 'financials' | 'similar' | 'network'
+
+function CompanyStickyNav({
+  sections, activeSection, condensed, company, headlineRevenue,
+}: {
+  sections: { id: SectionId; label: string; count?: number }[]
+  activeSection: SectionId
+  condensed: boolean
+  company: CompanyData
+  headlineRevenue: number | null
+}) {
+  const isActive = company.status_descr?.toLowerCase().includes('ενεργ')
+  return (
+    <div className={`cp-stickynav${condensed ? ' condensed' : ''}`}>
+      <div className="cp-stickynav-inner">
+        {condensed && (
+          <div className="cp-stickynav-id">
+            <span className={`cp-stickynav-dot ${isActive ? 'on' : 'off'}`} />
+            <span className="cp-stickynav-name">{company.co_name_el ?? company.ar_gemi}</span>
+            {headlineRevenue != null && (
+              <span className="cp-stickynav-rev">{formatEUR(headlineRevenue)}</span>
+            )}
+          </div>
+        )}
+        <nav className="cp-secnav">
+          {sections.map(s => (
+            <a
+              key={s.id}
+              href={`#${s.id}`}
+              className={`cp-secnav-link${activeSection === s.id ? ' active' : ''}`}
+            >
+              <span>{s.label}</span>
+              {s.count != null && <span className="cp-tab-count">{s.count}</span>}
+            </a>
+          ))}
+        </nav>
+      </div>
+    </div>
+  )
+}
+
 // ── Main Component ─────────────────────────────────────────────
 
 const FINANCIAL_FILER_TYPES = new Set(['ΑΕ', 'ΙΚΕ', 'ΕΠΕ'])
@@ -858,9 +871,6 @@ export default function CompanyPage({
   similar: SimilarCompany[]
   financials?: FinancialsData | null
 }) {
-  type TabId = 'overview' | 'people' | 'activities' | 'financials' | 'similar' | 'network'
-  const [activeTab, setActiveTab] = useState<TabId>('overview')
-
   const lc = logoColor(company.ar_gemi)
   const initials = getInitials(company.co_name_el ?? company.ar_gemi)
   const brands = brandTitles(company.co_titles_el, company.co_name_el)
@@ -869,19 +879,87 @@ export default function CompanyPage({
   const isActive = company.status_descr?.toLowerCase().includes('ενεργ')
   const mainActivity = activities.find(a => a.type === 'main')
   const showFinancials = !!company.legal_type_descr && FINANCIAL_FILER_TYPES.has(company.legal_type_descr)
+  const headlineRevenue = financials?.years?.[0]?.revenue ?? null
 
-  const tabs: { id: TabId; label: string; count?: number }[] = [
+  const sections: { id: SectionId; label: string; count?: number }[] = [
     { id: 'overview', label: 'Επισκόπηση' },
-    ...(persons.length > 0 ? [{ id: 'people' as TabId, label: 'Άνθρωποι', count: persons.length }] : []),
-    ...(activities.length > 0 ? [{ id: 'activities' as TabId, label: 'Δραστηριότητες', count: activities.length }] : []),
-    ...(showFinancials ? [{ id: 'financials' as TabId, label: 'Οικονομικά' }] : []),
-    ...(similar.length > 0 ? [{ id: 'similar' as TabId, label: 'Παρόμοιες' }] : []),
-    ...(persons.length > 0 ? [{ id: 'network' as TabId, label: 'Δίκτυο' }] : []),
+    ...(persons.length > 0 ? [{ id: 'people' as SectionId, label: 'Άνθρωποι', count: persons.length }] : []),
+    ...(activities.length > 0 ? [{ id: 'activities' as SectionId, label: 'Δραστηριότητες', count: activities.length }] : []),
+    ...(showFinancials ? [{ id: 'financials' as SectionId, label: 'Οικονομικά' }] : []),
+    ...(similar.length > 0 ? [{ id: 'similar' as SectionId, label: 'Παρόμοιες' }] : []),
+    ...(persons.length > 0 ? [{ id: 'network' as SectionId, label: 'Δίκτυο' }] : []),
   ]
 
+  // ── Scroll-driven state: which section is active, has the header
+  // scrolled out of view (→ show condensed identity in the sticky nav),
+  // and has the network graph section ever been visible (→ mount the
+  // graph — it fetches on mount, no point paying for that until scrolled to).
+  const headerRef = useRef<HTMLDivElement>(null)
+  const sectionEls = useRef<Map<SectionId, HTMLElement>>(new Map())
+  const [activeSection, setActiveSection] = useState<SectionId>('overview')
+  const [headerCondensed, setHeaderCondensed] = useState(false)
+  const [networkMounted, setNetworkMounted] = useState(false)
+
+  const setSectionRef = useCallback((id: SectionId) => (el: HTMLElement | null) => {
+    if (el) sectionEls.current.set(id, el)
+    else sectionEls.current.delete(id)
+  }, [])
+
+  useEffect(() => {
+    // The page's outer wrapper is min-height:100vh (not a fixed height), so
+    // this <main> never actually overflows itself — the window/document is
+    // what scrolls, not <main>. TRIGGER_LINE sits just below TopNav (64px)
+    // + the section nav (~48px). The active section is whichever section's
+    // top has most recently crossed above that line — i.e. the largest top
+    // that's still <= the line. (An IntersectionObserver with a shrunk
+    // "band" was tried first and picked the wrong section for any tall,
+    // multi-screen section like Overview: its top stays far above the
+    // viewport — a very negative number — for as long as any part of it
+    // still touches the band, which beat every section actually on screen.
+    // Directly comparing real boundingClientRect tops avoids that.)
+    const TRIGGER_LINE = 130
+
+    let ticking = false
+    function update() {
+      ticking = false
+      if (headerRef.current) {
+        setHeaderCondensed(headerRef.current.getBoundingClientRect().bottom <= 112)
+      }
+      let best: SectionId | null = null
+      let bestTop = -Infinity
+      sectionEls.current.forEach((el, id) => {
+        const top = el.getBoundingClientRect().top
+        if (top <= TRIGGER_LINE && top > bestTop) { bestTop = top; best = id }
+      })
+      if (!best && sections.length) best = sections[0].id
+      // A short final section (e.g. an empty-looking network graph with few
+      // nodes) may never scroll far enough for its own top to cross
+      // TRIGGER_LINE — the page runs out of scroll room first. Once we're
+      // at the bottom of the document, force the last section active so it
+      // still gets marked active (and, for the network graph, mounted).
+      const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4
+      if (atBottom && sections.length) best = sections[sections.length - 1].id
+      if (best) {
+        setActiveSection(best)
+        if (best === 'network') setNetworkMounted(true)
+      }
+    }
+    function onScroll() {
+      if (!ticking) { ticking = true; requestAnimationFrame(update) }
+    }
+
+    update()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll)
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+    }
+  }, [sections.length])
+
   return (
-    <main style={{ flex: 1, background: 'var(--page-bg)', overflowY: 'auto' }}>
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 32px 80px' }}>
+    <main style={{ flex: 1, background: 'var(--page-bg)' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 32px' }}>
 
         {/* Breadcrumb */}
         <div style={{ padding: '14px 0 16px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
@@ -895,7 +973,7 @@ export default function CompanyPage({
         </div>
 
         {/* Header card — full width */}
-        <div className="card" style={{ padding: '26px 30px', marginBottom: 20 }}>
+        <div ref={headerRef} className="card" style={{ padding: '26px 30px', marginBottom: 20 }}>
           <div style={{ display: 'flex', gap: 22, alignItems: 'flex-start' }}>
             <div className="logo-initial xl"
               style={{ background: lc.bg, color: lc.fg, border: `1.5px solid ${lc.border}`, flexShrink: 0 }}>
@@ -989,36 +1067,61 @@ export default function CompanyPage({
           </div>
         </div>
 
-        {/* ── Horizontal tab bar ── */}
-        <nav className="cp-tabbar">
-          {tabs.map(tab => {
-            const active = activeTab === tab.id
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`cp-tab${active ? ' active' : ''}`}
-              >
-                <span>{tab.label}</span>
-                {tab.count != null && <span className="cp-tab-count">{tab.count}</span>}
-              </button>
-            )
-          })}
-        </nav>
+      </div>
 
-        {/* ── Content ── */}
-        <div className="cp-tab-panel">
-          {activeTab === 'overview' && (
-            <OverviewTab company={company} persons={persons} similar={similar} activities={activities} />
-          )}
-          {activeTab === 'people' && <PeopleTab persons={persons} />}
-          {activeTab === 'activities' && activities.length > 0 && <ActivitiesTab activities={activities} />}
-          {activeTab === 'financials' && <FinancialsTab data={financials ?? null} />}
-          {activeTab === 'similar' && <SimilarTab similar={similar} />}
-          {activeTab === 'network' && (
-            <CompanyNetworkGraph arGemi={company.ar_gemi} companyName={company.co_name_el ?? company.ar_gemi} />
-          )}
-        </div>
+      {/* ── Sticky section nav — full-bleed so its background spans the
+          viewport like the site TopNav above it, content still lines up
+          with the 1400px column via cp-stickynav-inner. ── */}
+      <CompanyStickyNav
+        sections={sections}
+        activeSection={activeSection}
+        condensed={headerCondensed}
+        company={company}
+        headlineRevenue={headlineRevenue}
+      />
+
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 32px 80px' }}>
+
+        <section id="overview" data-section-id="overview" ref={setSectionRef('overview')} className="cp-section">
+          <OverviewTab company={company} persons={persons} activities={activities} />
+        </section>
+
+        {persons.length > 0 && (
+          <section id="people" data-section-id="people" ref={setSectionRef('people')} className="cp-section">
+            <div className="cp-section-hd"><h2>Άνθρωποι</h2><span className="cp-tab-count">{persons.length}</span></div>
+            <PeopleTab persons={persons} />
+          </section>
+        )}
+
+        {activities.length > 0 && (
+          <section id="activities" data-section-id="activities" ref={setSectionRef('activities')} className="cp-section">
+            <div className="cp-section-hd"><h2>Δραστηριότητες</h2><span className="cp-tab-count">{activities.length}</span></div>
+            <ActivitiesTab activities={activities} />
+          </section>
+        )}
+
+        {showFinancials && (
+          <section id="financials" data-section-id="financials" ref={setSectionRef('financials')} className="cp-section">
+            <div className="cp-section-hd"><h2>Οικονομικά</h2></div>
+            <FinancialsTab data={financials ?? null} />
+          </section>
+        )}
+
+        {similar.length > 0 && (
+          <section id="similar" data-section-id="similar" ref={setSectionRef('similar')} className="cp-section">
+            <div className="cp-section-hd"><h2>Παρόμοιες εταιρείες</h2></div>
+            <SimilarTab similar={similar} />
+          </section>
+        )}
+
+        {persons.length > 0 && (
+          <section id="network" data-section-id="network" ref={setSectionRef('network')} className="cp-section cp-section-last">
+            <div className="cp-section-hd"><h2>Δίκτυο</h2></div>
+            {networkMounted && (
+              <CompanyNetworkGraph arGemi={company.ar_gemi} companyName={company.co_name_el ?? company.ar_gemi} />
+            )}
+          </section>
+        )}
       </div>
     </main>
   )

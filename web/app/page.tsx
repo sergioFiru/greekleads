@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Icon from '@/components/Icon'
 import TopNav from '@/components/TopNav'
+import PrefectureMap from '@/components/PrefectureMap'
 
 // ── TypeScript globals ──────────────────────────────────────────────
 declare global {
@@ -233,6 +234,7 @@ interface HomeStats {
   active?: number
   withContact?: number
   withSocial?: number
+  byPrefecture?: Record<string, number>
 }
 
 // The live registry feed, moved out of the hero into its own band so the
@@ -485,14 +487,6 @@ interface Suggestion {
   status: string | null
 }
 
-interface NewFirm {
-  ar_gemi: string
-  name: string
-  legal_type: string
-  city: string
-  ts: number          // epoch ms of registration
-}
-
 interface ScoutResult {
   filters: {
     prefectures: string[]
@@ -521,55 +515,6 @@ const SCOUT_EXAMPLES = [
   'Καφέ χονδρικής σε εστιατόρια και μπαρ',
 ]
 
-// PLACEHOLDER DATA — swap for the live watcher feed.
-// new_firms_watcher.py already polls ΓΕΜΗ every 10 min; when that is exposed
-// over a socket/SSE, replace useFakeNewFirms() with the live subscription.
-// The NewFirm shape above is what the real feed should emit.
-const FAKE_NEW_FIRMS: Array<Omit<NewFirm, 'ts'>> = [
-  { ar_gemi: '181240301000', name: 'ΑΙΓΑΙΟ ΤΕΧΝΙΚΗ ΙΚΕ',            legal_type: 'ΙΚΕ',     city: 'ΠΕΙΡΑΙΑΣ' },
-  { ar_gemi: '181239802000', name: 'ΚΑΛΛΙΣΤΩ ΤΡΟΦΙΜΑ ΑΕ',           legal_type: 'ΑΕ',      city: 'ΘΕΣΣΑΛΟΝΙΚΗ' },
-  { ar_gemi: '181238105000', name: 'ΔΕΛΦΟΙ ΣΥΜΒΟΥΛΕΥΤΙΚΗ ΟΕ',       legal_type: 'ΟΕ',      city: 'ΑΘΗΝΑ' },
-  { ar_gemi: '181237409000', name: 'ΜΕΛΤΕΜΙ ΤΟΥΡΙΣΤΙΚΗ ΙΚΕ',        legal_type: 'ΙΚΕ',     city: 'ΡΟΔΟΣ' },
-  { ar_gemi: '181236703000', name: 'ΠΑΠΠΑΣ ΓΕΩΡΓΙΟΣ',               legal_type: 'ΑΤΟΜΙΚΗ', city: 'ΛΑΡΙΣΑ' },
-  { ar_gemi: '181235908000', name: 'ΟΛΥΜΠΟΣ ΕΝΕΡΓΕΙΑΚΗ ΑΕ',         legal_type: 'ΑΕ',      city: 'ΚΑΤΕΡΙΝΗ' },
-  { ar_gemi: '181235204000', name: 'ΚΡΗΤΙΚΑ ΑΓΡΟΤΙΚΑ ΙΚΕ',          legal_type: 'ΙΚΕ',     city: 'ΗΡΑΚΛΕΙΟ' },
-  { ar_gemi: '181234607000', name: 'ΝΑΥΣΙΚΑ ΝΑΥΤΙΛΙΑΚΗ ΕΠΕ',        legal_type: 'ΕΠΕ',     city: 'ΠΕΙΡΑΙΑΣ' },
-  { ar_gemi: '181233901000', name: 'ΖΑΓΟΡΙ ΞΕΝΩΝΕΣ ΙΚΕ',            legal_type: 'ΙΚΕ',     city: 'ΙΩΑΝΝΙΝΑ' },
-  { ar_gemi: '181233205000', name: 'ΑΤΤΙΚΗ ΨΗΦΙΑΚΗ ΑΕ',             legal_type: 'ΑΕ',      city: 'ΑΘΗΝΑ' },
-]
-
-function useFakeNewFirms(visible = 5) {
-  const [items, setItems] = useState<NewFirm[]>([])
-  const idx = useRef(0)
-
-  useEffect(() => {
-    const now = Date.now()
-    // Seed with a few already-aged entries so the panel is never empty.
-    setItems(
-      FAKE_NEW_FIRMS.slice(0, visible).map((f, i) => ({ ...f, ts: now - (i + 1) * 96_000 }))
-    )
-    idx.current = visible
-
-    const t = setInterval(() => {
-      const next = FAKE_NEW_FIRMS[idx.current % FAKE_NEW_FIRMS.length]
-      idx.current += 1
-      setItems(prev => [{ ...next, ts: Date.now() }, ...prev].slice(0, visible))
-    }, 5200)
-    return () => clearInterval(t)
-  }, [visible])
-
-  return items
-}
-
-function agoLabel(ts: number, now: number): string {
-  const s = Math.max(0, Math.round((now - ts) / 1000))
-  if (s < 10) return 'τώρα'
-  if (s < 60) return `${s}δ`
-  const m = Math.round(s / 60)
-  if (m < 60) return `${m}λ`
-  return `${Math.round(m / 60)}ω`
-}
-
 function Hero({ totalCompanies, stats }: { totalCompanies: number; stats: HomeStats }) {
   const router = useRouter()
   const [mode, setMode]     = useState<'scout' | 'manual'>('scout')
@@ -586,13 +531,6 @@ function Hero({ totalCompanies, stats }: { totalCompanies: number; stats: HomeSt
   const [scouting, setScouting] = useState(false)
   const [recipe, setRecipe]   = useState<ScoutResult | null>(null)
   const [scoutErr, setScoutErr] = useState<string | null>(null)
-
-  const newFirms = useFakeNewFirms(5)
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 10_000)
-    return () => clearInterval(t)
-  }, [])
 
   const trimmed = query.trim()
 
@@ -890,33 +828,8 @@ function Hero({ totalCompanies, stats }: { totalCompanies: number; stats: HomeSt
           </div>
         </div>
 
-        {/* ── RIGHT: live registrations ── */}
-        <aside className="hs-feed">
-          <div className="hs-feed-hd">
-            <span className="hs-feed-dot" />
-            <span className="hs-feed-t">Νέες εγγραφές</span>
-          </div>
-          <div className="hs-feed-list">
-            {newFirms.map((f, i) => (
-              <Link
-                key={`${f.ar_gemi}-${f.ts}`}
-                href={`/etaireies/${f.ar_gemi}`}
-                className="hs-feed-item"
-                data-new={i === 0 ? 'true' : 'false'}
-              >
-                <span className="hs-feed-body">
-                  <span className="hs-feed-name">{f.name}</span>
-                  <span className="hs-feed-meta">{f.legal_type} · {f.city}</span>
-                </span>
-                <span className="hs-feed-time">{agoLabel(f.ts, now)}</span>
-              </Link>
-            ))}
-          </div>
-          <Link className="hs-feed-ft" href="/search">
-            Δες όλες τις νέες εγγραφές
-            <Icon name="chevron-right" size={12} />
-          </Link>
-        </aside>
+        {/* ── RIGHT: prefecture map ── */}
+        <PrefectureMap counts={stats.byPrefecture ?? {}} />
       </div>
     </section>
   )

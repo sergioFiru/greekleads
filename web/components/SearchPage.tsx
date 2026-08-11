@@ -1,15 +1,16 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import Link from 'next/link'
 import Icon from './Icon'
 import Paywall from './Paywall'
-import { ScoutPanel, ScoutPromptBar, ScoutSummaryBar, type ScoutRecipe } from './Scout'
+import { ScoutPanel, ScoutSummaryBar, type ScoutRecipe } from './Scout'
 import CompanyPreviewPanel from './CompanyPreviewPanel'
+import { brandTitles } from '@/lib/brand'
 
 interface Company {
   ar_gemi: string
   co_name_el: string
+  co_titles_el: string[] | null
   legal_type_descr: string
   prefecture_descr: string
   municipality_descr: string
@@ -529,15 +530,23 @@ export default function SearchPage() {
 
   return (
     <>
-    <div className="sp-breadcrumb">
-      <Link href="/">Αρχική</Link>
-      <span>/</span>
-      <span>Κατάλογος εταιρειών</span>
-    </div>
     <div className="sp-layout">
 
       {/* ── SIDEBAR ── */}
-      <aside className="sp-sidebar" ref={sidebarRef}>
+      <div className="sp-sidebar-col">
+        <div className="sp-scout-glass-frame">
+          <span className="sp-scout-blob sp-scout-blob-blue" />
+          <span className="sp-scout-blob sp-scout-blob-amber" />
+          <button className="sp-scout-top" onClick={() => setScoutOpen(true)}>
+            <span className="sp-scout-chip">AI</span>
+            <span className="sp-scout-card-icon"><Icon name="compass" size={17} /></span>
+            <span className="sp-scout-card-body">
+              <span className="sp-scout-card-title">Ρώτα τον Scout</span>
+              <span className="sp-scout-card-sub">Περίγραψε ποιους θες να βρεις — επιλέγει τα φίλτρα για εσένα</span>
+            </span>
+          </button>
+        </div>
+        <aside className="sp-sidebar" ref={sidebarRef}>
         <div className="sp-sidebar-hd">
           <span className="sp-sidebar-title">Φίλτρα</span>
           {pills.length > 0 && (
@@ -545,14 +554,14 @@ export default function SearchPage() {
           )}
         </div>
 
-        <FilterGroup title="Στοιχεία επικοινωνίας" defaultOpen active={filters.has_email || filters.has_phone || filters.has_website || filters.has_no_website}>
+        <FilterGroup title="Στοιχεία επικοινωνίας" defaultOpen={false} active={filters.has_email || filters.has_phone || filters.has_website || filters.has_no_website}>
           <CheckRow label="Επαληθευμένο email"  checked={filters.has_email}      onChange={() => setFilters(f => ({ ...f, has_email:      !f.has_email }))} />
           <CheckRow label="Τηλέφωνο"             checked={filters.has_phone}      onChange={() => setFilters(f => ({ ...f, has_phone:      !f.has_phone }))} />
           <CheckRow label="Ιστότοπος"            checked={filters.has_website}    onChange={() => setFilters(f => ({ ...f, has_website:    !f.has_website,    has_no_website: false }))} />
           <CheckRow label="Χωρίς ιστότοπο"       checked={filters.has_no_website} onChange={() => setFilters(f => ({ ...f, has_no_website: !f.has_no_website, has_website:    false }))} />
         </FilterGroup>
 
-        <FilterGroup title="Κοινωνικά δίκτυα" active={filters.has_instagram || filters.has_facebook || filters.has_linkedin || filters.has_twitter || filters.has_tiktok || filters.has_youtube}>
+        <FilterGroup title="Κοινωνικά δίκτυα" defaultOpen={false} active={filters.has_instagram || filters.has_facebook || filters.has_linkedin || filters.has_twitter || filters.has_tiktok || filters.has_youtube}>
           {([
             { key: 'has_instagram', label: 'Instagram', icon: 'instagram', color: '#E1306C' },
             { key: 'has_facebook',  label: 'Facebook',  icon: 'facebook',  color: '#1877F2' },
@@ -571,7 +580,7 @@ export default function SearchPage() {
           ))}
         </FilterGroup>
 
-        <FilterGroup title="Τοποθεσία" defaultOpen active={filters.prefectures.length > 0}>
+        <FilterGroup title="Τοποθεσία" defaultOpen={false} active={filters.prefectures.length > 0}>
           {topPrefs.map(p => (
             <CheckRow key={p} checked={filters.prefectures.includes(p)} onChange={() => togglePref(p)} label={p} />
           ))}
@@ -612,7 +621,7 @@ export default function SearchPage() {
           )}
         </FilterGroup>
 
-        <FilterGroup title="Κλάδος (ΚΑΔ)" defaultOpen active={filters.activities.length > 0}>
+        <FilterGroup title="Κλάδος (ΚΑΔ)" defaultOpen={false} active={filters.activities.length > 0}>
           {filters.activities.length > 5 ? (
             <div className="sp-kad-chip">
               <span style={{ flex: 1 }}>{filters.activities.length} ΚΑΔ επιλεγμένοι</span>
@@ -643,14 +652,14 @@ export default function SearchPage() {
           />
         </FilterGroup>
 
-        <FilterGroup title="Έτος Ίδρυσης" defaultOpen active={!!(filters.year_from || filters.year_to)}>
+        <FilterGroup title="Έτος Ίδρυσης" defaultOpen={false} active={!!(filters.year_from || filters.year_to)}>
           <div className="sp-year-row">
             <input className="sp-filter-input" placeholder="Από" value={filters.year_from} onChange={e => setFilters(f => ({ ...f, year_from: e.target.value }))} />
             <input className="sp-filter-input" placeholder="Έως" value={filters.year_to}   onChange={e => setFilters(f => ({ ...f, year_to:   e.target.value }))} />
           </div>
         </FilterGroup>
 
-        <FilterGroup title="Δήμος" defaultOpen active={!!filters.municipality.trim()}>
+        <FilterGroup title="Δήμος" defaultOpen={false} active={!!filters.municipality.trim()}>
           <input
             className="sp-filter-input"
             placeholder="Αναζήτηση δήμου..."
@@ -658,7 +667,8 @@ export default function SearchPage() {
             onChange={e => setFilters(f => ({ ...f, municipality: e.target.value }))}
           />
         </FilterGroup>
-      </aside>
+        </aside>
+      </div>
 
       {/* ── FLOATING KAD DROPDOWN ── */}
       {kadOpen && filteredActivities.length > 0 && (
@@ -697,15 +707,15 @@ export default function SearchPage() {
 
         {/* Search bar row */}
         <div className="sp-topbar">
-          {/* Scout prompt / summary bar */}
-          {scoutSummary ? (
+          {/* Scout's idle entry point now lives in the sidebar (see the aside
+              above) — this only shows once a Scout recipe is actually applied,
+              same as the filter-pills row only shows when filters are active. */}
+          {scoutSummary && (
             <ScoutSummaryBar
               summary={scoutSummary}
               onRefine={() => setScoutOpen(true)}
               onClear={() => { setScoutSummary(null); setFilters(EMPTY) }}
             />
-          ) : (
-            <ScoutPromptBar onClick={() => setScoutOpen(true)} />
           )}
 
           <div className="sp-topbar-row1">
@@ -847,9 +857,7 @@ export default function SearchPage() {
                       const col      = logoColor(c.ar_gemi)
                       const initials = getInitials(c.co_name_el)
                       const isActive = c.status_descr?.toLowerCase().includes('ενεργ')
-                      const meta     = [
-                        c.municipality_descr || c.prefecture_descr || null,
-                      ].filter(Boolean).join(' · ')
+                      const brand    = brandTitles(c.co_titles_el, c.co_name_el)[0]
 
                       return (
                         <tr
@@ -873,7 +881,7 @@ export default function SearchPage() {
                               </span>
                               <div style={{ minWidth: 0 }}>
                                 <div className="sp-co-name">{c.co_name_el}</div>
-                                {meta && <div className="sp-co-meta">{meta}</div>}
+                                {brand && <div className="sp-co-meta">{brand}</div>}
                               </div>
                             </div>
                           </td>
@@ -958,10 +966,8 @@ export default function SearchPage() {
                   const col      = logoColor(c.ar_gemi)
                   const initials = getInitials(c.co_name_el)
                   const isActive = c.status_descr?.toLowerCase().includes('ενεργ')
-                  const meta     = [
-                    c.legal_type_descr ?? null,
-                    c.municipality_descr || c.prefecture_descr || null,
-                  ].filter(Boolean).join(' · ')
+                  const brand    = brandTitles(c.co_titles_el, c.co_name_el)[0]
+                  const meta     = c.legal_type_descr || null
 
                   return (
                     <div
@@ -978,7 +984,8 @@ export default function SearchPage() {
                         {initials}
                       </span>
                       <div className="sp-card-item-name">{c.co_name_el}</div>
-                      {meta && <div className="sp-card-item-meta">{meta}</div>}
+                      {brand && <div className="sp-card-item-meta">{brand}</div>}
+                      {!brand && meta && <div className="sp-card-item-meta">{meta}</div>}
                       <div className="sp-enrich-row" style={{ marginTop: 8 }}>
                         <span className="sp-badge sp-badge-gemi" title="ΓΕΜΗ">
                           <Icon name="verified" size={10} stroke={1.6} />ΓΕΜΗ
