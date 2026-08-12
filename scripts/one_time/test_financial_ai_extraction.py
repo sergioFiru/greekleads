@@ -18,6 +18,7 @@ Run from the scripts/ directory:
 import argparse
 import os
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 import boto3
@@ -25,7 +26,7 @@ import psycopg2
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from financial_ai_extractor import extract_financials  # noqa: E402
+from financial_ai_extractor import extract_financials, merge_extractions  # noqa: E402
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
@@ -118,6 +119,8 @@ def main():
         docs = docs_for_company(conn, ar_gemi)[: args.max_docs_per_company]
         print(f"=== ar_gemi={ar_gemi}  {name}  ({len(docs)} docs) ===")
 
+        by_fiscal_year = defaultdict(list)  # results grouped for the merge step below
+
         for kak, r2_key, date_filed in docs:
             total += 1
             ext = r2_key.rsplit(".", 1)[-1]
@@ -151,10 +154,40 @@ def main():
                 f"revenue={result['revenue']}  net_profit={result['net_profit']}  "
                 f"assets={result['total_assets']}  equity={result['equity']}  "
                 f"pbt={result['profit_before_tax']}"
+            )
+            print(
+                f"         gross_profit={result['gross_profit']}  cost_of_sales={result['cost_of_sales']}  "
+                f"inventory={result['inventory']}  cash={result['cash_and_equivalents']}  "
+                f"receivables={result['receivables']}  liabilities={result['total_liabilities']}  "
+                f"employees={result['employee_count']}"
                 + (f"  notes={result['notes']}" if result["notes"] else "")
             )
+            if result.get("fiscal_year") is not None:
+                by_fiscal_year[result["fiscal_year"]].append(result)
             if args.write:
                 upsert_statement(conn, kak, ar_gemi, result)
+
+        # One merged row per fiscal year — this is the shape the real
+        # pipeline should actually produce, not the raw per-doc rows above.
+        for fy, group in sorted(by_fiscal_year.items(), reverse=True):
+            merged = merge_extractions(group)
+            print(f"  --- MERGED fiscal_year={fy}  ({merged['source_count']} of {len(group)} docs contributed) ---")
+            print(
+                f"      revenue={merged['revenue']}  net_profit={merged['net_profit']}  "
+                f"assets={merged['total_assets']}  equity={merged['equity']}  pbt={merged['profit_before_tax']}"
+            )
+            print(
+                f"      gross_profit={merged['gross_profit']}  cost_of_sales={merged['cost_of_sales']}  "
+                f"inventory={merged['inventory']}  cash={merged['cash_and_equivalents']}  "
+                f"receivables={merged['receivables']}  liabilities={merged['total_liabilities']}  "
+                f"employees={merged['employee_count']}"
+            )
+            filled = sum(1 for f in [
+                'revenue', 'total_assets', 'equity', 'profit_before_tax', 'net_profit',
+                'gross_profit', 'cost_of_sales', 'inventory', 'cash_and_equivalents',
+                'receivables', 'total_liabilities', 'employee_count',
+            ] if merged[f] is not None)
+            print(f"      -> {filled}/12 numeric fields filled after merge")
 
         print()
 

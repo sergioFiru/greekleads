@@ -18,6 +18,8 @@ import logging
 import os
 import sys
 import time
+import zipfile
+from io import BytesIO
 from pathlib import Path
 
 import boto3
@@ -208,9 +210,36 @@ _CT_EXT = {
 }
 _MAGIC_EXT = [
     (b"%PDF",         "pdf"),
-    (b"PK\x03\x04",  "xlsx"),   # zip-based: xlsx, docx — content-type distinguishes
+    (b"PK\x03\x04",  "_zip_container"),  # ambiguous on its own — xlsx, docx, and a
+                                          # plain .zip (like a bundled financial
+                                          # filing, e.g. JUMBO's) all share this
+                                          # exact magic number, since xlsx/docx
+                                          # ARE zip archives internally. Content-type
+                                          # usually disambiguates; when it doesn't,
+                                          # _sniff_zip_container peeks inside.
     (b"\xd0\xcf\x11\xe0", "xls"),  # legacy Office compound doc
 ]
+
+
+def _sniff_zip_container(content: bytes) -> str:
+    """content already matched the zip magic number PK\\x03\\x04 but Content-Type
+    didn't tell us which kind — peek at the archive's own internal file list.
+    xlsx/docx are internally just a zip with a predictable member file; a
+    genuine plain .zip (e.g. a bundled multi-document financial filing) won't
+    have either. Added 2026-08-12 after this ambiguity was flagged as a real
+    risk: a plain zip with a generic/missing Content-Type could otherwise get
+    silently mislabeled "xlsx" and fail later when openpyxl tries to open it
+    as a workbook instead of being recognized as a zip and handled correctly."""
+    try:
+        names = set(zipfile.ZipFile(BytesIO(content)).namelist())
+    except zipfile.BadZipFile:
+        return "bin"  # matched the magic bytes but isn't actually a valid zip
+    if "xl/workbook.xml" in names:
+        return "xlsx"
+    if "word/document.xml" in names:
+        return "docx"
+    return "zip"
+
 
 def _detect_ext(content: bytes, content_type: str) -> str:
     ct = (content_type or "").split(";")[0].strip().lower()
@@ -218,7 +247,7 @@ def _detect_ext(content: bytes, content_type: str) -> str:
         return _CT_EXT[ct]
     for magic, ext in _MAGIC_EXT:
         if content[:len(magic)] == magic:
-            return ext
+            return _sniff_zip_container(content) if ext == "_zip_container" else ext
     return "bin"
 
 
