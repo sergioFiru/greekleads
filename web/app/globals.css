@@ -2044,13 +2044,21 @@ input, select, textarea { font-family: inherit; }
 .cp-fin-found-copy { font-size: 13.5px; color: var(--text-primary); font-weight: 500; }
 .cp-fin-btn {
   display: inline-flex; align-items: center; gap: 7px;
-  background: var(--text-muted); color: #fff; border: none; border-radius: 6px;
+  background: var(--accent); color: #fff; border: none; border-radius: 6px;
   font-family: inherit; font-size: 12.5px; font-weight: 600;
-  padding: 8px 14px; cursor: not-allowed; opacity: .55;
+  padding: 8px 14px; cursor: pointer; transition: opacity .15s;
 }
-.cp-fin-soon {
-  font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-  background: rgba(255,255,255,0.25); padding: 2px 6px; border-radius: 4px;
+.cp-fin-btn:hover:not(:disabled) { opacity: .88; }
+.cp-fin-btn:disabled { cursor: not-allowed; opacity: .6; }
+.cp-fin-btn-spinner {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff;
+  animation: cp-fin-spin .7s linear infinite;
+}
+@keyframes cp-fin-spin { to { transform: rotate(360deg); } }
+.cp-fin-error {
+  width: 100%; font-size: 12.5px; color: var(--loss-ink);
+  margin-top: 8px;
 }
 
 .cp-fin-delta { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 20px; }

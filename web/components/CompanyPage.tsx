@@ -735,7 +735,110 @@ function RetrievedFinancials({ years }: { years: FinancialYearRow[] }) {
   )
 }
 
-function FinancialsTab({ data }: { data: FinancialsData | null }) {
+type RetrieveJobStatus = 'idle' | 'starting' | 'queued' | 'running' | 'error'
+
+interface RetrieveFiscalYear {
+  fiscal_year: number
+  revenue: number | null
+  total_assets: number | null
+  equity: number | null
+  profit_before_tax: number | null
+  net_profit: number | null
+}
+
+function RetrieveButton({ arGemi, onDone }: { arGemi: string; onDone: (years: FinancialYearRow[]) => void }) {
+  const [status, setStatus] = useState<RetrieveJobStatus>('idle')
+  const [error, setError] = useState<string | null>(null)
+  const pollRef = useRef<number | null>(null)
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current != null) {
+      window.clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+  }, [])
+
+  useEffect(() => stopPolling, [stopPolling])
+
+  const start = useCallback(async () => {
+    setStatus('starting')
+    setError(null)
+    try {
+      const resp = await fetch('/api/financials/retrieve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ar_gemi: arGemi }),
+      })
+      const data = await resp.json()
+      if (!resp.ok) throw new Error(data.error || 'Αποτυχία εκκίνησης ανάκτησης')
+
+      setStatus('queued')
+      const jobId: string = data.job_id
+
+      pollRef.current = window.setInterval(async () => {
+        try {
+          const r = await fetch(`/api/financials/retrieve?job_id=${encodeURIComponent(jobId)}`, { cache: 'no-store' })
+          const job = await r.json()
+          if (!r.ok) throw new Error(job.error || 'Σφάλμα κατά την παρακολούθηση ανάκτησης')
+
+          if (job.status === 'running') {
+            setStatus('running')
+            return
+          }
+          if (job.status === 'done') {
+            stopPolling()
+            const fiscalYears: RetrieveFiscalYear[] = job.result?.fiscal_years ?? []
+            if (fiscalYears.length === 0) {
+              setStatus('error')
+              setError(job.result?.message || 'Δεν βρέθηκαν εξαγώγιμα οικονομικά στοιχεία στα διαθέσιμα έγγραφα.')
+              return
+            }
+            const years: FinancialYearRow[] = fiscalYears.map(fy => ({
+              fiscal_year: fy.fiscal_year,
+              revenue: fy.revenue,
+              total_assets: fy.total_assets,
+              equity: fy.equity,
+              profit_before_tax: fy.profit_before_tax,
+              net_profit: fy.net_profit,
+            }))
+            onDone(years)
+            return
+          }
+          if (job.status === 'error') {
+            stopPolling()
+            setStatus('error')
+            setError(job.error || 'Η ανάκτηση απέτυχε.')
+          }
+        } catch (e) {
+          stopPolling()
+          setStatus('error')
+          setError(String(e))
+        }
+      }, 3000)
+    } catch (e) {
+      setStatus('error')
+      setError(String(e))
+    }
+  }, [arGemi, onDone, stopPolling])
+
+  const busy = status === 'starting' || status === 'queued' || status === 'running'
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+      <button className="cp-fin-btn" onClick={start} disabled={busy}>
+        {busy && <span className="cp-fin-btn-spinner" />}
+        {status === 'running' ? 'Ανάκτηση σε εξέλιξη…'
+          : status === 'queued' || status === 'starting' ? 'Εκκίνηση…'
+          : 'Ανάκτηση οικονομικών στοιχείων'}
+      </button>
+      {error && <div className="cp-fin-error">{error}</div>}
+    </div>
+  )
+}
+
+function FinancialsTab({ data, arGemi }: { data: FinancialsData | null; arGemi: string }) {
+  const [retrievedYears, setRetrievedYears] = useState<FinancialYearRow[] | null>(null)
+
   if (!data) {
     return (
       <div className="card" style={{ padding: '20px 22px' }}>
@@ -758,21 +861,20 @@ function FinancialsTab({ data }: { data: FinancialsData | null }) {
     )
   }
 
-  if (data.years.length === 0) {
+  const years = retrievedYears ?? data.years
+
+  if (years.length === 0) {
     return (
       <div className="card" style={{ padding: '20px 22px' }}>
         <div className="cp-fin-found">
           <span className="cp-fin-found-copy">Διαθέσιμα δημόσια οικονομικά στοιχεία.</span>
-          <button className="cp-fin-btn" disabled>
-            Ανάκτηση οικονομικών στοιχείων
-            <span className="cp-fin-soon">Σύντομα</span>
-          </button>
+          <RetrieveButton arGemi={arGemi} onDone={setRetrievedYears} />
         </div>
       </div>
     )
   }
 
-  return <RetrievedFinancials years={data.years} />
+  return <RetrievedFinancials years={years} />
 }
 
 // ── Similar Tab ────────────────────────────────────────────────
@@ -1103,7 +1205,7 @@ export default function CompanyPage({
         {showFinancials && (
           <section id="financials" data-section-id="financials" ref={setSectionRef('financials')} className="cp-section">
             <div className="cp-section-hd"><h2>Οικονομικά</h2></div>
-            <FinancialsTab data={financials ?? null} />
+            <FinancialsTab data={financials ?? null} arGemi={company.ar_gemi} />
           </section>
         )}
 
