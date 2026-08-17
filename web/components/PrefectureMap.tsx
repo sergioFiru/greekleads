@@ -10,23 +10,43 @@ const SHAPES = shapesData as ShapesFile
 
 // Blue-family ramp, log-scaled — Attica (~350k) and the smallest prefecture
 // (~1.2k) are ~300x apart, so a linear scale would make everything but Attica
-// look identical. Floor is deliberately not near-white: a paper-thin pastel
-// map was the exact complaint being fixed here, so even the lowest tier of
-// prefecture keeps real color presence against the card background.
-const STOP_LOW  : [number, number, number] = [186, 210, 236]  // soft slate-blue, not near-white
+// look identical. Most prefectures cluster near the low end of a log scale,
+// so the floor's own saturation sets the map's overall impression — an
+// earlier floor here (124,160,204, ~44% saturation) was noticeably duller
+// than the mid/high stops (~64%), so the bulk of the map read muted next to
+// them. Matched up to the same saturation family across all three stops.
+const STOP_LOW  : [number, number, number] = [82, 144, 214]   // vivid, same hue family as --accent
 const STOP_MID  : [number, number, number] = [37, 99, 168]    // --accent
-const STOP_HIGH: [number, number, number] = [12, 27, 51]      // deep ink-blue
+const STOP_HIGH: [number, number, number] = [8, 25, 48]       // deep ink-blue
 
 function lerp(a: number, b: number, t: number) { return a + (b - a) * t }
 
-function colorFor(t: number): string {
+function fmtCount(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M'
+  if (n >= 1_000) return Math.round(n / 1_000) + 'k'
+  return String(n)
+}
+
+function rgbFor(t: number): [number, number, number] {
   const [a, b, lt] = t <= 0.5
     ? [STOP_LOW, STOP_MID, t / 0.5]
     : [STOP_MID, STOP_HIGH, (t - 0.5) / 0.5]
-  const r = Math.round(lerp(a[0], b[0], lt))
-  const g = Math.round(lerp(a[1], b[1], lt))
-  const bl = Math.round(lerp(a[2], b[2], lt))
+  return [
+    Math.round(lerp(a[0], b[0], lt)),
+    Math.round(lerp(a[1], b[1], lt)),
+    Math.round(lerp(a[2], b[2], lt)),
+  ]
+}
+
+function colorFor(t: number): string {
+  const [r, g, bl] = rgbFor(t)
   return `rgb(${r},${g},${bl})`
+}
+
+// Perceived luminance of the fill — decides label ink, not a fixed t cutoff,
+// so it stays correct if the ramp above ever changes again.
+function isDark([r, g, b]: [number, number, number]) {
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) < 140
 }
 
 export default function PrefectureMap({ counts }: { counts: Record<string, number> }) {
@@ -54,13 +74,11 @@ export default function PrefectureMap({ counts }: { counts: Record<string, numbe
   const hoveredCount = hovered ? counts[hovered] || 0 : 0
 
   return (
-    <div className="pm-card">
-      <div className="pm-hd">
-        <span className="pm-dot" />
-        <span className="pm-t">Επιχειρήσεις ανά νομό</span>
-      </div>
+    <div className="pm">
+      <div className="pm-glow" aria-hidden />
 
-      <div className="pm-body">
+      <div className="pm-content">
+        <div className="pm-mapwrap">
         <svg
           className={`pm-svg${hovered ? ' has-hover' : ''}`}
           viewBox={`0 0 ${SHAPES.svgWidth} ${SHAPES.svgHeight}`}
@@ -69,7 +87,7 @@ export default function PrefectureMap({ counts }: { counts: Record<string, numbe
         >
           <defs>
             <linearGradient id="pm-sheen" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.32" />
+              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.06" />
               <stop offset="100%" stopColor="#000000" stopOpacity="0.10" />
             </linearGradient>
           </defs>
@@ -96,6 +114,26 @@ export default function PrefectureMap({ counts }: { counts: Record<string, numbe
               <path key={p.name} d={p.path} fill="url(#pm-sheen)" />
             ))}
           </g>
+          <g aria-hidden="true">
+            {SHAPES.prefectures.map(p => {
+              const v = counts[p.name] || 0
+              if (!v) return null
+              const isHovered = p.name === hovered
+              const light = isDark(rgbFor(tFor(v)))
+              return (
+                <text
+                  key={p.name}
+                  x={p.cx}
+                  y={p.cy}
+                  className={`pm-shape-label${isHovered ? ' is-hovered' : ''}`}
+                  fill={light ? '#F7F6F3' : '#16233B'}
+                  stroke={light ? 'rgba(12,27,51,0.35)' : 'rgba(255,255,255,0.55)'}
+                >
+                  {fmtCount(v)}
+                </text>
+              )
+            })}
+          </g>
         </svg>
 
         {hoveredShape && (
@@ -110,12 +148,7 @@ export default function PrefectureMap({ counts }: { counts: Record<string, numbe
             <div className="pm-tooltip-count">{hoveredCount.toLocaleString('el-GR')} επιχειρήσεις</div>
           </div>
         )}
-      </div>
-
-      <div className="pm-legend">
-        <span className="pm-legend-label">Λιγότερες</span>
-        <span className="pm-legend-ramp" />
-        <span className="pm-legend-label">Περισσότερες</span>
+        </div>
       </div>
     </div>
   )

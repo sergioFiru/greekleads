@@ -145,6 +145,7 @@ export async function POST(req: NextRequest) {
         twitter_url: string | null
         tiktok_url: string | null
         youtube_url: string | null
+        has_favicon: boolean
       }>(
         `SELECT
            c.ar_gemi,
@@ -160,8 +161,10 @@ export async function POST(req: NextRequest) {
            NULLIF(c.url,   '') AS url,
            NULLIF(c.discovered_url, '') AS discovered_url,
            c.instagram_url, c.facebook_url, c.linkedin_url,
-           c.twitter_url, c.tiktok_url, c.youtube_url
+           c.twitter_url, c.tiktok_url, c.youtube_url,
+           (fv.ar_gemi IS NOT NULL) AS has_favicon
          FROM companies c
+         LEFT JOIN company_favicons fv ON fv.ar_gemi = c.ar_gemi AND fv.status = 'ok'
          ${where}
          ORDER BY (
            (c.instagram_url IS NOT NULL)::int +

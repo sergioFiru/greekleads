@@ -17,7 +17,8 @@ async function getCompany(ar_gemi: string): Promise<CompanyData | null> {
       is_branch, incorporation_date::text,
       activities, capital,
       linkedin_url, instagram_url, facebook_url, twitter_url, tiktok_url, youtube_url,
-      primary_kad
+      primary_kad,
+      EXISTS(SELECT 1 FROM company_favicons f WHERE f.ar_gemi = companies.ar_gemi AND f.status = 'ok') AS has_favicon
     FROM companies WHERE ar_gemi = $1::bigint`,
     [ar_gemi]
   )

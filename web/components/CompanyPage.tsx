@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import KadDonut from './KadDonut'
 import CompanyNetworkGraph from './CompanyNetworkGraph'
+import CompanyFavicon from './CompanyFavicon'
 import { brandTitles } from '@/lib/brand'
 
 // ── Types ──────────────────────────────────────────────────────
@@ -57,6 +58,7 @@ export interface CompanyData {
   tiktok_url: string | null
   youtube_url: string | null
   primary_kad: string | null
+  has_favicon: boolean
 }
 
 export interface PersonRow {
@@ -746,7 +748,7 @@ interface RetrieveFiscalYear {
   net_profit: number | null
 }
 
-function RetrieveButton({ arGemi, onDone }: { arGemi: string; onDone: (years: FinancialYearRow[]) => void }) {
+function RetrieveButton({ arGemi, onDone, label }: { arGemi: string; onDone: (years: FinancialYearRow[]) => void; label?: string }) {
   const [status, setStatus] = useState<RetrieveJobStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const pollRef = useRef<number | null>(null)
@@ -829,7 +831,7 @@ function RetrieveButton({ arGemi, onDone }: { arGemi: string; onDone: (years: Fi
         {busy && <span className="cp-fin-btn-spinner" />}
         {status === 'running' ? 'Ανάκτηση σε εξέλιξη…'
           : status === 'queued' || status === 'starting' ? 'Εκκίνηση…'
-          : 'Ανάκτηση οικονομικών στοιχείων'}
+          : label ?? 'Ανάκτηση οικονομικών στοιχείων'}
       </button>
       {error && <div className="cp-fin-error">{error}</div>}
     </div>
@@ -850,12 +852,15 @@ function FinancialsTab({ data, arGemi }: { data: FinancialsData | null; arGemi: 
     )
   }
 
-  if (data.docs_found === 0) {
+  if (data.docs_found === 0 && !retrievedYears) {
     return (
       <div className="card" style={{ padding: '20px 22px' }}>
-        <div className="cp-fin-placeholder">
-          <span className="cp-fin-dot" />
-          Δεν βρέθηκαν δημόσια οικονομικά στοιχεία στο ΓΕΜΗ για αυτή την επιχείρηση.
+        <div className="cp-fin-found">
+          <span className="cp-fin-found-copy">
+            Δεν βρέθηκαν δημόσια οικονομικά στοιχεία στο ΓΕΜΗ για αυτή την επιχείρηση κατά τον
+            τελευταίο έλεγχο. Αν γνωρίζετε ότι υπάρχουν, ζητήστε νέο έλεγχο.
+          </span>
+          <RetrieveButton arGemi={arGemi} onDone={setRetrievedYears} label="Έλεγχος ξανά" />
         </div>
       </div>
     )
@@ -1077,10 +1082,18 @@ export default function CompanyPage({
         {/* Header card — full width */}
         <div ref={headerRef} className="card" style={{ padding: '26px 30px', marginBottom: 20 }}>
           <div style={{ display: 'flex', gap: 22, alignItems: 'flex-start' }}>
-            <div className="logo-initial xl"
-              style={{ background: lc.bg, color: lc.fg, border: `1.5px solid ${lc.border}`, flexShrink: 0 }}>
-              {initials}
-            </div>
+            <CompanyFavicon
+              arGemi={company.ar_gemi}
+              hasFavicon={company.has_favicon}
+              className="logo-initial xl"
+              style={{ background: lc.bg, border: `1.5px solid ${lc.border}`, flexShrink: 0, padding: 10 }}
+              fallback={
+                <div className="logo-initial xl"
+                  style={{ background: lc.bg, color: lc.fg, border: `1.5px solid ${lc.border}`, flexShrink: 0 }}>
+                  {initials}
+                </div>
+              }
+            />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
                 <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.2, margin: 0 }}>

@@ -5,6 +5,7 @@ import Icon from './Icon'
 import Paywall from './Paywall'
 import { ScoutPanel, ScoutSummaryBar, type ScoutRecipe } from './Scout'
 import CompanyPreviewPanel from './CompanyPreviewPanel'
+import CompanyFavicon from './CompanyFavicon'
 import { brandTitles } from '@/lib/brand'
 
 interface Company {
@@ -26,6 +27,7 @@ interface Company {
   twitter_url: string | null
   tiktok_url: string | null
   youtube_url: string | null
+  has_favicon: boolean
 }
 
 interface FilterOptions {
@@ -873,12 +875,20 @@ export default function SearchPage() {
 
                           <td>
                             <div className="sp-company-cell">
-                              <span
+                              <CompanyFavicon
+                                arGemi={c.ar_gemi}
+                                hasFavicon={c.has_favicon}
                                 className="sp-logo"
-                                style={{ background: col.bg, color: col.fg, borderColor: col.border }}
-                              >
-                                {initials}
-                              </span>
+                                style={{ background: col.bg, borderColor: col.border, padding: 3 }}
+                                fallback={
+                                  <span
+                                    className="sp-logo"
+                                    style={{ background: col.bg, color: col.fg, borderColor: col.border }}
+                                  >
+                                    {initials}
+                                  </span>
+                                }
+                              />
                               <div style={{ minWidth: 0 }}>
                                 <div className="sp-co-name">{c.co_name_el}</div>
                                 {brand && <div className="sp-co-meta">{brand}</div>}
@@ -977,12 +987,20 @@ export default function SearchPage() {
                       data-selected={isSel ? 'true' : 'false'}
                       onClick={() => router.push(`/etaireies/${c.ar_gemi}`)}
                     >
-                      <span
+                      <CompanyFavicon
+                        arGemi={c.ar_gemi}
+                        hasFavicon={c.has_favicon}
                         className="sp-logo"
-                        style={{ background: col.bg, color: col.fg, borderColor: col.border, width: 36, height: 36, borderRadius: 8, fontSize: 12 }}
-                      >
-                        {initials}
-                      </span>
+                        style={{ background: col.bg, borderColor: col.border, width: 36, height: 36, borderRadius: 8, padding: 4 }}
+                        fallback={
+                          <span
+                            className="sp-logo"
+                            style={{ background: col.bg, color: col.fg, borderColor: col.border, width: 36, height: 36, borderRadius: 8, fontSize: 12 }}
+                          >
+                            {initials}
+                          </span>
+                        }
+                      />
                       <div className="sp-card-item-name">{c.co_name_el}</div>
                       {brand && <div className="sp-card-item-meta">{brand}</div>}
                       {!brand && meta && <div className="sp-card-item-meta">{meta}</div>}

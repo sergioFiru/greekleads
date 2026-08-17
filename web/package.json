@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1111.0",
     "@clerk/nextjs": "^7.5.8",
     "@stripe/stripe-js": "^4.8.0",
     "@vercel/analytics": "^2.0.1",
