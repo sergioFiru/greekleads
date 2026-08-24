@@ -14,7 +14,8 @@ export async function GET(
                 prefecture_descr, municipality_descr, city, street, street_number, zip_code,
                 email, phone, fax, url, discovered_url, website_source, incorporation_date::text, primary_kad,
                 activities, capital, objective,
-                instagram_url, facebook_url, linkedin_url, twitter_url, tiktok_url, youtube_url
+                instagram_url, facebook_url, linkedin_url, twitter_url, tiktok_url, youtube_url,
+                EXISTS(SELECT 1 FROM company_favicons f WHERE f.ar_gemi = companies.ar_gemi AND f.status = 'ok') AS has_favicon
          FROM companies WHERE ar_gemi = $1::bigint`,
         [ar_gemi]
       ),
@@ -22,6 +23,8 @@ export async function GET(
         `SELECT person_name, role, category, dt_to::text
          FROM company_persons WHERE ar_gemi = $1
          ORDER BY (dt_to IS NULL) DESC, dt_from DESC NULLS LAST
+         -- Keep in sync with MEMBER_FETCH_LIMIT in components/CompanyPreviewPanel.tsx,
+         -- which uses a full page as the signal that more members exist.
          LIMIT 6`,
         [ar_gemi]
       ),

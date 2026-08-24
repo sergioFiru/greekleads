@@ -24,12 +24,31 @@ Requires columns from migrate_discovery_columns.py:
 import logging
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 import psycopg2.extras
 
 from scan_utils import scan_site, probe_domain, email_domain, FREEMAIL
 
 log = logging.getLogger(__name__)
+
+# Domains shared by >=5 companies' emails (accountants/lawyers/franchisors
+# whose own site got mistaken for the client's own — see
+# one_time/shared_domain_report.py). Probing these just re-finds the parent's
+# site, not the firm's own, so pass 2 skips them outright.
+_BLOCKLIST_PATH = Path(__file__).parent / "shared_domain_blocklist.txt"
+
+
+def _load_blocklist() -> set[str]:
+    if not _BLOCKLIST_PATH.exists():
+        return set()
+    with open(_BLOCKLIST_PATH, encoding="utf-8") as f:
+        return {line.strip().lower() for line in f if line.strip() and not line.startswith("#")}
+
+
+SHARED_DOMAIN_BLOCKLIST = _load_blocklist()
+log.info(f"[{__name__}] loaded {len(SHARED_DOMAIN_BLOCKLIST):,} shared-domain "
+         f"blocklist entries from {_BLOCKLIST_PATH.name}")
 
 NAME       = "website_scanner"
 INTERVAL   = 3    # minutes
@@ -140,6 +159,8 @@ def _discover_no_url_firms(db):
     for row in batch:
         updates = {"discovered_scanned_at": datetime.now(timezone.utc)}
         dom = email_domain(row["email"])  # authoritative freemail/validity gate
+        if dom in SHARED_DOMAIN_BLOCKLIST:
+            dom = None  # known accountant/lawyer/franchisor domain — skip the probe
 
         if dom:
             res = probe_domain(dom)

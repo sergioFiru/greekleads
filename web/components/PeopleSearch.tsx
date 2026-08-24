@@ -59,45 +59,25 @@ const STATUS_OPTIONS = [
   { label: 'Παλαιός', value: 'past' },
 ]
 
-// What the dataset covers — static copy, no query needed
-const CAPABILITIES = [
-  {
-    title: 'Διοικητικά στελέχη',
-    text: 'Διευθύνοντες σύμβουλοι, πρόεδροι ΔΣ, διαχειριστές και νόμιμοι εκπρόσωποι.',
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
-        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Μετοχική σύνθεση',
-    text: 'Μέτοχοι και εταίροι με ποσοστά συμμετοχής, όπως δηλώνονται στο ΓΕΜΗ.',
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21.21 15.89A10 10 0 1 1 8 2.83" /><path d="M22 12A10 10 0 0 0 12 2v10z" />
-      </svg>
-    ),
-  },
-  {
-    title: 'Διασυνδέσεις',
-    text: 'Κοινά στελέχη μεταξύ εταιρειών — δείτε ποιος συνδέεται με ποιον.',
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-        <path d="m8.59 13.51 6.83 3.98" /><path d="m15.41 6.51-6.82 3.98" />
-      </svg>
-    ),
-  },
-]
+// "2082399" → "2,1 εκατ." — the person-roles figure is a pg statistics estimate,
+// so it's shown rounded rather than as a falsely exact number.
+function compactMillions(n: number): string {
+  return (
+    (n / 1_000_000).toLocaleString('el-GR', {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }) + ' εκατ.'
+  )
+}
 
 export default function PeopleSearch({
   areas,
   totalCompanies,
+  totalPersonRoles,
 }: {
   areas: string[]
   totalCompanies?: number
+  totalPersonRoles?: number
 }) {
   const searchParams = useSearchParams()
   const router       = useRouter()
@@ -189,29 +169,55 @@ export default function PeopleSearch({
   const filterCount = [area, count, status].filter(Boolean).length
 
   return (
-    <div className="ps-page">
+    <div className="ps-page" data-searching={hasQuery ? 'true' : 'false'}>
 
-      {/* ── HERO ─────────────────────────────────────────────── */}
+      {/* ── HERO ─────────────────────────────────────────────────────
+          Idle, this band grows to fill the viewport and centres itself —
+          the page IS the search. Once a query is live it collapses to a
+          slim control bar (see .ps-page[data-searching] in globals.css)
+          and hands the whole screen to the results. */}
       <div className="ps-hero">
         <div className="ps-hero-inner">
-          <span className="ps-eyebrow">
-            <span className="ps-eyebrow-dot" />
-            Επίσημα δεδομένα ΓΕΜΗ
-          </span>
+          <div className="ps-lede">
+            <span className="ps-eyebrow">
+              <span className="ps-eyebrow-dot" />
+              Επίσημα δεδομένα ΓΕΜΗ
+            </span>
 
-          <h1 className="ps-title">Αναζήτηση Στελεχών</h1>
-          <p className="ps-sub">
-            Διευθυντές, μέτοχοι και νόμιμοι εκπρόσωποι σε{' '}
-            <strong>
-              {totalCompanies ? totalCompanies.toLocaleString('el-GR') : '1.670.000'}
-            </strong>{' '}
-            εταιρείες του Γενικού Εμπορικού Μητρώου.
-          </p>
+            <h1 className="ps-title">
+              Οι άνθρωποι πίσω από<br />
+              <span className="ps-title-accent">κάθε ελληνική εταιρεία</span>
+            </h1>
+            <p className="ps-sub">
+              Διευθύνοντες σύμβουλοι, μέτοχοι και νόμιμοι εκπρόσωποι — αναζητήστε
+              με ονοματεπώνυμο, email ή τηλέφωνο και δείτε ολόκληρο το προφίλ τους.
+            </p>
+
+            {/* Scale of the dataset — the credibility line between the claim and the search */}
+            <div className="ps-metrics">
+              {!!totalPersonRoles && totalPersonRoles > 0 && (
+                <div className="ps-metric">
+                  <span className="ps-metric-val">{compactMillions(totalPersonRoles)}</span>
+                  <span className="ps-metric-lbl">Θέσεις &amp; ρόλοι</span>
+                </div>
+              )}
+              <div className="ps-metric">
+                <span className="ps-metric-val">
+                  {totalCompanies ? totalCompanies.toLocaleString('el-GR') : '1.670.000'}
+                </span>
+                <span className="ps-metric-lbl">Εταιρείες</span>
+              </div>
+              <div className="ps-metric">
+                <span className="ps-metric-val">ΓΕΜΗ</span>
+                <span className="ps-metric-lbl">Επίσημη πηγή</span>
+              </div>
+            </div>
+          </div>
 
           {/* Search input */}
           <div className="ps-searchbar">
             <span className="ps-search-icon">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
               </svg>
@@ -232,12 +238,27 @@ export default function PeopleSearch({
                 onClick={() => { setQ(''); inputRef.current?.focus() }}
                 aria-label="Καθαρισμός"
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
                   stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                   <path d="M18 6 6 18M6 6l12 12" />
                 </svg>
               </button>
             )}
+          </div>
+
+          {/* Seeds an empty search with a real query — replaces the old
+              below-the-fold empty-state card, which duplicated what the
+              placeholder and this row already say. */}
+          <div className="ps-hints">
+            <span className="ps-hints-lbl">Δοκιμάστε</span>
+            {EXAMPLE_NAMES.map(name => (
+              <button key={name} className="ps-hint" onClick={() => setQ(name)}>
+                <span className="ps-hint-avatar" style={{ background: avatarColor(name) }}>
+                  {initials(name)}
+                </span>
+                {name}
+              </button>
+            ))}
           </div>
 
           {/* Filters */}
@@ -282,8 +303,6 @@ export default function PeopleSearch({
       {/* ── RESULTS ──────────────────────────────────────────── */}
       <div className="ps-results">
         <div className="ps-results-inner">
-
-          {!hasQuery && <EmptyState onExampleClick={name => setQ(name)} />}
 
           {hasQuery && loading && <SkeletonList />}
 
@@ -380,43 +399,6 @@ function SkeletonList() {
         ))}
       </div>
     </>
-  )
-}
-
-function EmptyState({ onExampleClick }: { onExampleClick: (name: string) => void }) {
-  return (
-    <div className="ps-empty">
-      <div className="ps-empty-card">
-        <p className="ps-empty-title">Αναζητήστε ένα στέλεχος</p>
-        <p className="ps-empty-text">
-          Πληκτρολογήστε ονοματεπώνυμο για να δείτε σε ποιες εταιρείες συμμετέχει,
-          με ποιον ρόλο και για πόσο διάστημα. Μπορείτε επίσης να αναζητήσετε με
-          email ή τηλέφωνο εταιρείας.
-        </p>
-
-        <div className="ps-example-label">Δοκιμάστε</div>
-        <div className="ps-examples">
-          {EXAMPLE_NAMES.map(name => (
-            <button key={name} className="ps-example" onClick={() => onExampleClick(name)}>
-              <span className="ps-example-avatar" style={{ background: avatarColor(name) }}>
-                {initials(name)}
-              </span>
-              {name}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="ps-caps">
-        {CAPABILITIES.map(c => (
-          <div key={c.title} className="ps-cap">
-            <span className="ps-cap-icon">{c.icon}</span>
-            <div className="ps-cap-title">{c.title}</div>
-            <div className="ps-cap-text">{c.text}</div>
-          </div>
-        ))}
-      </div>
-    </div>
   )
 }
 

@@ -30,6 +30,15 @@ def get_conn():
     try:
         with _conn.cursor() as cur:
             cur.execute("SELECT 1")
+        # The health check itself opens a transaction. Without this rollback the
+        # cached connection sits `idle in transaction` between bot runs, holding
+        # locks on `companies` -- which blocks any DDL and stalls autovacuum
+        # (dead tuples cannot be reclaimed past the oldest open transaction).
+        #
+        # Deliberately NOT solved with autocommit=True: sync_persons() DELETEs
+        # then re-INSERTs company_persons in one transaction, so autocommit
+        # would make a mid-way failure destroy those rows permanently.
+        _conn.rollback()
         return _conn
     except Exception:
         try:

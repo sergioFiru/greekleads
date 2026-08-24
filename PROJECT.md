@@ -314,7 +314,7 @@ right rail with company count + active badge. Empty state explains the dataset
 
 ---
 
-## Planned: Live Feed + Statistics Page (`/statistika`)
+## Live Feed + Statistics Page (`/statistika`) — BUILT (v1, Aug 2026)
 
 A combined **live registry feed + business statistics + AI analysis** page.
 Idea: see what was registered today and in which industries, then zoom out to
@@ -412,18 +412,69 @@ day × {sector, prefecture, legal_form, digital flags}. The page then reads smal
 pre-aggregated tables and renders instantly. Charts must never hit `companies`
 directly.
 
-### Open questions
-- Route name: `/statistika` vs `/statistics` vs `/agora` (SEO — Greek likely wins)
-- Public (SEO) vs gated? Recommend **fully public** — it is a top-of-funnel asset.
-- Verify `last_status_change` coverage before promising closure/net-growth stats.
+### Decisions taken (Aug 2026)
+- Route: **`/statistika`**, fully public, no gate. Linked from TopNav.
+- Architecture: **`stats_rollup` + `stats_meta`**, built by
+  `scripts/one_time/build_stats_rollup.py` (manual backfill) and refreshed
+  nightly by `scripts/bots/stats_rollup.py` via runner.py. The page never
+  touches `companies`.
+- Sector grouping: `lib/nace.ts` maps NACE divisions → 21 sections. Unmatched
+  codes land in an explicit 'X — Μη ταξινομημένο' bucket so shares always sum.
+- Sector/region/legal bars link into `/search`, using a new **`kad_prefix`**
+  filter added to `lib/searchQuery.ts`.
+
+### Data-quality findings that shaped the page (measured, not assumed)
+- `incorporation_date` 99,6% populated, but junk exists: 50 future-dated rows
+  (max `9999-01-01`) and 39 pre-1900. `last_status_change` max is `9009-12-14`.
+  The rollup clamps everything to `[HISTORY_FROM, CURRENT_DATE]`.
+- **Our copy of ΓΕΜΗ lags.** p90 ingest lag for a newly founded firm is
+  **81 days** (median 30), and a month keeps filling for weeks after it ends —
+  August read 1.942 against a ~6.500 baseline. Anything inside a 90-day tail is
+  therefore marked provisional, drawn hatched, and **excluded from every
+  percentage change**. Without this the page would render our pipeline lag as a
+  collapse in Greek company formation.
+- Closures lag even harder — the last three months read 2, 10, 8 against a
+  ~2.500/month baseline. Net growth is shown but flagged.
+- **`primary_kad` holds the Greek DESCRIPTION, not a ΚΑΔ code** (e.g.
+  'ΛΙΑΝΙΚΟ ΕΜΠΟΡΙΟ ΕΙΔΩΝ ΠΑΝΤΟΠΩΛΕΙΟΥ'). Any `LEFT(primary_kad, 2) = '68'`
+  filter matches zero rows. It is also ~90% populated and **null on the newest
+  firms**. The numeric code lives only in the `activities` JSONB, so it is now
+  denormalised into **`companies.primary_kad_code`** by
+  `scripts/one_time/backfill_primary_kad_code.py` and indexed on
+  `LEFT(...,2)`; reading the JSONB at query time costs ~13s on a filtered
+  COUNT, over the search endpoint's 15s timeout. The nightly stats_rollup bot
+  tops the column up for newly ingested firms.
+- Full month × sector rollup: 23.082 rows in 14,8s — comfortably a nightly job.
+
+### Still open
+- Tier 2 (cohort survival, lifespan, capital) and Tier 4 (Scout narrative) not
+  built. Legal-form-over-time is a flat list for now, not a time series.
+- The existing `activities` search filter also reads `primary_kad`, so it
+  under-matches the newest firms — same root cause, separate fix.
 
 ---
 
 ## Financial Statements (Phase 2) — in progress
 
+> **⚠️ 2026-08-19: see [`FINANCIALS_PLAN.md`](FINANCIALS_PLAN.md) — it is the
+> current source of truth and supersedes the status below.** The existence sweep
+> **completed** (188,468 scanned, not the 36,544/19.4% stated below). Verified
+> that the portal's `/api/company/details` and `/api/download/financial`
+> endpoints work over **plain HTTP with no Playwright, no cookies, no reCAPTCHA
+> token** — so the Chromium crawler can be replaced by a plain `requests`
+> service. Measured the portal's rate ceiling at **0.5–0.75 req/s, per-IP**
+> (concurrency gives zero gain), cross-validated against 5 days of the real
+> crawler's own throughput. Plan approved-pending: last-3-years scope
+> (~314k docs, ~228k still to download), single IP, ~4–6.5 days, then AI
+> extraction gated behind a cost-calibration run.
+>
+> **Coverage ceiling worth remembering:** only **51,581** companies have any
+> filings at all — 30.3% of active ΑΕ/ΙΚΕ/ΕΠΕ, 5.2% of all active firms. Do not
+> over-claim this in product copy.
+
 Collect financial statement documents, store on Cloudflare R2, extract structured
 numbers (revenue, profit, assets, equity) with Gemini, surface them on company
-pages. Status as of 2026-08-06:
+pages. Status as of 2026-08-06 (**stale — see the note above**):
 
 **Collection — Playwright crawler, not the GEMI API.** The original
 `GEMI_FINANCIAL_API_KEY` / 8-req/min plan was replaced by
@@ -591,3 +642,12 @@ Scrape vrisko.gr for supplementary company data not available in GEMI (details T
 - 2026-08-06: Built the "Οικονομικά" tab on `/etaireies/[ar_gemi]` — real 4-state UI (unchecked / none found / found-not-retrieved / retrieved with dynamic multi-year charts + history table) wired to `financial_ar_gemi_scanned` + `financial_statements`; verified against real ar_gemi examples for all 4 states
 - 2026-08-06: Built `scripts/one_time/financial_existence_scan.py` — local, existence-only sweep (no downloads) for the 151,686 not-yet-checked ΑΕ/ΙΚΕ/ΕΠΕ companies; kept fully separate from the deployed `financial_playwright.py` after an in-place edit was tried and reverted (see `[[feedback_script_execution]]`)
 - 2026-08-06: Built `scripts/financial_ai_extractor.py` — AI-only extraction (no pdfplumber/regex) via `google/gemini-2.5-flash` on OpenRouter; PDFs as native file input, xlsx bridged to text via `openpyxl` (Gemini has no native spreadsheet vision); plus a local test driver (`test_financial_ai_extraction.py`). Not yet run — pending an OpenRouter balance top-up
+- 2026-08-19: Financials pipeline re-planned end-to-end → **[`FINANCIALS_PLAN.md`](FINANCIALS_PLAN.md)** (awaiting approval, no code written). Findings: existence sweep is **complete** (188,468 scanned / 51,581 with filings / 915,368 docs discovered, vs the 19.4% PROJECT.md claimed); portal endpoints work over **plain HTTP — no Playwright/cookies/reCAPTCHA** (`query` must be the object `{"arGEMI":"…"}`, a bare string 400s); rate ceiling measured at **0.5–0.75 req/s per-IP with concurrency giving zero gain**, cross-validated against 5 days of the deployed crawler's real throughput (0.46–0.57/s); `PW_DL_RATE=1.2` has been above the ceiling all along. Doc types split ΙΣΟΛΟΓΙΣΜΟΣ/ΚΑΧ/ΠΡΟΣΑΡΤΗΜΑ per fiscal year, but filename classification is only ~80% reliable (Greek accents + Latin/Greek homoglyphs) so it must not be a hard filter; ~54% of PDFs are scanned images. Scope locked: last 3 years, unknowns kept, single IP
+
+- 2026-08-20: Built the **Πελατολόγιο (CRM)** — see **[`CRM_PLAN.md`](CRM_PLAN.md)**. New tables `crm_lists` / `crm_list_members` / `crm_saved_searches` (`scripts/one_time/create_crm_tables.py`, idempotent); `lib/entitlements.ts` is the single source of truth for plan limits (free = 1 list / 50 members / 3 saved searches); `getAuth()` widened to return `plan` and gained `requireUser()`; **Clerk keys are now real** (were `placeholder`, so every visitor was anonymous). `buildWhere()` extracted from `/api/search` to `lib/searchQuery.ts` so "add all N results" inserts server-side via `INSERT..SELECT` without paging rows through the browser. Five `/api/crm/*` routes, all scoping ownership in the SQL `WHERE`. `SaveToDialog` wired to both previously-dead "Αποθήκευση" buttons on `/search`; `/crm` index + `/crm/[id]` detail with per-prospect notes and CSV export. "Ζωντανή λίστα" (Bring it Alive) ships as a **visible-but-disabled** toggle that persists `is_live`/`live_filters` — the matcher engine is NOT built. Instantly/HubSpot buttons are disabled placeholders. Clerk v7 has no `SignedIn`/`SignedOut` exports (v6 API) — TopNav uses `useAuth()` inside child components instead. **Fixed a pre-existing export bug**: `selected` was a `Set<string>` while CSV export filtered `results` (current page only), silently dropping cross-page selections; it is now a `Map<string, Company>` holding full rows.
+- 2026-08-20: Fixed intermittent `could not resize shared memory segment "/PostgreSQL.NNN": No space left on device` on `/search`. **Not a full disk** (DB is 5.6GB) — `/PostgreSQL.NNN` is a POSIX shm object and `dynamic_shared_memory_type=posix`, so parallel workers allocate in `/dev/shm` (64MB in a container). Filter combos plan as `Parallel Bitmap Heap Scan` over a `BitmapAnd` of three index scans (~716k + 1.07M + 1.34M rows); the shared ~3.1M-pointer bitmap requested 12.6MB and `/dev/shm` was full under concurrency. Added `queryNoParallel()` to `web/lib/db.ts` (sets `max_parallel_workers_per_gather=0` + statement_timeout per connection, RESETs both in `finally` since the pool reuses connections); used by `/api/search` (rows + count) and the CRM add-all `INSERT..SELECT`. Serial plans build the bitmap in private backend memory, where this cannot occur. Measured 617ms → ~990-1380ms. **Do NOT raise `work_mem` to fix this** — the shared bitmap may grow up to `work_mem`, so a bigger value asks `/dev/shm` for a LARGER segment and fails more often. Related symptoms seen: `work_mem=4MB` causes lossy bitmaps (`lossy=57944`, 207,069 rows rechecked) and 156GB of cumulative temp-file writes.
+- 2026-08-20: **CRM rebuilt as an Excel-style data grid.** `/crm/[id]` is now `CrmDataGrid` — sticky header + frozen name column, 30 columns across 4 groups from a DB-persisted per-list layout (`crm_lists.columns`), sort, quick-filter, row selection, bulk actions, inline note editing, and a pipeline stage per prospect (`crm_list_members.stage` + `last_contacted`, CHECK-constrained: new/contacted/proposal/customer/lost). `lib/crmColumns.ts` is the single column catalogue — the picker, header, cell renderer and CSV all read from it, and `resolveColumns()` drops stale keys so an old saved layout can never break the grid. `/crm` index rebuilt from cards into a dense table with a proportional pipeline bar per list. Schema via `scripts/one_time/add_crm_grid_columns.py` (idempotent). Gotcha fixed in review: the index stage breakdown was first written as `jsonb_object_agg(stage, 1)` inside the per-list LATERAL, which aggregates one row per member and reports 1 for every stage — replaced with a grouped subquery.
+- 2026-08-20: Select-all on /search now asks "all N matching" vs "just this page" — virtual flag (`allMatching` + `excluded`), never materialises rows; new `POST /api/search/export` builds the CSV server-side from `buildWhere`, capped by `entitlements.maxBulkAdd`; bulk list-add honours the same exclusions
+- 2026-08-21: Built /statistika — live registry feed, period KPIs, formation chart with provisional tail, sector mix, prefecture map, digital-presence panel; stats_rollup tables + nightly bot; lib/nace.ts sector map; kad_prefix search filter
+- 2026-08-21: /statistika redesign — editorial layout (masthead, feed+figure+chart hero, ruled sections); found and fixed that primary_kad stores descriptions not codes (sector links returned 0 results) via new denormalised primary_kad_code column; Greek decimal separator on all percentages
+- 2026-08-21: Fixed idle-in-transaction leak in scripts/db.py get_conn() + runner.py make_job() — cached worker connection held ACCESS SHARE on companies for ~50min, blocking DDL and autovacuum; migrations now preflight for stale txns, use lock_timeout and CREATE INDEX CONCURRENTLY

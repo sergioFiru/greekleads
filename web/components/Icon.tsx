@@ -17,10 +17,14 @@ export default function Icon({ name, size = 16, stroke = 1.5, style, className }
     case 'search':    return <svg {...p}><circle cx="11" cy="11" r="6"/><path d="M20 20l-3.5-3.5"/></svg>
     case 'x':        return <svg {...p}><path d="M6 6l12 12M18 6L6 18"/></svg>
     case 'chevron-down': return <svg {...p}><path d="M6 9l6 6 6-6"/></svg>
+    case 'chevron-up': return <svg {...p}><path d="M6 15l6-6 6 6"/></svg>
+    case 'columns':  return <svg {...p}><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M9 4v16M15 4v16"/></svg>
     case 'chevron-right': return <svg {...p}><path d="M9 6l6 6-6 6"/></svg>
     case 'download': return <svg {...p}><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></svg>
     case 'filter':   return <svg {...p}><path d="M4 5h16M7 12h10M10 19h4"/></svg>
     case 'check':    return <svg {...p}><path d="M5 12l5 5L20 7"/></svg>
+    case 'plus':     return <svg {...p}><path d="M12 5v14M5 12h14"/></svg>
+    case 'zap':      return <svg {...p}><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg>
     case 'lock':     return <svg {...p}><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>
     case 'building': return <svg {...p}><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M9 8h2M13 8h2M9 12h2M13 12h2M9 16h2M13 16h2"/></svg>
     case 'mail':     return <svg {...p}><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 7l9 6 9-6"/></svg>
@@ -42,6 +46,7 @@ export default function Icon({ name, size = 16, stroke = 1.5, style, className }
     case 'grid':       return <svg {...p}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
     case 'tag':        return <svg {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1" fill="currentColor" stroke="none"/></svg>
     case 'share':      return <svg {...p}><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>
+    case 'image':      return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
 
     // ── Brand icons (filled) ────────────────────────────────────
     case 'instagram': return (

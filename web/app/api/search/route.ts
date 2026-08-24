@@ -1,108 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { query, queryOne } from '@/lib/db'
+import { queryNoParallel } from '@/lib/db'
 import { getAuth, FREE_PAGE_LIMIT, PAGE_SIZE } from '@/lib/auth'
-
-interface SearchFilters {
-  name?: string
-  statuses?: string[]
-  prefectures?: string[]
-  municipality?: string
-  legal_types?: string[]
-  activities?: string[]
-  has_email?: boolean
-  has_phone?: boolean
-  has_website?: boolean
-  has_no_website?: boolean
-  has_instagram?: boolean
-  has_facebook?: boolean
-  has_linkedin?: boolean
-  has_twitter?: boolean
-  has_tiktok?: boolean
-  has_youtube?: boolean
-  year_from?: string
-  year_to?: string
-}
-
-
-function buildWhere(f: SearchFilters): { sql: string; params: unknown[] } {
-  const conds: string[] = []
-  const params: unknown[] = []
-  let i = 1
-
-  if (f.name?.trim()) {
-    const name  = f.name.trim()
-    const words = name.split(/\s+/).filter(Boolean)
-    if (words.length > 1) {
-      // All words must appear in co_name_el (any order), or exact phrase in other fields
-      const wordConds = words.map(() => `c.co_name_el ILIKE $${i++}`).join(' AND ')
-      words.forEach(w => params.push(`%${w}%`))
-      const exactIdx = i++
-      params.push(`%${name}%`)
-      conds.push(`((${wordConds}) OR c.co_titles_el::text ILIKE $${exactIdx} OR c.email ILIKE $${exactIdx} OR c.phone ILIKE $${exactIdx} OR c.url ILIKE $${exactIdx} OR c.afm ILIKE $${exactIdx})`)
-    } else {
-      conds.push(`(c.co_name_el ILIKE $${i} OR c.co_titles_el::text ILIKE $${i} OR c.email ILIKE $${i} OR c.phone ILIKE $${i} OR c.url ILIKE $${i} OR c.afm ILIKE $${i})`)
-      i++
-      params.push(`%${name}%`)
-    }
-  }
-  if (f.statuses?.length) {
-    const ph = f.statuses.map(() => `$${i++}`).join(', ')
-    conds.push(`c.status_descr IN (${ph})`)
-    params.push(...f.statuses)
-  }
-  if (f.prefectures?.length) {
-    const ph = f.prefectures.map(() => `$${i++}`).join(', ')
-    conds.push(`c.prefecture_descr IN (${ph})`)
-    params.push(...f.prefectures)
-  }
-  if (f.municipality?.trim()) {
-    conds.push(`c.municipality_descr ILIKE $${i++}`)
-    params.push(`%${f.municipality.trim()}%`)
-  }
-  if (f.legal_types?.length) {
-    const ph = f.legal_types.map(() => `$${i++}`).join(', ')
-    conds.push(`c.legal_type_descr IN (${ph})`)
-    params.push(...f.legal_types)
-  }
-  if (f.activities?.length) {
-    const ph = f.activities.map(() => `$${i++}`).join(', ')
-    conds.push(`c.primary_kad IN (${ph})`)
-    params.push(...f.activities)
-  }
-  if (f.has_email)      conds.push(`(c.email IS NOT NULL AND c.email != '')`)
-  if (f.has_phone)      conds.push(`(c.phone IS NOT NULL AND c.phone != '')`)
-  if (f.has_website)    conds.push(`(c.url IS NOT NULL AND c.url != '')`)
-  if (f.has_no_website) conds.push(`(c.url IS NULL OR c.url = '')`)
-  if (f.has_instagram)  conds.push(`c.instagram_url IS NOT NULL`)
-  if (f.has_facebook)   conds.push(`c.facebook_url  IS NOT NULL`)
-  if (f.has_linkedin)   conds.push(`c.linkedin_url  IS NOT NULL`)
-  if (f.has_twitter)    conds.push(`c.twitter_url   IS NOT NULL`)
-  if (f.has_tiktok)     conds.push(`c.tiktok_url    IS NOT NULL`)
-  if (f.has_youtube)    conds.push(`c.youtube_url   IS NOT NULL`)
-  if (f.year_from) {
-    const yr = parseInt(f.year_from, 10)
-    if (!isNaN(yr)) { conds.push(`EXTRACT(YEAR FROM c.incorporation_date) >= $${i++}`); params.push(yr) }
-  }
-  if (f.year_to) {
-    const yr = parseInt(f.year_to, 10)
-    if (!isNaN(yr)) { conds.push(`EXTRACT(YEAR FROM c.incorporation_date) <= $${i++}`); params.push(yr) }
-  }
-
-  return {
-    sql: conds.length ? `WHERE ${conds.join(' AND ')}` : '',
-    params,
-  }
-}
-
-function hasActiveFilter(f: SearchFilters): boolean {
-  return !!(
-    f.name?.trim() || f.municipality?.trim() ||
-    f.has_email || f.has_phone || f.has_website || f.has_no_website ||
-    f.has_instagram || f.has_facebook || f.has_linkedin || f.has_twitter || f.has_tiktok || f.has_youtube ||
-    f.statuses?.length || f.prefectures?.length || f.legal_types?.length ||
-    f.activities?.length || f.year_from || f.year_to
-  )
-}
+import { buildWhere, hasActiveFilter, type SearchFilters } from '@/lib/searchQuery'
 
 export async function POST(req: NextRequest) {
   try {
@@ -126,7 +25,7 @@ export async function POST(req: NextRequest) {
     const offset = (page - 1) * PAGE_SIZE
 
     const [rows, countRow] = await Promise.all([
-      query<{
+      queryNoParallel<{
         ar_gemi: string
         co_name_el: string
         co_titles_el: string[] | null
@@ -177,13 +76,13 @@ export async function POST(req: NextRequest) {
          LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
         params
       ),
-      queryOne<{ cnt: string }>(
+      queryNoParallel<{ cnt: string }>(
         `SELECT COUNT(*) AS cnt FROM companies c ${where}`,
         params
       ),
     ])
 
-    const total = parseInt(countRow?.cnt ?? '0', 10)
+    const total = parseInt(countRow[0]?.cnt ?? '0', 10)
     return NextResponse.json({ results: rows, total, page })
   } catch (err) {
     console.error('[/api/search] Error:', err)

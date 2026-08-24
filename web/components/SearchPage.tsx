@@ -5,8 +5,11 @@ import Icon from './Icon'
 import Paywall from './Paywall'
 import { ScoutPanel, ScoutSummaryBar, type ScoutRecipe } from './Scout'
 import CompanyPreviewPanel from './CompanyPreviewPanel'
+import SaveToDialog from './SaveToDialog'
 import CompanyFavicon from './CompanyFavicon'
+import FaviconPickerButton from './FaviconPickerButton'
 import { brandTitles } from '@/lib/brand'
+import { sectionNameForDivisions } from '@/lib/nace'
 
 interface Company {
   ar_gemi: string
@@ -44,6 +47,8 @@ interface SearchState {
   municipality: string
   legal_types: string[]
   activities: string[]
+  /** NACE divisions, set by a sector link from /statistika. */
+  kad_prefix: string[]
   has_email: boolean
   has_phone: boolean
   has_website: boolean
@@ -62,7 +67,7 @@ const ATTICA = ['ΑΤΤΙΚΗΣ', 'ΑΘΗΝΩΝ', 'ΠΕΙΡΑΙΑ', 'ΑΝΑΤΟ�
 
 const EMPTY: SearchState = {
   name: '', statuses: ['Ενεργή'], prefectures: [], municipality: '',
-  legal_types: [], activities: [],
+  legal_types: [], activities: [], kad_prefix: [],
   has_email: false, has_phone: false, has_website: false, has_no_website: false,
   has_instagram: false, has_facebook: false, has_linkedin: false, has_twitter: false, has_tiktok: false, has_youtube: false,
   year_from: '', year_to: '',
@@ -148,6 +153,8 @@ function parseParams(p: URLSearchParams): SearchState {
     municipality: p.get('municipality') ?? '',
     legal_types:  p.getAll('legal_type'),
     activities,
+    // Sector links from /statistika arrive as ?kad_prefix=56,55
+    kad_prefix:   (p.get('kad_prefix') ?? '').split(',').filter(Boolean),
     has_email:      p.has('email'),
     has_phone:      p.has('phone'),
     has_website:    p.has('website'),
@@ -175,6 +182,9 @@ function buildParams(f: SearchState, page: number, sort: string): URLSearchParam
   } else {
     f.activities.forEach(s => p.append('kad', s))
   }
+  // Without this the sector filter from /statistika survives the first render
+  // and is then lost the moment SearchPage rewrites the URL.
+  if (f.kad_prefix.length) p.set('kad_prefix', f.kad_prefix.join(','))
   if (f.municipality)   p.set('municipality', f.municipality)
   if (f.has_email)      p.set('email',    '1')
   if (f.has_phone)      p.set('phone',    '1')
@@ -301,14 +311,30 @@ export default function SearchPage() {
   const prefDropRef  = useRef<HTMLDivElement>(null)
   const sidebarRef   = useRef<HTMLElement>(null)
   const [legalShowAll, setLegalShowAll] = useState(false)
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+  // Keyed by ar_gemi, but holds the whole row: selection survives pagination,
+  // and export/list-add need the row data for companies that are no longer on
+  // the current page. (.has/.size behave the same as the Set this replaced.)
+  const [selected, setSelected] = useState<Map<string, Company>>(new Map())
+  // "Select all N matching" is a flag over the current filters, not a
+  // materialised selection: the browser never holds 12.000 rows. Rows unticked
+  // after the fact go into `excluded`, and both the CSV export and the list-add
+  // re-run the filters server-side, minus those ids.
+  const [allMatching, setAllMatching]   = useState(false)
+  const [excluded, setExcluded]         = useState<Set<string>>(new Set())
+  const [selectAllAsk, setSelectAllAsk] = useState(false)
+  const [exporting, setExporting]       = useState(false)
   const [sortBy, setSortBy]     = useState(() => searchParams.get('sort') ?? '-name')
   const [scoutOpen, setScoutOpen]       = useState(false)
   const [scoutSummary, setScoutSummary] = useState<string | null>(null)
   const [resultsKey, setResultsKey]     = useState(0)
   const [previewArGemi, setPreviewArGemi] = useState<string | null>(null)
+  // Which tab the save dialog opens on; null = closed.
+  const [saveTab, setSaveTab] = useState<'search' | 'list' | null>(null)
   const [viewMode, setViewMode]           = useState<'table' | 'card'>('table')
   const filterResetRef = useRef(false)
+  // Dev-only: ar_gemi -> cache-busting version after a manual favicon save via
+  // FaviconPickerButton, so the row/card picks it up without a full refetch.
+  const [faviconOverrides, setFaviconOverrides] = useState<Record<string, number>>({})
 
   useEffect(() => {
     fetch('/api/filters')
@@ -340,6 +366,11 @@ export default function SearchPage() {
   useEffect(() => {
     filterResetRef.current = true
     setPage(1)
+    // The flag means "everything matching THESE filters" — it cannot survive a
+    // filter change, or the export would run against a different set than the
+    // count the user agreed to.
+    setAllMatching(false)
+    setExcluded(new Set())
     setLoading(true)
     const delay = filters.name ? 200 : 400
     const id = setTimeout(() => { filterResetRef.current = false; search(filters, 1) }, delay)
@@ -423,34 +454,125 @@ export default function SearchPage() {
   const filteredPrefectures = filterOptions.prefectures
     .filter(p => prefSearch.trim() === '' || p.toLowerCase().includes(prefSearch.toLowerCase()))
 
-  // Row selection
-  const toggleOne = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    setSelected(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
+  // Row selection. In allMatching mode the meaning inverts: a row is selected
+  // unless it has been explicitly excluded.
+  const isSelected = (id: string) => allMatching ? !excluded.has(id) : selected.has(id)
+  const selectionCount = allMatching
+    ? Math.max(0, (total ?? 0) - excluded.size)
+    : selected.size
+
+  const clearSelection = () => {
+    setSelected(new Map())
+    setExcluded(new Set())
+    setAllMatching(false)
   }
-  const allOnPage = results.length > 0 && results.every(r => selected.has(r.ar_gemi))
-  const someOnPage = results.some(r => selected.has(r.ar_gemi)) && !allOnPage
-  const selectAll = (v: boolean) => {
+
+  const toggleOne = (c: Company, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (allMatching) {
+      setExcluded(prev => {
+        const s = new Set(prev)
+        s.has(c.ar_gemi) ? s.delete(c.ar_gemi) : s.add(c.ar_gemi)
+        return s
+      })
+      return
+    }
     setSelected(prev => {
-      const s = new Set(prev)
-      if (v) results.forEach(r => s.add(r.ar_gemi))
-      else   results.forEach(r => s.delete(r.ar_gemi))
+      const s = new Map(prev)
+      s.has(c.ar_gemi) ? s.delete(c.ar_gemi) : s.set(c.ar_gemi, c)
       return s
     })
   }
 
+  const allOnPage  = results.length > 0 && results.every(r => isSelected(r.ar_gemi))
+  const someOnPage = results.some(r => isSelected(r.ar_gemi)) && !allOnPage
+
+  /** Ticks or unticks only the rows currently on screen. */
+  const selectPage = (v: boolean) => {
+    if (allMatching) {
+      setExcluded(prev => {
+        const s = new Set(prev)
+        results.forEach(r => v ? s.delete(r.ar_gemi) : s.add(r.ar_gemi))
+        return s
+      })
+      return
+    }
+    setSelected(prev => {
+      const s = new Map(prev)
+      results.forEach(r => v ? s.set(r.ar_gemi, r) : s.delete(r.ar_gemi))
+      return s
+    })
+  }
+
+  /** Everything the filters match, server-side. */
+  const selectEverything = () => {
+    setSelected(new Map())
+    setExcluded(new Set())
+    setAllMatching(true)
+    setSelectAllAsk(false)
+  }
+
+  // Unticking the header is always an unambiguous "clear"; ticking it is the
+  // question, and only worth asking when there is more than this page to take.
+  const onHeaderCheck = () => {
+    if (allOnPage || allMatching) { allMatching ? clearSelection() : selectPage(false); return }
+    if (total != null && total > results.length) { setSelectAllAsk(true); return }
+    selectPage(true)
+  }
+
+  const download = (csv: string) => {
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = 'greekleads-export.csv'; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  /**
+   * In allMatching mode the rows are not in the browser, so the server builds
+   * the CSV from the same filters — capped by the plan's bulk limit.
+   */
+  const exportAllMatching = async () => {
+    setExporting(true)
+    try {
+      const res = await fetch('/api/search/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filters, excluded: Array.from(excluded) }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        alert(d.error === 'not_entitled'
+          ? 'Η εξαγωγή CSV απαιτεί συνδρομή.'
+          : 'Η εξαγωγή απέτυχε. Δοκιμάστε ξανά.')
+        return
+      }
+      const cap  = parseInt(res.headers.get('X-Row-Cap') ?? '0', 10)
+      const rows = parseInt(res.headers.get('X-Row-Count') ?? '0', 10)
+      download(await res.text())
+      // Say so rather than letting a silently truncated file look complete.
+      if (cap && rows >= cap && selectionCount > rows) {
+        alert(`Η εξαγωγή περιορίστηκε στις ${cap.toLocaleString('el-GR')} εταιρείες. Περιορίστε τα φίλτρα για τις υπόλοιπες.`)
+      }
+    } catch (err) {
+      console.error('[SearchPage] Export failed:', err)
+      alert('Η εξαγωγή απέτυχε. Δοκιμάστε ξανά.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const exportSelected = () => {
-    const rows = results.filter(r => selected.has(r.ar_gemi))
+    if (allMatching) { exportAllMatching(); return }
+    // Previously `results.filter(...)`, which silently dropped every selected
+    // company that was not on the page you happened to be standing on.
+    const rows = Array.from(selected.values())
     if (rows.length === 0) return
     const esc = (v: string) => `"${(v ?? '').replace(/"/g, '""')}"`
     const csv = [
       ['ΑΡΓΕΜΗ','Επωνυμία','Νομική Μορφή','Νομός','Δήμος','Κατάσταση','Έτος','Email','Τηλέφωνο','Website'].join(','),
       ...rows.map(r => [r.ar_gemi, esc(r.co_name_el), esc(r.legal_type_descr), esc(r.prefecture_descr), esc(r.municipality_descr), esc(r.status_descr), r.year_founded ?? '', r.email ?? '', r.phone ?? '', r.url ?? ''].join(','))
     ].join('\n')
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = 'greekleads-export.csv'; a.click()
-    URL.revokeObjectURL(url)
+    download(csv)
   }
 
   // Sort results client-side
@@ -474,6 +596,14 @@ export default function SearchPage() {
       ? [{ id: 'act-all', key: 'ΚΑΔ', value: `${filters.activities.length} κλάδοι`, remove: () => setFilters(f => ({ ...f, activities: [] })) }]
       : filters.activities.map(k => ({ id: `act-${k}`, key: 'ΚΑΔ', value: k.length > 40 ? k.slice(0, 40) + '…' : k, remove: () => removeActivity(k) }))
     ),
+    ...(filters.kad_prefix.length
+      ? [{
+          id: 'kadpfx',
+          key: 'Κλάδος',
+          value: sectionNameForDivisions(filters.kad_prefix),
+          remove: () => setFilters(f => ({ ...f, kad_prefix: [] })),
+        }]
+      : []),
     filters.has_email      ? { id: 'email',     key: 'Επαφές', value: 'Email',          remove: () => setFilters(f => ({ ...f, has_email:      false })) } : null,
     filters.has_phone      ? { id: 'phone',     key: 'Επαφές', value: 'Τηλέφωνο',      remove: () => setFilters(f => ({ ...f, has_phone:      false })) } : null,
     filters.has_website    ? { id: 'web',       key: 'Επαφές', value: 'Website',        remove: () => setFilters(f => ({ ...f, has_website:    false })) } : null,
@@ -730,7 +860,7 @@ export default function SearchPage() {
                 onChange={e => setFilters(f => ({ ...f, name: e.target.value }))}
               />
             </div>
-            <button className="sp-btn sp-btn-secondary">
+            <button className="sp-btn sp-btn-secondary" onClick={() => setSaveTab('search')}>
               <Icon name="bookmark" size={13} />
               Αποθήκευση αναζήτησης
             </button>
@@ -738,7 +868,7 @@ export default function SearchPage() {
               <span className="sp-match-count">
                 <strong>{animatedTotal.toLocaleString('el-GR')}</strong>
                 {' εταιρείες'}
-                {selected.size > 0 && <> · <strong>{selected.size}</strong> επιλεγμένα</>}
+                {selectionCount > 0 && <> · <strong>{selectionCount.toLocaleString('el-GR')}</strong> επιλεγμένα</>}
               </span>
             )}
           </div>
@@ -806,13 +936,32 @@ export default function SearchPage() {
                 <table className="sp-table">
                   <thead>
                     <tr>
-                      <th className="sp-th-check">
+                      <th className="sp-th-check" style={{ position: 'relative' }}>
                         <span
                           className="sp-chk"
                           data-checked={allOnPage ? 'true' : someOnPage ? 'indeterminate' : 'false'}
-                          onClick={() => selectAll(!allOnPage)}
+                          onClick={onHeaderCheck}
                           style={{ cursor: 'pointer' }}
                         />
+                        {selectAllAsk && (
+                          <>
+                            <div className="sa-scrim" onClick={() => setSelectAllAsk(false)} />
+                            <div className="sa-pop">
+                              <div className="sa-pop-title">Τι θέλετε να επιλέξετε;</div>
+                              <button className="sa-opt" onClick={selectEverything}>
+                                <strong>Όλες τις {total?.toLocaleString('el-GR')} εταιρείες</strong>
+                                <span>Όλα τα αποτελέσματα των φίλτρων σας</span>
+                              </button>
+                              <button
+                                className="sa-opt"
+                                onClick={() => { selectPage(true); setSelectAllAsk(false) }}
+                              >
+                                <strong>Μόνο αυτή τη σελίδα ({results.length})</strong>
+                                <span>Οι εταιρείες που βλέπετε τώρα</span>
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </th>
                       <th className="sp-th-company">Εταιρεία</th>
                       <th className="sp-th-legal">Νομική Μορφή</th>
@@ -855,7 +1004,7 @@ export default function SearchPage() {
                       </tr>
                     )}
                     {!loading && sortedRows.map((c, idx) => {
-                      const isSel    = selected.has(c.ar_gemi)
+                      const isSel    = isSelected(c.ar_gemi)
                       const col      = logoColor(c.ar_gemi)
                       const initials = getInitials(c.co_name_el)
                       const isActive = c.status_descr?.toLowerCase().includes('ενεργ')
@@ -869,7 +1018,7 @@ export default function SearchPage() {
                           data-selected={isSel ? 'true' : 'false'}
                           onClick={() => router.push(`/etaireies/${c.ar_gemi}`)}
                         >
-                          <td className="sp-td-check" onClick={e => toggleOne(c.ar_gemi, e)}>
+                          <td className="sp-td-check" onClick={e => toggleOne(c, e)}>
                             <span className="sp-chk" data-checked={isSel ? 'true' : 'false'} />
                           </td>
 
@@ -877,7 +1026,8 @@ export default function SearchPage() {
                             <div className="sp-company-cell">
                               <CompanyFavicon
                                 arGemi={c.ar_gemi}
-                                hasFavicon={c.has_favicon}
+                                hasFavicon={c.has_favicon || !!faviconOverrides[c.ar_gemi]}
+                                version={faviconOverrides[c.ar_gemi]}
                                 className="sp-logo"
                                 style={{ background: col.bg, borderColor: col.border, padding: 3 }}
                                 fallback={
@@ -908,32 +1058,40 @@ export default function SearchPage() {
                                 <Icon name="verified" size={11} stroke={1.6} />
                                 ΓΕΜΗ
                               </span>
-                              {c.email && (
-                                <span className="sp-badge sp-badge-neutral" title={c.email}>
-                                  <Icon name="mail" size={10} stroke={1.6} />
-                                </span>
-                              )}
-                              {c.phone && (
-                                <span className="sp-badge sp-badge-neutral" title={c.phone}>
-                                  <Icon name="phone" size={10} stroke={1.6} />
-                                </span>
-                              )}
-                              {c.url && (
-                                <span className="sp-badge sp-badge-neutral" title={c.url}>
-                                  <Icon name="globe" size={10} stroke={1.6} />
-                                </span>
-                              )}
-                              {!c.url && c.discovered_url && (
-                                <span className="sp-badge sp-badge-found" title={`Ιστότοπος βρέθηκε από το GreekLeads: ${c.discovered_url}`} style={{ padding: '0 4px' }}>
-                                  <span className="gl-mark">GL</span>
-                                </span>
-                              )}
-                              {SOCIAL_PLATFORMS.some(p => c[p.key]) && (
-                                <span style={{ width: '0.5px', height: 12, background: 'var(--border)', flexShrink: 0 }} />
-                              )}
-                              {SOCIAL_PLATFORMS.map(p => c[p.key] ? (
-                                <Icon key={p.key} name={p.icon} size={15} style={{ color: p.color, flexShrink: 0 }} />
-                              ) : null)}
+                              <span className="sp-badge-slot">
+                                {c.email && (
+                                  <span className="sp-badge sp-badge-neutral" title={c.email}>
+                                    <Icon name="mail" size={10} stroke={1.6} />
+                                  </span>
+                                )}
+                              </span>
+                              <span className="sp-badge-slot">
+                                {c.phone && (
+                                  <span className="sp-badge sp-badge-neutral" title={c.phone}>
+                                    <Icon name="phone" size={10} stroke={1.6} />
+                                  </span>
+                                )}
+                              </span>
+                              <span className="sp-badge-slot">
+                                {c.url && (
+                                  <span className="sp-badge sp-badge-neutral" title={c.url}>
+                                    <Icon name="globe" size={10} stroke={1.6} />
+                                  </span>
+                                )}
+                                {!c.url && c.discovered_url && (
+                                  <span className="sp-badge sp-badge-found" title={`Ιστότοπος βρέθηκε από το GreekLeads: ${c.discovered_url}`} style={{ padding: '0 4px' }}>
+                                    <span className="gl-mark">GL</span>
+                                  </span>
+                                )}
+                              </span>
+                              <span style={{ width: '0.5px', height: 12, background: 'var(--border)', flexShrink: 0 }} />
+                              <span className="sp-social-slots">
+                                {SOCIAL_PLATFORMS.map(p => (
+                                  <span key={p.key} className="sp-social-slot">
+                                    {c[p.key] && <Icon name={p.icon} size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
+                                  </span>
+                                ))}
+                              </span>
                               {!isActive && (
                                 <span className="sp-badge sp-badge-inactive">Ανενεργή</span>
                               )}
@@ -948,9 +1106,13 @@ export default function SearchPage() {
                             <button className="sp-action-btn" title="Preview" onClick={() => setPreviewArGemi(c.ar_gemi)}>
                               <Icon name="eye" size={14} />
                             </button>
-                            <button className="sp-action-btn" title="Export" onClick={() => { setSelected(prev => { const s = new Set(prev); s.add(c.ar_gemi); return s }) }}>
+                            <button className="sp-action-btn" title="Export" onClick={() => { setSelected(prev => { const s = new Map(prev); s.set(c.ar_gemi, c); return s }) }}>
                               <Icon name="download" size={14} />
                             </button>
+                            <FaviconPickerButton
+                              arGemi={c.ar_gemi}
+                              onSaved={() => setFaviconOverrides(prev => ({ ...prev, [c.ar_gemi]: Date.now() }))}
+                            />
                           </td>
                         </tr>
                       )
@@ -972,7 +1134,7 @@ export default function SearchPage() {
                   </div>
                 ))}
                 {!loading && sortedRows.map((c, idx) => {
-                  const isSel    = selected.has(c.ar_gemi)
+                  const isSel    = isSelected(c.ar_gemi)
                   const col      = logoColor(c.ar_gemi)
                   const initials = getInitials(c.co_name_el)
                   const isActive = c.status_descr?.toLowerCase().includes('ενεργ')
@@ -983,13 +1145,20 @@ export default function SearchPage() {
                     <div
                       key={c.ar_gemi}
                       className="sp-card-item sp-row-enter"
-                      style={{ animationDelay: `${idx * 14}ms`, cursor: 'pointer' }}
+                      style={{ animationDelay: `${idx * 14}ms`, cursor: 'pointer', position: 'relative' }}
                       data-selected={isSel ? 'true' : 'false'}
                       onClick={() => router.push(`/etaireies/${c.ar_gemi}`)}
                     >
+                      <div style={{ position: 'absolute', top: 8, right: 8 }}>
+                        <FaviconPickerButton
+                          arGemi={c.ar_gemi}
+                          onSaved={() => setFaviconOverrides(prev => ({ ...prev, [c.ar_gemi]: Date.now() }))}
+                        />
+                      </div>
                       <CompanyFavicon
                         arGemi={c.ar_gemi}
-                        hasFavicon={c.has_favicon}
+                        hasFavicon={c.has_favicon || !!faviconOverrides[c.ar_gemi]}
+                        version={faviconOverrides[c.ar_gemi]}
                         className="sp-logo"
                         style={{ background: col.bg, borderColor: col.border, width: 36, height: 36, borderRadius: 8, padding: 4 }}
                         fallback={
@@ -1013,7 +1182,7 @@ export default function SearchPage() {
                         {c.url && <span className="sp-badge sp-badge-neutral" title={c.url}><Icon name="globe" size={9} stroke={1.6} /></span>}
                         {!c.url && c.discovered_url && <span className="sp-badge sp-badge-found" title={`Ιστότοπος βρέθηκε από το GreekLeads: ${c.discovered_url}`} style={{ padding: '0 4px' }}><span className="gl-mark" style={{ width: 13, height: 13 }}>GL</span></span>}
                         {SOCIAL_PLATFORMS.map(p => c[p.key] ? (
-                          <Icon key={p.key} name={p.icon} size={12} style={{ color: p.color, flexShrink: 0 }} />
+                          <Icon key={p.key} name={p.icon} size={10} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                         ) : null)}
                         {!isActive && <span className="sp-badge sp-badge-inactive">Ανενεργή</span>}
                       </div>
@@ -1026,11 +1195,20 @@ export default function SearchPage() {
             {/* Footer */}
             <div className="sp-card-footer">
               <div className="sp-footer-left">
-                {selected.size > 0 ? (
+                {selectionCount > 0 ? (
                   <>
-                    <span><span className="mono" style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{selected.size}</span> επιλεγμένα</span>
-                    <button className="sp-btn sp-btn-secondary sp-btn-sm" onClick={() => setSelected(new Set())}>Καθαρισμός</button>
-                    <button className="sp-btn sp-btn-secondary sp-btn-sm">
+                    <span>
+                      <span className="mono" style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+                        {selectionCount.toLocaleString('el-GR')}
+                      </span> επιλεγμένα
+                      {allMatching && (
+                        <span className="sa-tag">
+                          όλα τα αποτελέσματα{excluded.size > 0 ? ` (−${excluded.size})` : ''}
+                        </span>
+                      )}
+                    </span>
+                    <button className="sp-btn sp-btn-secondary sp-btn-sm" onClick={clearSelection}>Καθαρισμός</button>
+                    <button className="sp-btn sp-btn-secondary sp-btn-sm" onClick={() => setSaveTab('list')}>
                       <Icon name="bookmark" size={12} />
                       Αποθήκευση λίστας
                     </button>
@@ -1066,11 +1244,11 @@ export default function SearchPage() {
                 )}
                 <button
                   className="sp-btn sp-btn-primary"
-                  disabled={selected.size === 0}
+                  disabled={selectionCount === 0 || exporting}
                   onClick={exportSelected}
                 >
                   <Icon name="download" size={13} />
-                  Εξαγωγή ({selected.size})
+                  {exporting ? 'Εξαγωγή…' : `Εξαγωγή (${selectionCount.toLocaleString('el-GR')})`}
                 </button>
               </div>
             </div>
@@ -1081,6 +1259,19 @@ export default function SearchPage() {
       </main>
 
       <CompanyPreviewPanel arGemi={previewArGemi} onClose={() => setPreviewArGemi(null)} />
+
+      <SaveToDialog
+        open={saveTab !== null}
+        defaultTab={saveTab ?? 'search'}
+        onClose={() => setSaveTab(null)}
+        filters={filters}
+        pills={pills}
+        selectedIds={Array.from(selected.keys())}
+        allMatching={allMatching}
+        excludedIds={Array.from(excluded)}
+        totalResults={total}
+        scoutBrief={scoutSummary}
+      />
 
       <ScoutPanel
         open={scoutOpen}

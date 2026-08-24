@@ -28,12 +28,14 @@ import gemi as _gemi
 # ---------------------------------------------------------------------------
 from bots import new_firms_watcher
 from bots import website_scanner
+from bots import stats_rollup
 # from bots import linkedin_enricher   ← add future bots like this
 # from bots import contact_finder
 
 BOTS = [
     new_firms_watcher,
     website_scanner,
+    stats_rollup,
     # linkedin_enricher,
     # contact_finder,
 ]
@@ -42,7 +44,17 @@ BOTS = [
 def make_job(bot):
     def job():
         conn = _db.get_conn()
-        bot.run(conn, _gemi)
+        try:
+            bot.run(conn, _gemi)
+        finally:
+            # A bot that reads and returns early (new_firms_watcher does exactly
+            # that when there is nothing new) leaves its read transaction open
+            # until the next run. Rolling back here is a no-op after a clean
+            # commit, and closes the transaction in every other case.
+            try:
+                conn.rollback()
+            except Exception:
+                pass
     return job
 
 

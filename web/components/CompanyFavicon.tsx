@@ -13,18 +13,22 @@ export default function CompanyFavicon({
   fallback,
   className,
   style,
+  version,
 }: {
   arGemi: string
   hasFavicon: boolean
   fallback: React.ReactNode
   className?: string
   style?: React.CSSProperties
+  // Bumped by FaviconPickerButton after a manual save, so the browser doesn't
+  // keep serving the old image from under the route's 1-year immutable cache.
+  version?: number
 }) {
   const [errored, setErrored] = useState(false)
   if (!hasFavicon || errored) return <>{fallback}</>
   return (
     <img
-      src={`/api/favicon/${arGemi}`}
+      src={`/api/favicon/${arGemi}${version ? `?v=${version}` : ''}`}
       alt=""
       className={className}
       style={{ objectFit: 'contain', background: '#fff', ...style }}

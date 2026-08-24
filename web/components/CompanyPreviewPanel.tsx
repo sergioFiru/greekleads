@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Icon from './Icon'
+import CompanyFavicon from './CompanyFavicon'
 
 const LOGO_COLORS = [
   { bg: '#EEF4FF', fg: '#1A4A8A', border: '#C0D0E8' },
@@ -46,6 +47,8 @@ interface CompanyDetail {
   twitter_url: string | null
   tiktok_url: string | null
   youtube_url: string | null
+  discovered_url: string | null
+  has_favicon: boolean
 }
 
 const PANEL_SOCIALS = [
@@ -57,10 +60,16 @@ const PANEL_SOCIALS = [
   { key: 'youtube_url'   as const, label: 'YouTube',     icon: 'youtube',    color: '#FF0000' },
 ]
 
+// Registered capital runs from a few thousand to billions, and the raw figure
+// (€159.171.267,3) is unreadable at stat-tile size — compact the big ones.
 function formatCapital(capital: CapitalEntry[] | null): string | null {
   const stock = capital?.[0]?.capitalStock
   if (!stock) return null
-  return `€${new Intl.NumberFormat('el-GR').format(stock)}`
+  const fmt = (n: number, d: number) =>
+    n.toLocaleString('el-GR', { minimumFractionDigits: d, maximumFractionDigits: d })
+  if (stock >= 1_000_000_000) return `€${fmt(stock / 1_000_000_000, 1)} δισ.`
+  if (stock >= 1_000_000)     return `€${fmt(stock / 1_000_000, 1)} εκατ.`
+  return `€${fmt(stock, 0)}`
 }
 
 interface Member {
@@ -73,6 +82,10 @@ interface Member {
 interface PanelData extends CompanyDetail {
   members: Member[]
 }
+
+// Must match the LIMIT in app/api/company/[ar_gemi]/route.ts — used to tell a
+// complete member list apart from a truncated one.
+const MEMBER_FETCH_LIMIT = 6
 
 export default function CompanyPreviewPanel({
   arGemi,
@@ -127,33 +140,56 @@ function PanelContent({ data, onClose }: { data: PanelData; onClose: () => void 
   const isActive = data.status_descr?.toLowerCase().includes('ενεργ')
   const location = [data.city ?? data.municipality_descr, data.prefecture_descr].filter(Boolean).join(', ')
   const year     = data.incorporation_date?.slice(0, 4)
-  const websiteUrl = data.url?.startsWith('http') ? data.url : data.url ? `https://${data.url}` : null
+  // Falls back to the site GreekLeads discovered when ΓΕΜΗ has none on file —
+  // matches what the results table already surfaces via its GL marker.
+  const rawSite    = data.url || data.discovered_url
+  const websiteUrl = rawSite ? (rawSite.startsWith('http') ? rawSite : `https://${rawSite}`) : null
+  const isDiscovered = !data.url && !!data.discovered_url
 
   const currentMembers = data.members.filter(m => !m.dt_to)
   const shownMembers   = currentMembers.length > 0 ? currentMembers : data.members
+  const capital        = formatCapital(data.capital)
+  const activeSocials  = PANEL_SOCIALS.filter(s => data[s.key])
+  // /api/company fetches at most MEMBER_FETCH_LIMIT people, so a firm with 50
+  // executives and one with exactly 6 would otherwise show an identical count.
+  // Mark the number as a floor whenever we came back full.
+  const memberCountLabel = shownMembers.length
+    ? `${shownMembers.length}${data.members.length >= MEMBER_FETCH_LIMIT ? '+' : ''}`
+    : '—'
 
   return (
     <div className="co-panel-inner">
       {/* Header */}
       <div className="co-panel-header">
-        <span
+        <CompanyFavicon
+          arGemi={data.ar_gemi}
+          hasFavicon={data.has_favicon}
           className="co-panel-logo"
-          style={{ background: col.bg, color: col.fg, borderColor: col.border }}
-        >
-          {initials}
-        </span>
+          style={{ background: '#fff', borderColor: col.border, padding: 4 }}
+          fallback={
+            <span
+              className="co-panel-logo"
+              style={{ background: col.bg, color: col.fg, borderColor: col.border }}
+            >
+              {initials}
+            </span>
+          }
+        />
         <div className="co-panel-hd-text">
           <div className="co-panel-name">{data.co_name_el}</div>
           <div className="co-panel-meta">
-            {data.legal_type_descr && <span>{data.legal_type_descr}</span>}
+            {data.legal_type_descr && (
+              <span className="co-panel-legal">{data.legal_type_descr}</span>
+            )}
             {data.status_descr && (
               <span className={`co-panel-status ${isActive ? 'active' : 'inactive'}`}>
-                ● {data.status_descr}
+                <span className="co-panel-status-dot" />
+                {data.status_descr}
               </span>
             )}
           </div>
         </div>
-        <button className="co-panel-close" onClick={onClose} title="Close">
+        <button className="co-panel-close" onClick={onClose} title="Κλείσιμο">
           <Icon name="x" size={14} />
         </button>
       </div>
@@ -161,60 +197,90 @@ function PanelContent({ data, onClose }: { data: PanelData; onClose: () => void 
       {/* Body */}
       <div className="co-panel-body">
 
-        {/* Location + Year */}
-        {(location || year) && (
-          <div className="co-panel-section">
-            <div className="co-panel-row">
-              <Icon name="map-pin" size={13} />
-              <span>{[location, year ? `Ίδρυση ${year}` : null].filter(Boolean).join(' · ')}</span>
-            </div>
+        {/* At-a-glance — the three numbers worth seeing before opening the profile */}
+        <div className="co-panel-stats">
+          <div className="co-panel-stat">
+            <span className="co-panel-stat-val" data-empty={capital ? 'false' : 'true'}>
+              {capital ?? '—'}
+            </span>
+            <span className="co-panel-stat-lbl">Κεφάλαιο</span>
           </div>
-        )}
+          <div className="co-panel-stat">
+            <span className="co-panel-stat-val" data-empty={year ? 'false' : 'true'}>
+              {year ?? '—'}
+            </span>
+            <span className="co-panel-stat-lbl">Ίδρυση</span>
+          </div>
+          <div className="co-panel-stat">
+            <span className="co-panel-stat-val" data-empty={shownMembers.length ? 'false' : 'true'}>
+              {memberCountLabel}
+            </span>
+            <span className="co-panel-stat-lbl">Στελέχη</span>
+          </div>
+        </div>
 
-        {/* Primary KAD */}
-        {data.primary_kad && (
+        {/* Identity */}
+        {(location || data.primary_kad) && (
           <div className="co-panel-section">
-            <div className="co-panel-row">
-              <Icon name="tag" size={13} />
-              <span className="co-panel-kad">{data.primary_kad}</span>
-            </div>
+            {location && (
+              <div className="co-panel-row">
+                <Icon name="map-pin" size={14} />
+                <span>{location}</span>
+              </div>
+            )}
+            {data.primary_kad && (
+              <div className="co-panel-row">
+                <Icon name="tag" size={14} />
+                <span className="co-panel-kad">{data.primary_kad}</span>
+              </div>
+            )}
           </div>
         )}
 
         {/* Contact */}
         {(data.email || data.phone || websiteUrl) && (
           <div className="co-panel-section">
+            <div className="co-panel-section-title">Επικοινωνία</div>
             {data.email && (
               <div className="co-panel-row">
-                <Icon name="mail" size={13} />
+                <Icon name="mail" size={14} />
                 <a href={`mailto:${data.email}`} className="co-panel-link">{data.email}</a>
               </div>
             )}
             {data.phone && (
               <div className="co-panel-row">
-                <Icon name="phone" size={13} />
+                <Icon name="phone" size={14} />
                 <a href={`tel:${data.phone}`} className="co-panel-link">{data.phone}</a>
               </div>
             )}
             {websiteUrl && (
               <div className="co-panel-row">
-                <Icon name="globe" size={13} />
+                <Icon name="globe" size={14} />
                 <a href={websiteUrl} target="_blank" rel="noopener noreferrer" className="co-panel-link">
-                  {data.url}
+                  {rawSite}
                 </a>
+                {isDiscovered && (
+                  <span className="gl-mark" title="Ιστότοπος βρέθηκε από το GreekLeads">GL</span>
+                )}
               </div>
             )}
-          </div>
-        )}
 
-        {/* Socials */}
-        {PANEL_SOCIALS.some(s => data[s.key]) && (
-          <div className="co-panel-section">
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-              {PANEL_SOCIALS.map(s => data[s.key] ? (
-                <Icon key={s.key} name={s.icon} size={20} style={{ color: s.color, flexShrink: 0 }} />
-              ) : null)}
-            </div>
+            {activeSocials.length > 0 && (
+              <div className="co-panel-socials">
+                {activeSocials.map(s => (
+                  <a
+                    key={s.key}
+                    href={data[s.key] as string}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="co-panel-social"
+                    title={s.label}
+                  >
+                    <Icon name={s.icon} size={14} />
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -223,28 +289,19 @@ function PanelContent({ data, onClose }: { data: PanelData; onClose: () => void 
           <div className="co-panel-section">
             <div className="co-panel-section-title">Στελέχη</div>
             {shownMembers.slice(0, 5).map((m, i) => (
-              <div key={i} className="co-panel-member">
-                <span className="co-panel-member-name">{m.person_name}</span>
-                <span
-                  className="co-panel-member-role"
-                  style={m.dt_to ? { opacity: 0.45 } : undefined}
-                >
-                  {m.role ?? m.category ?? ''}
-                </span>
+              <div key={i} className="co-panel-member" data-past={m.dt_to ? 'true' : 'false'}>
+                <span className="co-panel-member-dot" />
+                <div className="co-panel-member-text">
+                  <div className="co-panel-member-name">{m.person_name}</div>
+                  {(m.role || m.category) && (
+                    <div className="co-panel-member-role">{m.role ?? m.category}</div>
+                  )}
+                </div>
               </div>
             ))}
             {shownMembers.length > 5 && (
               <div className="co-panel-more">+ {shownMembers.length - 5} ακόμα</div>
             )}
-          </div>
-        )}
-
-        {/* Capital */}
-        {formatCapital(data.capital) && (
-          <div className="co-panel-section">
-            <div className="co-panel-row" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              Μετοχικό κεφάλαιο: <strong style={{ marginLeft: 4, color: 'var(--text-secondary)' }}>{formatCapital(data.capital)}</strong>
-            </div>
           </div>
         )}
       </div>

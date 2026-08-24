@@ -1,3 +1,4 @@
+import { SignUp } from '@clerk/nextjs'
 import TopNav from '@/components/TopNav'
 
 export const metadata = { title: 'Εγγραφή — GreekLeads' }
@@ -12,8 +13,7 @@ export default function SignUpPage() {
       <TopNav />
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         {clerkConfigured ? (
-          // @ts-expect-error — Clerk component
-          <ClerkSignUp />
+          <SignUp />
         ) : (
           <div style={{
             background: 'var(--card-bg)',

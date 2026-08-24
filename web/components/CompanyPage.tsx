@@ -4,6 +4,8 @@ import Link from 'next/link'
 import KadDonut from './KadDonut'
 import CompanyNetworkGraph from './CompanyNetworkGraph'
 import CompanyFavicon from './CompanyFavicon'
+import CompanyQuickSearch from './CompanyQuickSearch'
+import Icon from './Icon'
 import { brandTitles } from '@/lib/brand'
 
 // ── Types ──────────────────────────────────────────────────────
@@ -201,13 +203,20 @@ const ACTIVITY_TYPE_LABELS: Record<string, string> = {
   old_secondary: 'Πρώην Δευτερεύουσα',
 }
 
+// GEMI's own activities JSON carries `type` as Greek text ('Κύρια', 'Δευτερεύουσα',
+// 'Βοηθητική', 'Λοιπή') — the english 'main'/'secondary' keys above only ever show
+// up for a legacy/normalized shape, so both must be checked.
+function isMainActivity(type: string): boolean {
+  return type === 'main' || type === 'Κύρια'
+}
+
 const SOCIALS = [
-  { key: 'linkedin_url' as const, label: 'LinkedIn' },
-  { key: 'instagram_url' as const, label: 'Instagram' },
-  { key: 'facebook_url' as const, label: 'Facebook' },
-  { key: 'twitter_url' as const, label: 'Twitter / X' },
-  { key: 'tiktok_url' as const, label: 'TikTok' },
-  { key: 'youtube_url' as const, label: 'YouTube' },
+  { key: 'linkedin_url' as const, label: 'LinkedIn', icon: 'linkedin', color: '#0A66C2' },
+  { key: 'instagram_url' as const, label: 'Instagram', icon: 'instagram', color: '#E1306C' },
+  { key: 'facebook_url' as const, label: 'Facebook', icon: 'facebook', color: '#1877F2' },
+  { key: 'twitter_url' as const, label: 'Twitter / X', icon: 'twitter-x', color: '#1D1D1B' },
+  { key: 'tiktok_url' as const, label: 'TikTok', icon: 'tiktok', color: '#010101' },
+  { key: 'youtube_url' as const, label: 'YouTube', icon: 'youtube', color: '#FF0000' },
 ]
 
 // ── KvRow ──────────────────────────────────────────────────────
@@ -228,35 +237,29 @@ function KvRow({ label, children, mono }: { label: string; children: React.React
 
 function OverviewTab({
   company,
-  persons,
   activities,
+  showNetwork,
 }: {
   company: CompanyData
-  persons: PersonRow[]
   activities: KadActivity[]
+  showNetwork: boolean
 }) {
   const [objectiveExpanded, setObjectiveExpanded] = useState(false)
   const address = buildAddress(company)
   const capital = formatCapital(company.capital)
   const isActive = company.status_descr?.toLowerCase().includes('ενεργ')
-  const activePeople = persons.filter(isPersonActive)
   const activeSocials = SOCIALS.filter(s => company[s.key])
-  const mainActivity = activities.find(a => a.type === 'main')
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
       {/* Stats row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
         <div className="stat-card">
           <div className="stat-label">Κεφάλαιο</div>
           <div className="stat-value" style={{ fontSize: capital ? 20 : 16, fontFamily: capital ? 'var(--font-mono)' : undefined }}>
             {capital ?? '—'}
           </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Ενεργά στελέχη</div>
-          <div className="stat-value">{activePeople.length || '—'}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Δραστηριότητες</div>
@@ -268,13 +271,10 @@ function OverviewTab({
         </div>
       </div>
 
-      {/* Two-column content grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12, alignItems: 'start' }}>
-
-        {/* Left */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
-
-          <div className="card" style={{ padding: '20px 22px' }}>
+      {/* Identity / Status / Location — one horizontal section */}
+      <div className="card" style={{ padding: '20px 22px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
+          <div>
             <div className="section-label" style={{ marginBottom: 14 }}>Ταυτότητα εταιρείας</div>
             <KvRow label="Νομική μορφή">{company.legal_type_descr}</KvRow>
             <KvRow label="ΓΕΜΗ" mono>{company.ar_gemi}</KvRow>
@@ -283,7 +283,7 @@ function OverviewTab({
             <KvRow label="Υπηρεσία ΓΕΜΗ">{company.gemi_office_descr}</KvRow>
           </div>
 
-          <div className="card" style={{ padding: '20px 22px' }}>
+          <div style={{ borderLeft: '1px solid var(--row-divider)', paddingLeft: 24 }}>
             <div className="section-label" style={{ marginBottom: 14 }}>Κατάσταση & Κεφάλαιο</div>
             <KvRow label="Κατάσταση">
               <span className={`badge ${isActive ? 'badge-active' : 'badge-inactive'}`} style={{ fontSize: 11 }}>
@@ -294,142 +294,96 @@ function OverviewTab({
             <KvRow label="Κεφάλαιο">{capital}</KvRow>
           </div>
 
-          <div className="card" style={{ padding: '20px 22px' }}>
+          <div style={{ borderLeft: '1px solid var(--row-divider)', paddingLeft: 24 }}>
             <div className="section-label" style={{ marginBottom: 14 }}>Τοποθεσία</div>
             <KvRow label="Διεύθυνση">{address}</KvRow>
             <KvRow label="Δήμος">{company.municipality_descr}</KvRow>
             <KvRow label="Νομός">{company.prefecture_descr}</KvRow>
           </div>
-
-          {mainActivity && (
-            <div className="card" style={{ padding: '20px 22px' }}>
-              <div className="section-label" style={{ marginBottom: 14 }}>Κύρια δραστηριότητα</div>
-              <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.5, marginBottom: 10 }}>
-                {mainActivity.activity.descr}
-              </div>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface-subtle)', padding: '2px 8px', borderRadius: 4, border: '0.5px solid var(--border)' }}>
-                ΚΑΔ {mainActivity.activity.id}
-              </span>
-            </div>
-          )}
-
-          {company.objective && (
-            <div className="card" style={{ padding: '20px 22px' }}>
-              <div className="section-label" style={{ marginBottom: 10 }}>Σκοπός εταιρείας</div>
-              <div style={{ position: 'relative', maxHeight: objectiveExpanded ? 'none' : 90, overflow: 'hidden' }}>
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75, margin: 0 }}>
-                  {company.objective}
-                </p>
-                {!objectiveExpanded && (
-                  <div style={{
-                    position: 'absolute', bottom: 0, left: 0, right: 0, height: 36,
-                    background: 'linear-gradient(to bottom, rgba(255,255,255,0), #fff)',
-                    pointerEvents: 'none',
-                  }} />
-                )}
-              </div>
-              {company.objective.length > 200 && (
-                <button
-                  onClick={() => setObjectiveExpanded(x => !x)}
-                  style={{
-                    marginTop: 6, background: 'none', border: 'none',
-                    color: 'var(--accent)', cursor: 'pointer',
-                    fontSize: 12, fontWeight: 500, padding: 0, display: 'block',
-                  }}
-                >
-                  {objectiveExpanded ? 'Λιγότερα ↑' : 'Περισσότερα ↓'}
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Right */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
-
-          <div className="card" style={{ padding: '20px 22px' }}>
-            <div className="section-label" style={{ marginBottom: 14 }}>Επικοινωνία</div>
-            <KvRow label="Website">
-              {company.url
-                ? <a href={ensureHttp(company.url)} target="_blank" rel="noopener noreferrer"
-                    style={{ color: 'var(--accent)', textDecoration: 'none', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {displayUrl(company.url)}
-                  </a>
-                : company.discovered_url
-                  ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, maxWidth: '100%', overflow: 'hidden' }}>
-                      <span className="gl-found" style={{ flexShrink: 0 }}><span className="gl-mark">GL</span>βρέθηκε από το GreekLeads</span>
-                      <a href={ensureHttp(company.discovered_url)} target="_blank" rel="noopener noreferrer"
-                        style={{ color: 'var(--accent)', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {displayUrl(company.discovered_url)}
-                      </a>
-                    </span>
-                  : null}
-            </KvRow>
-            <KvRow label="Email">
-              {company.email
-                ? <a href={`mailto:${company.email}`} style={{ color: 'var(--accent)', textDecoration: 'none', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{company.email}</a>
-                : null}
-            </KvRow>
-            <KvRow label="Τηλέφωνο">
-              {company.phone
-                ? <a href={`tel:${company.phone}`} style={{ color: 'var(--text-primary)', textDecoration: 'none' }}>{company.phone}</a>
-                : null}
-            </KvRow>
-            <KvRow label="Φαξ">{company.fax}</KvRow>
-            {activeSocials.length > 0 && (
-              <div style={{ marginTop: 14 }}>
-                <div className="section-label" style={{ marginBottom: 8 }}>Κοινωνικά δίκτυα</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-                  {activeSocials.map(s => (
-                    <a key={s.key} href={ensureHttp(company[s.key]!)} target="_blank" rel="noopener noreferrer"
-                      className="social-pill">
-                      {s.label}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {activePeople.length > 0 && (
-            <div className="card" style={{ padding: '20px 22px' }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 14 }}>
-                <span className="section-label">Ενεργά στελέχη</span>
-                {persons.length > activePeople.length && (
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>+{persons.length - activePeople.length} πρώην</span>
-                )}
-              </div>
-              {activePeople.map((p, i) => {
-                const lc = logoColor(p.person_name)
-                return (
-                  <Link key={p.id} href={`/people/${encodeURIComponent(p.person_name)}`}
-                    style={{
-                      textDecoration: 'none', color: 'inherit',
-                      display: 'flex', alignItems: 'center', gap: 12,
-                      padding: '10px 0',
-                      borderTop: i > 0 ? '1px solid var(--row-divider)' : 'none',
-                    }}>
-                    <div className="logo-initial lg"
-                      style={{ background: lc.bg, color: lc.fg, border: `1px solid ${lc.border}`, flexShrink: 0 }}>
-                      {getInitials(p.person_name)}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{p.person_name}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>
-                        {[p.role, p.category].filter(Boolean).join(' · ')}
-                        {p.percentage ? ` · ${p.percentage}%` : ''}
-                      </div>
-                    </div>
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ color: 'var(--text-muted)', flexShrink: 0 }}>
-                      <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </Link>
-                )
-              })}
-            </div>
-          )}
         </div>
       </div>
+
+      {showNetwork && (
+        <div className="card" style={{ padding: '20px 22px' }}>
+          <div className="section-label" style={{ marginBottom: 14 }}>Δίκτυο</div>
+          <CompanyNetworkGraph arGemi={company.ar_gemi} companyName={company.co_name_el ?? company.ar_gemi} />
+        </div>
+      )}
+
+      {/* Επικοινωνία — standalone horizontal section */}
+      <div className="card" style={{ padding: '20px 22px' }}>
+        <div className="section-label" style={{ marginBottom: 14 }}>Επικοινωνία</div>
+        <KvRow label="Website">
+          {company.url
+            ? <a href={ensureHttp(company.url)} target="_blank" rel="noopener noreferrer"
+                style={{ color: 'var(--accent)', textDecoration: 'none', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {displayUrl(company.url)}
+              </a>
+            : company.discovered_url
+              ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, maxWidth: '100%', overflow: 'hidden' }}>
+                  <span className="gl-found" style={{ flexShrink: 0 }}><span className="gl-mark">GL</span>βρέθηκε από το GreekLeads</span>
+                  <a href={ensureHttp(company.discovered_url)} target="_blank" rel="noopener noreferrer"
+                    style={{ color: 'var(--accent)', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {displayUrl(company.discovered_url)}
+                  </a>
+                </span>
+              : null}
+        </KvRow>
+        <KvRow label="Email">
+          {company.email
+            ? <a href={`mailto:${company.email}`} style={{ color: 'var(--accent)', textDecoration: 'none', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{company.email}</a>
+            : null}
+        </KvRow>
+        <KvRow label="Τηλέφωνο">
+          {company.phone
+            ? <a href={`tel:${company.phone}`} style={{ color: 'var(--text-primary)', textDecoration: 'none' }}>{company.phone}</a>
+            : null}
+        </KvRow>
+        <KvRow label="Φαξ">{company.fax}</KvRow>
+        {activeSocials.length > 0 && (
+          <div style={{ marginTop: 18 }}>
+            <div className="section-label" style={{ marginBottom: 12 }}>Κοινωνικά δίκτυα</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+              {activeSocials.map(s => (
+                <a key={s.key} href={ensureHttp(company[s.key]!)} target="_blank" rel="noopener noreferrer"
+                  className="social-badge" style={{ background: `${s.color}17`, borderColor: `${s.color}33` }}>
+                  <Icon name={s.icon} size={22} style={{ color: s.color }} />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {company.objective && (
+        <div className="card" style={{ padding: '20px 22px' }}>
+          <div className="section-label" style={{ marginBottom: 10 }}>Σκοπός εταιρείας</div>
+          <div style={{ position: 'relative', maxHeight: objectiveExpanded ? 'none' : 90, overflow: 'hidden' }}>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75, margin: 0 }}>
+              {company.objective}
+            </p>
+            {!objectiveExpanded && (
+              <div style={{
+                position: 'absolute', bottom: 0, left: 0, right: 0, height: 36,
+                background: 'linear-gradient(to bottom, rgba(255,255,255,0), #fff)',
+                pointerEvents: 'none',
+              }} />
+            )}
+          </div>
+          {company.objective.length > 200 && (
+            <button
+              onClick={() => setObjectiveExpanded(x => !x)}
+              style={{
+                marginTop: 6, background: 'none', border: 'none',
+                color: 'var(--accent)', cursor: 'pointer',
+                fontSize: 12, fontWeight: 500, padding: 0, display: 'block',
+              }}
+            >
+              {objectiveExpanded ? 'Λιγότερα ↑' : 'Περισσότερα ↓'}
+            </button>
+          )}
+        </div>
+      )}
 
     </div>
   )
@@ -505,10 +459,14 @@ function PeopleTab({ persons }: { persons: PersonRow[] }) {
 // ── Activities Tab ─────────────────────────────────────────────
 
 function ActivitiesTab({ activities }: { activities: KadActivity[] }) {
-  const sorted = [...activities].sort((a, b) => {
-    const order = ['main', 'secondary', 'old_main', 'old_secondary']
-    return order.indexOf(a.type) - order.indexOf(b.type)
-  })
+  const [expanded, setExpanded] = useState(false)
+
+  const primary = activities.filter(a => isMainActivity(a.type))
+  // Fallback for the rare row with no 'main'-typed entry at all — still show something by default.
+  const defaultVisible = primary.length > 0 ? primary : activities.slice(0, 1)
+  const visible = expanded ? activities : defaultVisible
+  const hiddenCount = activities.length - defaultVisible.length
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {activities.length >= 2 && (
@@ -518,11 +476,10 @@ function ActivitiesTab({ activities }: { activities: KadActivity[] }) {
         </div>
       )}
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-      {sorted.map((act, i) => {
-        const isOld = act.type.startsWith('old_')
-        const isMain = act.type === 'main'
+      {visible.map((act, i) => {
+        const isMain = isMainActivity(act.type)
         return (
-          <div key={i} style={{ padding: '16px 22px', borderTop: i > 0 ? '1px solid var(--row-divider)' : 'none', opacity: isOld ? 0.6 : 1 }}>
+          <div key={i} style={{ padding: '16px 22px', borderTop: i > 0 ? '1px solid var(--row-divider)' : 'none' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
               <span style={{
                 fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 4, flexShrink: 0, marginTop: 2,
@@ -545,6 +502,19 @@ function ActivitiesTab({ activities }: { activities: KadActivity[] }) {
           </div>
         )
       })}
+      {hiddenCount > 0 && (
+        <button
+          onClick={() => setExpanded(x => !x)}
+          style={{
+            width: '100%', textAlign: 'left', padding: '13px 22px',
+            borderTop: '1px solid var(--row-divider)', borderLeft: 'none', borderRight: 'none', borderBottom: 'none',
+            background: 'var(--surface-subtle)',
+            color: 'var(--accent)', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+          }}
+        >
+          {expanded ? 'Λιγότερες δραστηριότητες ↑' : `Δείτε ${hiddenCount} ακόμη δραστηριότητες ↓`}
+        </button>
+      )}
     </div>
     </div>
   )
@@ -922,7 +892,7 @@ function SimilarTab({ similar }: { similar: SimilarCompany[] }) {
 
 // ── Sticky section nav (scrollspy) ──────────────────────────────
 
-type SectionId = 'overview' | 'people' | 'activities' | 'financials' | 'similar' | 'network'
+type SectionId = 'overview' | 'people' | 'activities' | 'financials' | 'similar'
 
 function CompanyStickyNav({
   sections, activeSection, condensed, company, headlineRevenue,
@@ -984,7 +954,7 @@ export default function CompanyPage({
   const activities: KadActivity[] = Array.isArray(company.activities) ? company.activities : []
   const capital = formatCapital(company.capital)
   const isActive = company.status_descr?.toLowerCase().includes('ενεργ')
-  const mainActivity = activities.find(a => a.type === 'main')
+  const mainActivity = activities.find(a => isMainActivity(a.type))
   const showFinancials = !!company.legal_type_descr && FINANCIAL_FILER_TYPES.has(company.legal_type_descr)
   const headlineRevenue = financials?.years?.[0]?.revenue ?? null
 
@@ -994,18 +964,14 @@ export default function CompanyPage({
     ...(activities.length > 0 ? [{ id: 'activities' as SectionId, label: 'Δραστηριότητες', count: activities.length }] : []),
     ...(showFinancials ? [{ id: 'financials' as SectionId, label: 'Οικονομικά' }] : []),
     ...(similar.length > 0 ? [{ id: 'similar' as SectionId, label: 'Παρόμοιες' }] : []),
-    ...(persons.length > 0 ? [{ id: 'network' as SectionId, label: 'Δίκτυο' }] : []),
   ]
 
-  // ── Scroll-driven state: which section is active, has the header
-  // scrolled out of view (→ show condensed identity in the sticky nav),
-  // and has the network graph section ever been visible (→ mount the
-  // graph — it fetches on mount, no point paying for that until scrolled to).
+  // ── Scroll-driven state: which section is active, and has the header
+  // scrolled out of view (→ show condensed identity in the sticky nav).
   const headerRef = useRef<HTMLDivElement>(null)
   const sectionEls = useRef<Map<SectionId, HTMLElement>>(new Map())
-  const [activeSection, setActiveSection] = useState<SectionId>('overview')
+  const [activeSection, setActiveSection] = useState<SectionId>(sections[0]?.id ?? 'overview')
   const [headerCondensed, setHeaderCondensed] = useState(false)
-  const [networkMounted, setNetworkMounted] = useState(false)
 
   const setSectionRef = useCallback((id: SectionId) => (el: HTMLElement | null) => {
     if (el) sectionEls.current.set(id, el)
@@ -1039,17 +1005,12 @@ export default function CompanyPage({
         if (top <= TRIGGER_LINE && top > bestTop) { bestTop = top; best = id }
       })
       if (!best && sections.length) best = sections[0].id
-      // A short final section (e.g. an empty-looking network graph with few
-      // nodes) may never scroll far enough for its own top to cross
-      // TRIGGER_LINE — the page runs out of scroll room first. Once we're
-      // at the bottom of the document, force the last section active so it
-      // still gets marked active (and, for the network graph, mounted).
+      // A short final section may never scroll far enough for its own top to
+      // cross TRIGGER_LINE — the page runs out of scroll room first. Once
+      // we're at the bottom of the document, force the last section active.
       const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4
       if (atBottom && sections.length) best = sections[sections.length - 1].id
-      if (best) {
-        setActiveSection(best)
-        if (best === 'network') setNetworkMounted(true)
-      }
+      if (best) setActiveSection(best)
     }
     function onScroll() {
       if (!ticking) { ticking = true; requestAnimationFrame(update) }
@@ -1078,6 +1039,9 @@ export default function CompanyPage({
             {company.co_name_el ?? company.ar_gemi}
           </span>
         </div>
+
+        {/* Jump straight to another company without going back to /search */}
+        <CompanyQuickSearch currentArGemi={company.ar_gemi} />
 
         {/* Header card — full width */}
         <div ref={headerRef} className="card" style={{ padding: '26px 30px', marginBottom: 20 }}>
@@ -1198,7 +1162,7 @@ export default function CompanyPage({
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 32px 80px' }}>
 
         <section id="overview" data-section-id="overview" ref={setSectionRef('overview')} className="cp-section">
-          <OverviewTab company={company} persons={persons} activities={activities} />
+          <OverviewTab company={company} activities={activities} showNetwork={persons.length > 0} />
         </section>
 
         {persons.length > 0 && (
@@ -1223,18 +1187,9 @@ export default function CompanyPage({
         )}
 
         {similar.length > 0 && (
-          <section id="similar" data-section-id="similar" ref={setSectionRef('similar')} className="cp-section">
+          <section id="similar" data-section-id="similar" ref={setSectionRef('similar')} className="cp-section cp-section-last">
             <div className="cp-section-hd"><h2>Παρόμοιες εταιρείες</h2></div>
             <SimilarTab similar={similar} />
-          </section>
-        )}
-
-        {persons.length > 0 && (
-          <section id="network" data-section-id="network" ref={setSectionRef('network')} className="cp-section cp-section-last">
-            <div className="cp-section-hd"><h2>Δίκτυο</h2></div>
-            {networkMounted && (
-              <CompanyNetworkGraph arGemi={company.ar_gemi} companyName={company.co_name_el ?? company.ar_gemi} />
-            )}
           </section>
         )}
       </div>
