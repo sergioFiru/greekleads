@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Script from 'next/script'
 import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
+import { SITE_URL } from '@/lib/site'
 import './globals.css'
 
 const clerkConfigured =
@@ -15,13 +16,17 @@ const clerkConfigured =
 const clarityId = process.env.NEXT_PUBLIC_CLARITY_ID
 
 export const metadata: Metadata = {
+  // Without metadataBase, `alternates.canonical: '/etaireies/123'` is emitted as
+  // a relative href that resolves against whatever host served the page. That
+  // silently makes the canonical follow the request instead of declaring one.
+  metadataBase: new URL(SITE_URL),
   title: 'GreekLeads — Greek Business Intelligence',
   description:
     'Search every active Greek company from the official ΓΕΜΗ registry. Filter by industry, location, legal type and export your leads.',
   openGraph: {
     title: 'GreekLeads',
     description: 'The Greek business registry, prospect-ready.',
-    url: 'https://greekleads.gr',
+    url: SITE_URL,
     siteName: 'GreekLeads',
     locale: 'el_GR',
     type: 'website',
