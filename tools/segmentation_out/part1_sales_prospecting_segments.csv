@@ -1,0 +1,11 @@
+﻿segment,kad_basis,match_type,status,non_atomiki_count,atomiki_included_count,atomiki_only_count
+Marketing/advertising/digital (KAD 73.1x),731,prefix,RE-VERIFY (already had),19059,31736,12677
+Real estate agencies (KAD 68.3x),683,prefix,RE-VERIFY (already had),26578,39265,12687
+Recruiting/staffing/HR (KAD 78.1x — 78.20 temp-staffing and a would-be 78.30 do not exist as separate codes in this KAD revision; 78.10 'employment placement agencies' is the only populated 78.1x code),781,prefix,RE-VERIFY (already had),1848,2294,446
+Insurance agents/brokers (KAD 66.2x),662,prefix,RE-VERIFY (already had),5585,21440,15855
+Exporters / import-export trading (NO clean KAD — see flag),ΕΞΑΓΩΓ,descr,NEW,8274,11236,2962
+Event & conference organizers (KAD 82.30),8230,prefix,NEW,16037,21440,5403
+Franchise developers / franchise-model (NO clean KAD — see flag),"FRANCHISE,ΔΙΚΑΙΟΧΡΗΣ",descr,NEW,3123,3367,244
+"B2B SaaS / software (KAD too broad — 62.10 used as closest code, see flag)",6210,prefix,NEW,19535,31699,12164
+"Industrial equipment / machinery sellers (KAD 46.6x, wholesale of machinery & equipment)",466,prefix,NEW,30059,50379,20320
+"Wholesale/distributors (KAD 46.xx, ALL sub-codes combined)",46,prefix,NEW,133525,266735,133210

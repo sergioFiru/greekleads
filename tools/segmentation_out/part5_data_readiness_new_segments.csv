@@ -1,0 +1,14 @@
+﻿segment,count,with_website,pct_website,with_social,pct_social,with_financial_filing,pct_financial_filing
+Exporters / import-export trading (NO clean KAD — see flag),11236,3510,31.2,1498,13.3,1627,14.5
+Event & conference organizers (KAD 82.30),21440,6172,28.8,3194,14.9,2743,12.8
+Franchise developers / franchise-model (NO clean KAD — see flag),3367,1195,35.5,511,15.2,642,19.1
+"B2B SaaS / software (KAD too broad — 62.10 used as closest code, see flag)",31699,10042,31.7,4785,15.1,3552,11.2
+"Industrial equipment / machinery sellers (KAD 46.6x, wholesale of machinery & equipment)",50379,13281,26.4,5106,10.1,5637,11.2
+"Wholesale/distributors (KAD 46.xx, all sub-codes)",266735,48968,18.4,19557,7.3,22182,8.3
+Banks / monetary intermediation (KAD 64.19),5353,1260,23.5,569,10.6,614,11.5
+Financial leasing companies (KAD 64.91),646,249,38.5,107,16.6,159,24.6
+Other credit-granting institutions / lenders (KAD 64.92),865,265,30.6,114,13.2,155,17.9
+"Accounting, auditing, tax consultancy firms (KAD 69.20)",7966,2598,32.6,887,11.1,1588,19.9
+Legal firms (KAD 69.10),812,300,36.9,107,13.2,150,18.5
+"Holding companies (KAD 64.21 — NOT 64.20 as guessed; 64.20 does not exist as a populated code in this KAD revision, 64.21 'activities of holding companies' does)",4153,1361,32.8,830,20.0,819,19.7
+Investment/fund management firms (KAD 66.30),1223,390,31.9,182,14.9,227,18.6

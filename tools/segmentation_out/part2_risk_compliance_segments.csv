@@ -1,0 +1,9 @@
+﻿segment,kad_basis,status,count_non_atomiki
+Banks / monetary intermediation (KAD 64.19),6419,NEW,5353
+Financial leasing companies (KAD 64.91),6491,NEW,646
+Other credit-granting institutions / lenders (KAD 64.92),6492,NEW,865
+"Accounting, auditing, tax consultancy firms (KAD 69.20)",6920,NEW,7966
+Legal firms (KAD 69.10),6910,NEW,812
+"Holding companies (KAD 64.21 — NOT 64.20 as guessed; 64.20 does not exist as a populated code in this KAD revision, 64.21 'activities of holding companies' does)",6421,NEW,4153
+Investment/fund management firms (KAD 66.30),6630,NEW,1223
+Debt collection / credit bureaus (KAD 82.91),8291,RE-VERIFY (already had),3127

@@ -1,0 +1,33 @@
+GreekLeads — Customer Segmentation Dataset
+============================================================
+
+Total active non-branch companies: 997,265
+  ΑΤΟΜΙΚΗ:      640,674
+  non-ΑΤΟΜΙΚΗ:  356,591
+Long-tail / free-tier ceiling (Part 4): 166,149
+
+KAD CODES CORRECTED FROM THE ORIGINAL GUESS:
+  - Holding companies: 64.20 does not exist as a populated code in this
+    KAD revision. Corrected to 64.21 'ΥΠΗΡΕΣΙΕΣ ΕΤΑΙΡΕΙΩΝ ΧΑΡΤΟΦΥΛΑΚΙΟΥ'.
+  - B2B SaaS/software: 62.01/62.02 do not exist as separate codes here;
+    everything sits under 62.10. Used 62.10 as the closest code, but it
+    also catches general custom-software shops and freelance devs, not
+    just SaaS businesses — cannot isolate the SaaS business model from KAD
+    alone.
+  - Recruiting/HR: a would-be 78.30 'other HR activities' code does not
+    exist in this KAD revision; only 78.10 (placement agencies) and 78.20
+    (temp staffing) are populated. 78.1x as specified = 78.10 only.
+
+SEGMENTS WITH NO CLEAN KAD (description-text matched instead):
+  - Exporters / import-export: export activity is embedded as a suffix
+    on dozens of product-specific wholesale codes (46.24, 46.31-46.49,
+    46.90, ...), not one dedicated code. Matched on activity description
+    containing 'ΕΞΑΓΩΓ' across ANY current activity. This over-counts
+    (catches secondary/rarely-used export lines) and under-counts (misses
+    exporters who never registered an export-specific KAD line at all).
+  - Franchise developers: no dedicated code. 77.40 covers trademark/IP
+    licensing broadly (not franchise-specific) and 70.20 (management
+    consultancy) has one franchise-granting sub-description. Matched on
+    'FRANCHISE' / 'ΔΙΚΑΙΟΧΡΗΣ' in the description. Most real franchisors
+    register under their core retail/service KAD, not a franchise-specific
+    one, so this segment is very likely a significant undercount.
