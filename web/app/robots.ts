@@ -12,6 +12,11 @@ import { SITE_URL } from '@/lib/site'
  *
  * /people is different: the bare hub and the /people/[slug] profiles are real
  * content, so only the query-string variants are blocked.
+ *
+ * NEVER add /sitemaps/ here. Disallow blocks the crawler from FETCHING the
+ * path, not just from indexing it -- so disallowing the chunk files makes the
+ * sitemap index point at URLs the crawler is forbidden to read. Bing reported
+ * exactly that: "Blocked by robots.txt", 0 URLs discovered.
  */
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -24,7 +29,6 @@ export default function robots(): MetadataRoute.Robots {
           '/people?',     // ?q= variants only; profiles stay crawlable
           '/crm',         // authenticated
           '/api/',
-          '/sitemaps/',  // chunk files are reached via the index, not crawled as pages
           '/sign-in',
           '/sign-up',
         ],
