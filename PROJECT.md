@@ -307,7 +307,7 @@ right rail with company count + active badge. Empty state explains the dataset
 - [ ] Email provider (Resend / SendGrid) for auth emails
 - [ ] Sector mapping — group KAD codes into ~12 broader sectors for the ΚΛΑΔΟΣ column
 - [ ] Affiliate tracking link for influencer marketing
-- [x] Sitemap + robots.txt (Phase 0) — **needs `scripts/one_time/add_sitemap_index.py` run before deploy**
+- [x] Sitemap + robots.txt (Phase 0) — live; index built. See **[`SEO_PLAN.md`](SEO_PLAN.md)**
 - [ ] Verify the property in Google Search Console + Bing Webmaster Tools, submit `/sitemap.xml`
 - [ ] Watch the Tier A indexation ratio for 3–4 weeks, then decide whether to widen `TIER_A`
 - [ ] LinkedIn enrichment bot (Phase 2)
