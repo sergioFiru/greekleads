@@ -256,7 +256,7 @@ function OverviewTab({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
       {/* Stats row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+      <div className="cp-grid cp-grid-3">
         <div className="stat-card">
           <div className="stat-label">Κεφάλαιο</div>
           <div className="stat-value" style={{ fontSize: capital ? 20 : 16, fontFamily: capital ? 'var(--font-mono)' : undefined }}>
@@ -274,8 +274,8 @@ function OverviewTab({
       </div>
 
       {/* Identity / Status / Location — one horizontal section */}
-      <div className="card" style={{ padding: '20px 22px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
+      <div className="card cp-card">
+        <div className="cp-grid cp-grid-3 cp-grid-wide">
           <div>
             <div className="section-label" style={{ marginBottom: 14 }}>Ταυτότητα εταιρείας</div>
             <KvRow label="Νομική μορφή">{company.legal_type_descr}</KvRow>
@@ -306,14 +306,14 @@ function OverviewTab({
       </div>
 
       {showNetwork && (
-        <div className="card" style={{ padding: '20px 22px' }}>
+        <div className="card cp-card">
           <div className="section-label" style={{ marginBottom: 14 }}>Δίκτυο</div>
           <CompanyNetworkGraph arGemi={company.ar_gemi} companyName={company.co_name_el ?? company.ar_gemi} />
         </div>
       )}
 
       {/* Επικοινωνία — standalone horizontal section */}
-      <div className="card" style={{ padding: '20px 22px' }}>
+      <div className="card cp-card">
         <div className="section-label" style={{ marginBottom: 14 }}>Επικοινωνία</div>
         <KvRow label="Website">
           {company.url
@@ -358,7 +358,7 @@ function OverviewTab({
       </div>
 
       {company.objective && (
-        <div className="card" style={{ padding: '20px 22px' }}>
+        <div className="card cp-card">
           <div className="section-label" style={{ marginBottom: 10 }}>Σκοπός εταιρείας</div>
           <div style={{ position: 'relative', maxHeight: objectiveExpanded ? 'none' : 90, overflow: 'hidden' }}>
             <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.75, margin: 0 }}>
@@ -398,7 +398,7 @@ function PeopleTable({ rows, title }: { rows: PersonRow[]; title: string }) {
   return (
     <div style={{ marginBottom: 20 }}>
       <div className="section-label" style={{ marginBottom: 10 }}>{title}</div>
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="card cp-card-table">
         <table className="data-table">
           <thead>
             <tr>
@@ -472,12 +472,12 @@ function ActivitiesTab({ activities }: { activities: KadActivity[] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {activities.length >= 2 && (
-        <div className="card" style={{ padding: '20px 22px' }}>
+        <div className="card cp-card">
           <div className="section-label" style={{ marginBottom: 16 }}>Κατανομή ανά κλάδο</div>
           <KadDonut activities={activities} />
         </div>
       )}
-    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+    <div className="card cp-card-table">
       {visible.map((act, i) => {
         const isMain = isMainActivity(act.type)
         return (
@@ -590,7 +590,7 @@ function RetrievedFinancials({ years }: { years: FinancialYearRow[] }) {
 
   return (
     <div className="cp-fin">
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+      <div className="cp-grid cp-grid-4">
         <FinStatCard label="Κύκλος εργασιών" value={formatEUR(latest.revenue)}
           delta={pctDelta(latest.revenue, prior?.revenue ?? null)} />
         <FinStatCard label="Καθαρά κέρδη" value={formatEUR(latest.net_profit)}
@@ -603,7 +603,7 @@ function RetrievedFinancials({ years }: { years: FinancialYearRow[] }) {
           spark={sparkPoints(chrono.map(y => y.equity))} sparkColor="var(--gemi-text)" />
       </div>
 
-      <div className="card" style={{ padding: '20px 22px 18px' }}>
+      <div className="card cp-card">
         <div className="cp-fin-chart-title" style={{ marginBottom: 2 }}>
           Κύκλος εργασιών <span className="unit">(€)</span>
         </div>
@@ -666,7 +666,7 @@ function RetrievedFinancials({ years }: { years: FinancialYearRow[] }) {
         </div>
       </div>
 
-      <div className="card" style={{ padding: '20px 22px 18px' }}>
+      <div className="card cp-card">
         <div className="cp-fin-chart-title" style={{ marginBottom: 12 }}>Πλήρες ιστορικό, ανά οικονομική χρήση</div>
         <div className="cp-fin-table-scroll">
           <table className="data-table" style={{ minWidth: 620 }}>
@@ -712,7 +712,7 @@ function RetrievedFinancials({ years }: { years: FinancialYearRow[] }) {
 function FinancialsTab({ data }: { data: FinancialsData | null }) {
   if (!data) {
     return (
-      <div className="card" style={{ padding: '20px 22px' }}>
+      <div className="card cp-card">
         <div className="cp-fin-placeholder">
           <span className="cp-fin-dot" />
           Δεν έχει ελεγχθεί ακόμη για δημόσια οικονομικά στοιχεία.
@@ -723,7 +723,7 @@ function FinancialsTab({ data }: { data: FinancialsData | null }) {
 
   if (data.docs_found === 0) {
     return (
-      <div className="card" style={{ padding: '20px 22px' }}>
+      <div className="card cp-card">
         <div className="cp-fin-found">
           <span className="cp-fin-found-copy">
             Δεν βρέθηκαν δημόσια οικονομικά στοιχεία στο ΓΕΜΗ για αυτή την επιχείρηση κατά τον
@@ -736,7 +736,7 @@ function FinancialsTab({ data }: { data: FinancialsData | null }) {
 
   if (data.years.length === 0) {
     return (
-      <div className="card" style={{ padding: '20px 22px' }}>
+      <div className="card cp-card">
         <div className="cp-fin-found">
           <span className="cp-fin-found-copy">
             Βρέθηκαν δημοσιευμένες καταστάσεις στο ΓΕΜΗ, αλλά δεν έχουν εξαχθεί ακόμη μεγέθη.
@@ -753,12 +753,12 @@ function FinancialsTab({ data }: { data: FinancialsData | null }) {
 
 function SimilarTab({ similar }: { similar: SimilarCompany[] }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+    <div className="cp-grid cp-grid-3">
       {similar.map(c => {
         const lc = logoColor(c.ar_gemi)
         return (
           <Link key={c.ar_gemi} href={`/etaireies/${c.ar_gemi}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className="card" style={{ padding: 18 }}>
+            <div className="card cp-card-sm">
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 10 }}>
                 <div className="logo-initial lg"
                   style={{ background: lc.bg, color: lc.fg, border: `1px solid ${lc.border}`, flexShrink: 0 }}>
@@ -941,8 +941,8 @@ export default function CompanyPage({
         <CompanyQuickSearch currentArGemi={company.ar_gemi} />
 
         {/* Header card — full width */}
-        <div ref={headerRef} className="card" style={{ padding: '26px 30px', marginBottom: 20 }}>
-          <div style={{ display: 'flex', gap: 22, alignItems: 'flex-start' }}>
+        <div ref={headerRef} className="card cp-headercard">
+          <div className="cp-hero">
             <CompanyFavicon
               arGemi={company.ar_gemi}
               hasFavicon={company.has_favicon}
@@ -957,7 +957,7 @@ export default function CompanyPage({
             />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-                <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.2, margin: 0 }}>
+                <h1 className="cp-h1">
                   {company.co_name_el ?? '—'}
                 </h1>
                 <span className={`badge ${isActive ? 'badge-active' : 'badge-inactive'}`}>{company.status_descr ?? 'Άγνωστη'}</span>
@@ -983,7 +983,7 @@ export default function CompanyPage({
               </div>
 
               {/* Meta strip */}
-              <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
+              <div className="cp-metastrip">
                 {company.incorporation_date && (
                   <div>
                     <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Ίδρυση</div>

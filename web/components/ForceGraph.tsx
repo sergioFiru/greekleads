@@ -20,6 +20,15 @@ export interface GraphLink {
   dashed?: boolean
 }
 
+/** Exported so the mobile connection list can use the same colour key. */
+export const NODE_COLOR: Record<NodeType, string> = {
+  center:           '#1A4A8A',
+  person:           '#D97706',
+  company_active:   '#0F766E',
+  company_inactive: '#94A3B8',
+  codirector:       '#7C3AED',
+}
+
 const NODE_STYLE: Record<NodeType, { r: number; fill: string; text: string }> = {
   center:           { r: 30, fill: '#1A4A8A', text: '#fff' },
   person:           { r: 21, fill: '#D97706', text: '#fff' },
@@ -61,6 +70,12 @@ export default function ForceGraph({
 
       const svgEl = svgRef.current
       const w = svgEl.getBoundingClientRect().width || 640
+      // On a phone the SVG is ~344px. A 20-character label centred under a node
+      // near the edge is drawn straight off the canvas, so shorten labels and
+      // keep nodes away from the sides.
+      const narrow = w < 520
+      const labelChars = narrow ? 10 : 20
+      const padX = narrow ? 40 : 62
 
       // Deep-copy so D3 can mutate freely
       const nd = nodes.map(n => ({ ...n })) as (GraphNode & { x: number; y: number })[]
@@ -104,6 +119,10 @@ export default function ForceGraph({
         .attr('filter', 'url(#gfx-shadow)')
         .call(
           d3.drag<SVGGElement, typeof nd[0]>()
+            // Mouse only. With touch enabled, a swipe that starts on a node
+            // drags the node instead of scrolling the page — on a phone that
+            // traps the reader in the middle of the article.
+            .filter((event: any) => !event.touches && event.button === 0)
             .on('start', (event, d) => {
               if (!event.active) simulation.alphaTarget(0.3).restart()
               d.fx = d.x; d.fy = d.y
@@ -147,8 +166,8 @@ export default function ForceGraph({
 
         // Label below (skip for co-directors to reduce clutter)
         if (d.type !== 'codirector') {
-          g.append('text')
-            .text(truncate(d.fullLabel, 20))
+          const label = g.append('text')
+            .text(truncate(d.fullLabel, labelChars))
             .attr('text-anchor', 'middle')
             .attr('y', cfg.r + 13)
             .attr('fill', '#374151')
@@ -156,6 +175,10 @@ export default function ForceGraph({
             .attr('font-family', 'system-ui, -apple-system, sans-serif')
             .style('pointer-events', 'none')
             .style('user-select', 'none')
+          // Measured once here rather than per tick — getComputedTextLength
+          // forces layout and there are 60 ticks a second.
+          const node = label.node()
+          ;(d as any).labelHalf = node ? node.getComputedTextLength() / 2 : 0
         }
       })
 
@@ -179,6 +202,15 @@ export default function ForceGraph({
         .on('click', (_ev, d) => { if (d.href) router.push(d.href) })
 
       simulation.on('tick', () => {
+        // Keep every node (and therefore its label) inside the canvas.
+        nd.forEach((d: any) => {
+          const r = NODE_STYLE[d.type as NodeType].r
+          // The margin is whichever is wider: the circle, or half its label.
+          const m = Math.min(Math.max(r, (d.labelHalf ?? 0) + 2), w / 2 - 8)
+          d.x = Math.max(m, Math.min(w - m, d.x ?? w / 2))
+          d.y = Math.max(r + 8, Math.min(height - r - 20, d.y ?? height / 2))
+        })
+
         linkSel
           .attr('x1', (d: any) => d.source.x)
           .attr('y1', (d: any) => d.source.y)

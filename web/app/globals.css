@@ -3556,9 +3556,23 @@ input, select, textarea { font-family: inherit; }
 }
 
 .crm-head {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  gap: 20px; flex-wrap: wrap;
+  /* Three zones: title left, totals dead-centre on the page, action right.
+     1fr / auto / 1fr rather than space-between, because space-between centres
+     the middle child only when the two outer ones happen to be equal width. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 20px;
   padding: 12px 0 20px;
+}
+.crm-head > :first-child { min-width: 0; }
+.crm-head .crm-stats { justify-self: center; }
+.crm-head-action { justify-self: end; }
+
+@media (max-width: 1080px) {
+  .crm-head { grid-template-columns: 1fr; }
+  .crm-head .crm-stats { justify-self: start; }
+  .crm-head-action { justify-self: start; }
 }
 .crm-h1 {
   display: flex; align-items: center;
@@ -3705,6 +3719,91 @@ input, select, textarea { font-family: inherit; }
   display: flex; align-items: center; gap: 8px;
   font-size: 17px; font-weight: 600; color: var(--text-primary); margin-top: 2px;
 }
+/* ── Yuboto partner CTA (CRM list) ─────────────────────────────
+   Uses OUR tokens, not Yuboto's brand colours. A partner's logo belongs in
+   our UI; a partner's palette does not — it makes the product look like
+   someone else's product.                                          */
+
+.yb-mark { border-radius: 50%; flex-shrink: 0; }
+
+.yb-cta {
+  gap: 9px;
+  height: auto; padding: 11px 16px;
+  font-size: 14px; font-weight: 600;
+  border-radius: 9px;
+  box-shadow: 0 1px 2px rgba(16,22,34,.1), 0 8px 20px -10px rgba(37,99,168,.55);
+}
+.yb-cta:hover:not(:disabled) { box-shadow: 0 2px 4px rgba(16,22,34,.12), 0 12px 26px -10px rgba(37,99,168,.7); }
+.yb-cta-count {
+  margin-left: 2px; padding: 2px 8px; border-radius: 999px;
+  background: rgba(255,255,255,.22);
+  font-family: var(--font-mono); font-size: 12.5px; font-weight: 600;
+}
+
+.yb-scrim {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(16,22,34,.42); backdrop-filter: blur(2px);
+}
+.yb-dialog {
+  position: fixed; z-index: 201; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(500px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px); overflow-y: auto;
+  background: var(--card-bg);
+  border: 1px solid var(--border-strong); border-radius: 12px;
+  box-shadow: 0 18px 48px rgba(16,22,34,.22);
+  padding: 22px 24px;
+}
+
+.yb-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
+.yb-title { font-size: 17px; font-weight: 600; color: var(--text-primary); }
+.yb-sub { font-size: 12.5px; color: var(--text-secondary); margin-top: 2px; }
+.yb-close {
+  margin-left: auto; background: none; border: none; cursor: pointer;
+  font-size: 22px; line-height: 1; color: var(--text-muted); padding: 0 2px;
+}
+.yb-close:hover { color: var(--text-primary); }
+
+.yb-reach {
+  display: flex; align-items: baseline; gap: 9px;
+  padding: 13px 15px; border-radius: 8px;
+  background: var(--accent-light); border: 1px solid #DCE7F7;
+}
+.yb-reach-n {
+  font-family: var(--font-mono); font-size: 24px; font-weight: 600;
+  color: var(--accent); line-height: 1;
+}
+.yb-reach-l { font-size: 12.5px; color: var(--text-secondary); line-height: 1.4; }
+
+.yb-body {
+  margin-top: 16px; font-size: 13px; line-height: 1.65; color: var(--text-secondary);
+}
+
+.yb-points {
+  list-style: none; margin: 14px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.yb-points li {
+  position: relative; padding-left: 18px;
+  font-size: 13px; color: var(--text-primary); line-height: 1.45;
+}
+.yb-points li::before {
+  content: ''; position: absolute; left: 3px; top: 7px;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+}
+
+.yb-foot {
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+  margin-top: 20px; padding-top: 14px;
+  border-top: 1px solid var(--border-strong);
+}
+.yb-soon {
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-light); color: var(--accent);
+  font-size: 10.5px; font-weight: 600;
+}
+.yb-foot-note { font-size: 11px; color: var(--text-muted); }
+
 /* ── Contact dialog (pricing enquiry) ──────────────────────── */
 .ct-scrim {
   position: fixed; inset: 0; z-index: 200;
@@ -3808,18 +3907,22 @@ input, select, textarea { font-family: inherit; }
 }
 .crm-title-btn:hover { color: var(--accent); }
 
-.crm-stats { display: flex; gap: 26px; flex-shrink: 0; }
+.crm-stats { display: flex; gap: 30px; flex-shrink: 0; }
 .crm-stats > div {
   display: flex; flex-direction: column;
   font-size: 11px; color: var(--text-muted);
   text-transform: uppercase; letter-spacing: .06em;
 }
+.crm-stats > div { align-items: center; }
 .crm-stats span {
-  font-family: var(--font-mono); font-size: 19px; font-weight: 600;
+  font-family: var(--font-mono); font-size: 22px; font-weight: 600;
   color: var(--text-primary); letter-spacing: 0; text-transform: none;
 }
 
-.crm-pipe { margin-top: 10px; max-width: 520px; }
+/* 520px was fine when this was a flex child that shrank to its content. In the
+   three-zone grid the left column is 1fr, so the bar stretched to the full cap
+   and read as a long rule under the title. Kept compact instead. */
+.crm-pipe { margin-top: 10px; max-width: 300px; }
 .crm-pipe-bar {
   display: flex; height: 7px; border-radius: 4px; overflow: hidden;
   background: var(--surface-subtle); border: 0.5px solid var(--border);
@@ -4800,4 +4903,166 @@ input, select, textarea { font-family: inherit; }
   .st-rank { grid-template-columns: 22px 1fr 58px 48px; }
   .st-rank-bar { display: none; }
   .st-cta { padding: 24px; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   COMPANY PAGE — layout primitives + mobile
+   ══════════════════════════════════════════════════════════════
+   Most organic traffic to /etaireies/* is mobile. These grids used to be
+   inline styles, which no media query can override — which is why the
+   three-column identity card kept its columns at 400px wide and wrapped
+   ΕΜΠΟΡΙΚΟ&ΒΙΟΜΗΧΑΝΙΚΟ ΕΠΙΜΕΛΗΤΗΡΙΟ one letter per line.
+   ══════════════════════════════════════════════════════════════ */
+
+/* Network: graph on desktop, list on phones. Both render; CSS picks one. */
+.cp-net-list { display: none; list-style: none; margin: 0; padding: 0; }
+.cp-net-legend {
+  display: flex; gap: 14px; font-size: 11px; color: var(--text-secondary);
+  flex-wrap: wrap; justify-content: flex-end;
+}
+
+.cp-card    { padding: 20px 22px; }
+.cp-card-sm { padding: 18px; }
+/* Tables live edge-to-edge in their card. `overflow: hidden` used to clip the
+   right-hand columns on a phone with no way to reach them; the mobile block
+   turns this into a horizontal scroll instead. */
+.cp-card-table { padding: 0; overflow: hidden; }
+
+.cp-grid { display: grid; gap: 12px; }
+.cp-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.cp-grid-4 { grid-template-columns: repeat(4, 1fr); }
+.cp-grid-wide { gap: 24px; }
+
+.cp-headercard { padding: 26px 30px; margin-bottom: 20px; }
+.cp-hero { display: flex; gap: 22px; align-items: flex-start; }
+.cp-h1 {
+  font-size: 24px; font-weight: 700; letter-spacing: -0.02em;
+  line-height: 1.2; margin: 0;
+  /* ΓΕΜΗ names are single unbroken uppercase runs; without this a long one
+     pushes the card wider than the viewport. */
+  overflow-wrap: anywhere;
+}
+.cp-metastrip { display: flex; gap: 32px; flex-wrap: wrap; }
+
+/* ── Tablet ─────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .cp-grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .cp-grid-wide { grid-template-columns: repeat(2, 1fr); gap: 20px; }
+}
+
+/* ── Phone ──────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  /* Every multi-column block collapses. Two columns of 150px is not a
+     compromise, it is unreadable — Greek registry values are long. */
+  .cp-grid-3,
+  .cp-grid-4,
+  .cp-grid-wide { grid-template-columns: 1fr; }
+  .cp-grid-wide { gap: 0; }
+  /* Stacked identity blocks need a rule between them, since the visual
+     separation used to come from being in separate columns. */
+  .cp-grid-wide > * + * {
+    margin-top: 18px; padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+
+  .cp-headercard { padding: 18px 16px; margin-bottom: 14px; }
+  .cp-hero { gap: 13px; }
+  .cp-h1 { font-size: 19px; line-height: 1.25; }
+  .cp-metastrip { gap: 14px 22px; }
+
+  .cp-section { margin-bottom: 30px; scroll-margin-top: 108px; }
+
+  /* Key/value rows: label above value rather than fighting for width. A
+     right-aligned value in a 150px column is what produced the vertical
+     letter columns. */
+  .kv-row {
+    display: block; padding: 9px 0;
+  }
+  .kv-key { display: block; margin-bottom: 2px; font-size: 11px; }
+  .kv-val { display: block; text-align: left; overflow-wrap: anywhere; }
+
+  /* Stat cards sit in one column now, so make them read as a compact row
+     instead of three tall boxes. */
+  .cp-grid-3 .stat-card {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 12px; padding: 12px 14px;
+  }
+  .cp-grid-3 .stat-label { margin: 0; }
+  .cp-grid-3 .stat-value { font-size: 18px; }
+
+  /* Tables are the one thing that must NOT stack — a person row reads as a
+     row. Scroll it instead, and let the container show it is scrollable. */
+  .cp-card-table { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .cp-fin-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .data-table { min-width: 520px; }
+
+  .cp-card { padding: 15px 16px; }
+  .cp-card-sm { padding: 14px; }
+  .cp-section-hd h2 { font-size: 17px; }
+
+  /* Section nav already scrolls; hide the scrollbar chrome so it reads as a
+     tab strip rather than a scrolled pane. */
+  .cp-secnav { scrollbar-width: none; -ms-overflow-style: none; }
+  .cp-secnav::-webkit-scrollbar { display: none; }
+  .cp-stickynav-inner { padding: 0 14px; }
+  .cp-stickynav-name { max-width: 150px; }
+
+  .cp-net-graph { display: none; }
+  .cp-net-list { display: flex; flex-direction: column; }
+  .cp-net-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 11px 0; border-top: 1px solid var(--row-divider);
+  }
+  .cp-net-item:first-child { border-top: none; }
+  .cp-net-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    flex-shrink: 0; margin-top: 5px;
+  }
+  .cp-net-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .cp-net-name {
+    font-size: 13.5px; font-weight: 600; color: var(--accent);
+    text-decoration: none; overflow-wrap: anywhere;
+  }
+  span.cp-net-name { color: var(--text-primary); }
+  .cp-net-role { font-size: 11.5px; color: var(--text-muted); }
+  .cp-net-legend { justify-content: flex-start; gap: 10px; }
+
+  .cp-fin-chart { height: 150px; }
+  .cp-fin-bars { gap: 8px; }
+}
+
+@media (max-width: 400px) {
+  .cp-h1 { font-size: 17.5px; }
+  .cp-metastrip { gap: 12px 18px; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   TOP NAV — mobile
+   The nav row was 911px wide inside a 486px viewport, so EVERY page
+   scrolled horizontally. Links become a scrollable strip rather than being
+   hidden: a mobile visitor arriving from Google is exactly who needs to
+   discover the rest of the site.
+   ══════════════════════════════════════════════════════════════ */
+@media (max-width: 860px) {
+  .topnav { padding: 0 14px; gap: 12px; }
+  .nav-spacer { display: none; }
+  .nav-links {
+    flex: 1; min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none; -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .nav-links::-webkit-scrollbar { display: none; }
+  .nav-link { padding: 7px 10px; font-size: 13.5px; white-space: nowrap; }
+  .brand-word { font-size: 15.5px; }
+  .nav-live, .nav-divider { display: none; }
+  .btn-nav { padding: 7px 9px; font-size: 13px; }
+  .btn-cta { padding: 7px 11px !important; font-size: 13px !important; white-space: nowrap; }
+}
+
+@media (max-width: 480px) {
+  /* Below this the CTA and the links cannot both breathe. The links win —
+     "Δοκιμάστε δωρεάν" is duplicated by the in-page paywall and pricing CTAs,
+     the nav is the only site-wide wayfinding a phone visitor gets. */
+  .btn-cta { display: none !important; }
 }

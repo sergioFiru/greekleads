@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import Icon from './Icon'
+import YubotoCta from './YubotoCta'
 import CrmDataGrid, { type GridRow } from './CrmDataGrid'
 import { DEFAULT_COLUMNS, STAGES, stageOf } from '@/lib/crmColumns'
 
@@ -175,6 +176,10 @@ export default function CrmListDetail({ listId }: { listId: string }) {
           <div><span>{stats.phone.toLocaleString('el-GR')}</span>τηλέφωνο</div>
           <div><span>{stats.web.toLocaleString('el-GR')}</span>website</div>
         </div>
+
+        <div className="crm-head-action">
+          <YubotoCta emailCount={stats.email} listName={meta?.name ?? 'η λίστα'} />
+        </div>
       </div>
 
       <div className="crm-actionbar">
@@ -186,12 +191,6 @@ export default function CrmListDetail({ listId }: { listId: string }) {
           <span className="std-soon">Προσεχώς</span>
         </div>
         <span className="std-spacer" />
-        <button className="sp-btn sp-btn-secondary sp-btn-sm" disabled title="Προσεχώς">
-          Instantly <span className="std-soon">Προσεχώς</span>
-        </button>
-        <button className="sp-btn sp-btn-secondary sp-btn-sm" disabled title="Προσεχώς">
-          HubSpot <span className="std-soon">Προσεχώς</span>
-        </button>
         <Link href="/search" className="sp-btn sp-btn-primary sp-btn-sm">
           <Icon name="plus" size={12} /> Προσθήκη εταιρειών
         </Link>

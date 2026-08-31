@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
-import ForceGraph, { GraphNode, GraphLink } from './ForceGraph'
+import Link from 'next/link'
+import ForceGraph, { GraphNode, GraphLink, NODE_COLOR } from './ForceGraph'
 import type { ConnectionRow } from '@/app/api/company/[ar_gemi]/connections/route'
 
 export default function CompanyNetworkGraph({
@@ -106,12 +107,12 @@ export default function CompanyNetworkGraph({
             Στελέχη που δραστηριοποιούνται και σε άλλες εταιρείες
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 14, fontSize: 11, color: 'var(--text-secondary)', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <div className="cp-net-legend">
           {[
-            { color: '#1A4A8A', label: 'Εταιρεία' },
-            { color: '#D97706', label: 'Στελέχη' },
-            { color: '#0F766E', label: 'Συνδεδεμένες' },
-            { color: '#94A3B8', label: 'Ανενεργές' },
+            { color: NODE_COLOR.center,           label: 'Εταιρεία' },
+            { color: NODE_COLOR.person,           label: 'Στελέχη' },
+            { color: NODE_COLOR.company_active,   label: 'Συνδεδεμένες' },
+            { color: NODE_COLOR.company_inactive, label: 'Ανενεργές' },
           ].map(({ color, label }) => (
             <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
@@ -120,7 +121,27 @@ export default function CompanyNetworkGraph({
           ))}
         </div>
       </div>
-      <ForceGraph nodes={nodes} links={links} height={400} />
+      {/* A 344px force-directed graph with 20 nodes is unreadable on a phone —
+          labels overlap whatever you do to them. The same data reads better as
+          a list, so swap by CSS rather than shrinking something that cannot
+          work at that size. Both are rendered; only one is displayed. */}
+      <div className="cp-net-graph">
+        <ForceGraph nodes={nodes} links={links} height={400} />
+      </div>
+
+      <ul className="cp-net-list">
+        {nodes.filter(n => n.type !== 'center').map(n => (
+          <li key={n.id} className="cp-net-item">
+            <span className="cp-net-dot" style={{ background: NODE_COLOR[n.type] }} />
+            <span className="cp-net-body">
+              {n.href
+                ? <Link href={n.href} className="cp-net-name">{n.fullLabel}</Link>
+                : <span className="cp-net-name">{n.fullLabel}</span>}
+              {n.role && <span className="cp-net-role">{n.role}</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
         Κάντε κλικ σε κόμβο για μετάβαση · σύρτε για αναδιάταξη
       </div>
