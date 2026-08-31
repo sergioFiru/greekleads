@@ -19,7 +19,9 @@ interface ListRow {
 interface Pill { id: string; key: string; value: string }
 
 type Tab = 'search' | 'list'
-type Plan = 'free' | 'paid'
+import type { PlanName } from '@/lib/entitlements'
+
+type Plan = PlanName
 
 export default function SaveToDialog({
   open,
@@ -49,7 +51,7 @@ export default function SaveToDialog({
   const [tab, setTab]         = useState<Tab>(defaultTab)
   const [lists, setLists]     = useState<ListRow[]>([])
   const [plan, setPlan]       = useState<Plan>('free')
-  const [limits, setLimits]   = useState({ maxLists: 1, maxSavedSearches: 3 })
+  const [limits, setLimits]   = useState({ maxLists: 1, maxSavedSearches: 3, canBringAlive: false })
   const [savedCount, setSavedCount] = useState(0)
   const [authed, setAuthed]   = useState(true)
   const [loading, setLoading] = useState(false)
@@ -83,8 +85,9 @@ export default function SaveToDialog({
       setPlan(ld.plan ?? 'free')
       setSavedCount((sd.searches ?? []).length)
       setLimits({
-        maxLists: ld.plan === 'paid' ? Infinity : 1,
+        maxLists:         ld.limits?.maxLists ?? 1,
         maxSavedSearches: sd.limit ?? 3,
+        canBringAlive:    !!ld.limits?.canBringAlive,
       })
       // Land on "pick existing" when they already have lists — the common case
       // after the first one.
@@ -114,7 +117,7 @@ export default function SaveToDialog({
 
   const atListCap   = Number.isFinite(limits.maxLists) && lists.length >= limits.maxLists
   const atSearchCap = Number.isFinite(limits.maxSavedSearches) && savedCount >= limits.maxSavedSearches
-  const canAlive    = plan === 'paid'
+  const canAlive    = limits.canBringAlive
   // In allMatching mode the selection is the filter set, so the count comes
   // from the server's total rather than from an array of ids.
   const selCount = allMatching

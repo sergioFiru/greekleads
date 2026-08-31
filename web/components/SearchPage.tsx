@@ -1,8 +1,9 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import Icon from './Icon'
-import Paywall from './Paywall'
+import Paywall, { type GateReason } from './Paywall'
 import { ScoutPanel, ScoutSummaryBar, type ScoutRecipe } from './Scout'
 import CompanyPreviewPanel from './CompanyPreviewPanel'
 import SaveToDialog from './SaveToDialog'
@@ -74,7 +75,6 @@ const EMPTY: SearchState = {
 }
 
 const GATE_DISABLED = process.env.NEXT_PUBLIC_DISABLE_GATE === 'true'
-const FREE_PAGE_LIMIT = 2
 
 const SOCIAL_PLATFORMS = [
   { key: 'instagram_url', label: 'Instagram', icon: 'instagram',  color: '#E1306C' },
@@ -297,7 +297,7 @@ export default function SearchPage() {
   const [total, setTotal]     = useState<number | null>(null)
   const [page, setPage]       = useState(() => parseInt(searchParams.get('page') ?? '1', 10))
   const [loading, setLoading] = useState(false)
-  const [gated, setGated]     = useState(false)
+  const [gated, setGated]     = useState<GateReason | null>(null)
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({ statuses: [], prefectures: [], legal_types: [], activities: [] })
   const [activitySearch, setActivitySearch] = useState('')
   const [kadOpen, setKadOpen] = useState(false)
@@ -323,6 +323,10 @@ export default function SearchPage() {
   const [excluded, setExcluded]         = useState<Set<string>>(new Set())
   const [selectAllAsk, setSelectAllAsk] = useState(false)
   const [exporting, setExporting]       = useState(false)
+  // The caller's own export allowance. null until known; 0 means not entitled.
+  // The server enforces this too (/api/search/export) — this is the UI half, so
+  // the button explains the gate instead of silently producing a file.
+  const [maxExportRows, setMaxExportRows] = useState<number | null>(null)
   const [sortBy, setSortBy]     = useState(() => searchParams.get('sort') ?? '-name')
   const [scoutOpen, setScoutOpen]       = useState(false)
   const [scoutSummary, setScoutSummary] = useState<string | null>(null)
@@ -343,15 +347,33 @@ export default function SearchPage() {
       .catch(err => console.error('[SearchPage] Failed to load filters:', err))
   }, [])
 
+  // Entitlements are per-user, so this is a client fetch rather than a prop —
+  // the page itself is cached and must stay identical for everyone.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/billing/status')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled) setMaxExportRows(d?.limits?.maxExportRows ?? 0) })
+      .catch(() => { if (!cancelled) setMaxExportRows(0) })
+    return () => { cancelled = true }
+  }, [])
+
   const search = useCallback(async (f: SearchState, p: number) => {
-    setLoading(true); setGated(false)
+    setLoading(true); setGated(null)
     try {
       const res = await fetch('/api/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filters: f, page: p }),
       })
-      if (res.status === 403) { setGated(true); setLoading(false); return }
+      if (res.status === 403) {
+        // The server decides which wall: 'signup' for anonymous, 'upgrade' for
+        // a signed-in free user who has run out of pages.
+        const d = await res.json().catch(() => ({}))
+        setGated(d.reason === 'upgrade' ? 'upgrade' : 'signup')
+        setLoading(false)
+        return
+      }
       const data = await res.json()
       if (data.error) console.error('[SearchPage] API error:', data.error)
       setResults(data.results ?? [])
@@ -561,11 +583,19 @@ export default function SearchPage() {
     }
   }
 
+  // null = still loading, so don't flash a locked button at a paying customer.
+  const canExport = (maxExportRows ?? 0) > 0
+  const exportCapped = canExport && selectionCount > (maxExportRows ?? 0)
+
   const exportSelected = () => {
+    // This path builds the CSV in the browser from rows already in memory, so
+    // it never reached /api/search/export and was therefore ungated — CSV
+    // export was free for everyone. The cap is applied here as well now.
+    if (!canExport) return
     if (allMatching) { exportAllMatching(); return }
     // Previously `results.filter(...)`, which silently dropped every selected
     // company that was not on the page you happened to be standing on.
-    const rows = Array.from(selected.values())
+    const rows = Array.from(selected.values()).slice(0, maxExportRows ?? 0)
     if (rows.length === 0) return
     const esc = (v: string) => `"${(v ?? '').replace(/"/g, '""')}"`
     const csv = [
@@ -930,7 +960,7 @@ export default function SearchPage() {
                       <div key={i} style={{ height: 56, borderBottom: '0.5px solid var(--row-divider)' }} />
                     ))}
                   </div>
-                  <Paywall />
+                  <Paywall reason={gated} />
                 </div>
               ) : (
                 <table className="sp-table">
@@ -1214,7 +1244,11 @@ export default function SearchPage() {
                     </button>
                   </>
                 ) : (
-                  <span>Επιλέξτε γραμμές για εξαγωγή CSV</span>
+                  <span>
+                    {maxExportRows !== null && !canExport
+                      ? 'Η εξαγωγή CSV περιλαμβάνεται στο πλάνο Agency'
+                      : 'Επιλέξτε γραμμές για εξαγωγή CSV'}
+                  </span>
                 )}
               </div>
               <div className="sp-footer-right">
@@ -1242,14 +1276,30 @@ export default function SearchPage() {
                     </button>
                   </div>
                 )}
-                <button
-                  className="sp-btn sp-btn-primary"
-                  disabled={selectionCount === 0 || exporting}
-                  onClick={exportSelected}
-                >
-                  <Icon name="download" size={13} />
-                  {exporting ? 'Εξαγωγή…' : `Εξαγωγή (${selectionCount.toLocaleString('el-GR')})`}
-                </button>
+                {maxExportRows !== null && !canExport ? (
+                  <Link
+                    href="/pricing"
+                    className="sp-btn sp-btn-secondary"
+                    title="Η εξαγωγή CSV περιλαμβάνεται στο πλάνο Agency"
+                  >
+                    <Icon name="lock" size={13} />
+                    Εξαγωγή CSV
+                  </Link>
+                ) : (
+                  <button
+                    className="sp-btn sp-btn-primary"
+                    disabled={selectionCount === 0 || exporting || maxExportRows === null}
+                    onClick={exportSelected}
+                    title={exportCapped
+                      ? `Το πλάνο σας εξάγει έως ${(maxExportRows ?? 0).toLocaleString('el-GR')} γραμμές`
+                      : undefined}
+                  >
+                    <Icon name="download" size={13} />
+                    {exporting
+                      ? 'Εξαγωγή…'
+                      : `Εξαγωγή (${Math.min(selectionCount, maxExportRows ?? 0).toLocaleString('el-GR')})`}
+                  </button>
+                )}
               </div>
             </div>
           </div>

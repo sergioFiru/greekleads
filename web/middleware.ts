@@ -51,5 +51,12 @@ export const config = {
     '/api/search/:path*',
     '/sign-in/:path*',
     '/sign-up/:path*',
+    // Billing: checkout and portal call requireUser() and so need auth(). The
+    // WEBHOOK is deliberately absent — Stripe posts with no cookies, it is
+    // authenticated by its signature instead, and routing it through Clerk
+    // would risk the same handshake redirect that was breaking Googlebot.
+    '/api/billing/checkout',
+    '/api/billing/portal',
+    '/api/billing/status',
   ],
 }

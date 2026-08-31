@@ -601,7 +601,171 @@ Scrape vrisko.gr for supplementary company data not available in GEMI (details T
 
 ---
 
+## Planned: Scout v2 — ΚΑΔ vocabulary table + tool loop (designed Aug 2026, not built)
+
+### Why Scout v1 is at its limit
+
+Scout today is a **one-shot text→JSON translator**: brief → Gemini 2.5 Flash with a
+~100-line static system prompt → filters + Greek keyword stems → `primary_kad ~* '\mSTEM'`
+→ COUNT. Every bug so far (ΕΚΣΚΑΦΩΝ, ΦΩΤΟΒΟΛΤ-as-buyer, legal-type-as-size,
+has_email by reflex) was patched by **adding another paragraph to the prompt**.
+That approach is out of road. The real gaps are structural:
+
+1. **No tools, no loop.** It guesses stems, and the COUNT happens *after* it has
+   already answered. It never sees its own result and cannot react to it.
+2. **It cannot ask a question.** The schema has exactly one shape (a recipe), so
+   every ambiguity is silently resolved by guessing.
+3. **Its knowledge of the data is 17 hand-typed lines** in the prompt. Anything
+   off that list (marble, wood, printing, vets, gyms…) is invented from
+   pretraining and hoped to exist in ΓΕΜΗ's vocabulary.
+4. **It optimises the wrong objective** — the prompt literally says "return the
+   MAXIMUM number of relevant prospects".
+5. **It reads `primary_kad`** (the stale description column) not
+   `primary_kad_code`, and ignores secondary activities entirely.
+6. **It reaches 8 of ~20 filters.** No year range, municipality, kad_prefix or
+   social filters — so "νεοσύστατες στη Γλυφάδα με Instagram" is unreachable.
+
+Agreed plan, in order: (1) `kad_vocab` table → (2) tool loop → (3) let it ask
+questions → (4) target band instead of "maximum" → (5) show the chosen ΚΑΔ list
+with per-code counts and checkboxes → (6) wire the missing filters → (7) stream +
+log briefs as an eval set → (8) stronger model for the planning turn.
+
+### Measured facts about the ΚΑΔ vocabulary (probed Aug 2026, not assumed)
+
+- **The live vocabulary is 9.507 codes.** Filter `dtTo IS NULL` +
+  `kadVersion='kad_2026'` and code→descr is **strictly 1:1** (9.507 codes,
+  9.507 pairs). No ambiguity.
+- ⚠️ **`kad_2008` and `kad_2026` reuse the same 8-digit code for different
+  activities.** `19200000` = luggage in one, petroleum refining in the other;
+  `13101000` = iron ore vs wool grease. Across all history: 21.032 distinct
+  codes, 22.452 code/descr pairs, 14.267 distinct descriptions. **Any code-based
+  logic must pin kadVersion.** Harmless today only because of the split below.
+- **Open activity is ~100% kad_2026**: of 8.482.111 open rows, 8.482.051 are
+  kad_2026 and **60** are kad_2008. Historically it is near-even (8,5M vs 6,5M),
+  so the collision bites only on closed activities.
+- **Firms register at every depth** — this kills any "normalise to 4-digit class"
+  idea. 8-digit 4.896 codes/597.163 firms · 6-digit 3.842/307.770 ·
+  4-digit 512/199.788 · 3-digit 246/55.540 · 2-digit 11/20.857.
+  **76.397 firms sit shallower than class**, so a code is a *point*: a firm on
+  `41000000` is NOT inside `41100000`. Prefix rollup is for aggregation only.
+- Structure: 87 divisions → 288 groups → 770 classes → 4.612 categories → 9.507 codes.
+- **Half the vocabulary is long tail**: 1.703 codes have zero primary firms,
+  3.309 have 1–9. All 9.507 have ≥1 firm somewhere.
+- **Secondary activities are a 7× larger surface than Scout touches today** —
+  8,48M open activity rows over 1,18M firms with an open primary (~7 each).
+- **Description search is mandatory, prefixes are not enough**: `ΜΑΡΜΑΡ` spans
+  five divisions — 08 quarrying, 23 cutting, 43 installation, 46 wholesale,
+  47 retail.
+- **`00010000 ΕΛΛΕΙΨΗ ΔΡΑΣΤΗΡΙΟΤΗΤΑΣ` is the 9th largest primary code in Greece
+  (11.864 firms; 12.598 across division 00).** Registered-but-dormant shells,
+  currently landing in `nace.ts`'s 'X' bucket and counted as prospects everywhere.
+- **Division 45 does not exist in Greek ΚΑΔ 2026.** Vehicle sales/repair live in
+  95, which `nace.ts` maps to *S — Άλλες υπηρεσίες*, so every car repair shop in
+  the country files under "other services" rather than Εμπόριο on `/statistika`.
+- Environment: PostgreSQL **18.6**; `pg_trgm` 1.6 installed; **`vector` 0.8.6
+  available but not installed**; we connect as `postgres` with CREATE privilege.
+  `unaccent` available — deliberately skipped, normalisation is done in Python so
+  it matches the frontend's JS `norm()` exactly.
+- The full per-code aggregate ran in **20,5 s** — comfortably a nightly job.
+
+### Decisions taken (Aug 2026)
+
+- **Grain: codes only** (9.507 rows), rollup by prefix at query time. No
+  synthetic class/group/division rows, no subtree count columns.
+- **Coverage: keep everything, flag it.** Division 00 gets `is_dormant`; the
+  1.703 zero-primary codes stay and are visible via `primary_firms = 0`. The
+  search tool excludes them by default. The table stays a faithful mirror of ΓΕΜΗ.
+- **Retrieval: hybrid.** GIN trigram on `descr_norm` **+** vector, fused with
+  reciprocal-rank fusion. Trigram gives a precision floor and a working fallback
+  when the embedding call fails; vectors cover synonyms trigram cannot reach.
+- **Embeddings from day one**, `gemini-embedding-001` (Matryoshka) at **768 dims**
+  — enough for 9.507 short Greek phrases and keeps the HNSW index tiny.
+  ⚠️ **OpenRouter has no embeddings endpoint**, so this needs a *new direct
+  Google AI Studio key*, in `scripts/.env` **and** in Vercel — the query must be
+  embedded per request, putting a third-party call (~100–200 ms) on the critical
+  path of `/api/scout`.
+- **HNSW, not IVFFlat** — at 9.507 rows IVFFlat's clustering buys nothing and
+  needs `lists` tuning.
+- **Build: `scripts/one_time/build_kad_vocab.py`** (with progress bar, user runs
+  it) for the initial build; refresh folded into the nightly
+  `scripts/bots/stats_rollup.py`, mirroring how `primary_kad_code` is topped up.
+- **`aliases` left empty in v1** — measure what hybrid search actually misses
+  before guessing synonyms.
+
+### Agreed schema
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE kad_vocab (
+  code            char(8)     PRIMARY KEY,
+  kad_version     text        NOT NULL DEFAULT 'kad_2026',
+  descr           text        NOT NULL,
+  descr_norm      text        NOT NULL,   -- NFD, marks stripped, ς→σ, uppercase
+
+  division        char(2)     NOT NULL,
+  group_code      char(3)     NOT NULL,
+  class_code      char(4)     NOT NULL,
+  category_code   char(6)     NOT NULL,
+  depth           smallint    NOT NULL,   -- 2 | 3 | 4 | 6 | 8
+  section         char(1)     NOT NULL,   -- A–U per nace.ts, 'X' if unmapped
+  section_label   text        NOT NULL,
+
+  primary_firms   integer     NOT NULL,   -- open kad_2026, type='Κύρια'
+  primary_active  integer     NOT NULL,   -- + status_descr='Ενεργή'
+  any_firms       integer     NOT NULL,
+  any_active      integer     NOT NULL,
+
+  with_email      integer     NOT NULL,   -- all four over primary_active
+  with_phone      integer     NOT NULL,
+  with_website    integer     NOT NULL,
+  with_social     integer     NOT NULL,
+
+  is_dormant      boolean     NOT NULL DEFAULT false,
+  aliases         text[]      NOT NULL DEFAULT '{}',
+  embedding       vector(768),
+
+  built_at        timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX kad_vocab_descr_trgm ON kad_vocab USING gin (descr_norm gin_trgm_ops);
+CREATE INDEX kad_vocab_alias_gin  ON kad_vocab USING gin (aliases);
+CREATE INDEX kad_vocab_embed_hnsw ON kad_vocab USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX kad_vocab_class      ON kad_vocab (class_code);
+CREATE INDEX kad_vocab_division   ON kad_vocab (division);
+```
+
+### Next step when this resumes
+
+Write `scripts/one_time/build_kad_vocab.py`. **Blocked on**: a Google AI Studio
+key for `gemini-embedding-001`. Probe scripts used to establish all of the above
+are in the session scratchpad (`kad_vocab_probe{,2,3}.py`).
+
+---
+
 ## Session Log
+- 2026-08-31: Company-page SEO pass (titles, meta, schema). New `web/lib/companyName.ts`.
+  ROOT CAUSE WAS NOT THE BRIEF'S GUESS: nothing lowercased the title - it read co_name_el directly. Google REWROTE it because it was long and all-caps; fundamenta's short abbreviated caps title in the same SERP was left alone. Fix = abbreviate the legal-form boilerplate and de-shout Latin words so Google keeps our title.
+  DELIBERATELY NOT lowercasing Greek: 980.858/1.053.852 active names are ALL CAPS and only 60.634 have accents, because uppercase Greek correctly omits them. Lowercasing would turn a million correct names into misspelt ones. Legal-form boilerplate is the exception (fixed vocabulary, safe to accent).
+  Titles now prefer the d.t. (364.023 active companies have one) - people google the brand, not the legal name. Meta description replaced the old `objective` fallback (a legal blob identical across thousands of firms, which Google ignored) with a dynamic list that only promises fields the company actually has, owners/directors first (the differentiator vs 11888/fundamenta), budgeted to 155 chars by dropping whole items.
+  BUGS FOUND WHILE VERIFYING AGAINST REAL ROWS:
+   * `company_persons.ar_gemi` is TEXT, `companies.ar_gemi` is BIGINT - my new EXISTS would have 500'd EVERY company page. tsc and next build both passed; only running it caught this.
+   * JS `\b` is an ASCII word boundary and Greek letters are not \w, so every legal-form regex silently no-opped. Replaced with (?:^|\s).
+   * Homoglyphs: real d.t. values include `SIDE A.E.` (Latin A/E) and `Μ.EΠΕ`; plus `Μ.Ε.Π.Ε.` glues the monoprosopi prefix on with no space. Without folding these we appended a second suffix (`ZV Greece Μ.Ε.Π.Ε. Ε.Π.Ε.`). hasLegalForm now normalises the last token.
+   * `S.P.S.` became `S.p.s.` - dotted acronyms are now left alone.
+   * Meta-description concatenation `179604901000ORIGAMI` was NOT in the meta tag: the GEMI badge and the English-name span are adjacent flex children separated only by `gap:10`, i.e. CSS not text, so crawlers ran them together. Added a real separator text node.
+   * `{arr.length && <x/>}` rendered a literal 0 when co_names_en was empty.
+  Schema: alternateName was already shipped; ADDED `vatID` and `sameAs` (social profiles).
+- 2026-08-30: PFA question closed - no customers expected before the IKE, so a Romanian VAT/OSS/e-Factura registration would be stood up and abandoned inside a month. Stripe goes live only on the Greek IKE. (Correction to the earlier entry: Stripe DOES support account-to-account migration - PCI data-migration request for payment methods, Billing Migration Toolkit for subscriptions, SEPA mandates carry over - but it is ~10 business days plus documented elevated post-migration declines, so it is disproportionate for a handful of customers.)
+  BUG CLOSED: `exportSelected` in SearchPage built the CSV client-side from rows already in memory and never called /api/search/export, so **CSV export was ungated for everyone** despite the server enforcing maxExportRows. SearchPage now fetches /api/billing/status, locks the button to /pricing when maxExportRows is 0, slices the selection to the cap, and shows the cap in the button label. Server check unchanged - this is the UI half.
+  New `scripts/one_time/grant_plan.py` - grant/revoke a plan with no Stripe (source='manual', synthetic stripe_* values, stable id manual_<user_id> so re-granting updates in place). Same table and same read path as a real subscription on purpose: a granted Agency user exercises exactly what a paying one does. Needed a new `billing_subscriptions.source` column - create_billing_tables.py gained an idempotent ALTER, so RE-RUN IT. `--list` / `--list-users` help find a Clerk user id.
+- 2026-08-30: ENTITY BLOCKER FOUND. The existing Stripe account was created under a Romanian PFA and is therefore a RO account (hence RON). Stripe: "After activating a Stripe service on a live account, you can't change the business origin country. To use a different supported country, create a new account." Removing the business info does not change what the account is. Decision: DO NOT launch live on it. The Greek IKE (~Oct 2026) gets a brand-new Stripe account; billing through the RO PFA would mean 0% reverse-charge invoices from a Romanian entity to Greek customers (needing VIES-valid VAT numbers many small Greek firms lack), RO e-Factura instead of myDATA, and - since subscriptions cannot be moved between Stripe accounts - every subscriber re-entering their card at migration. Nothing is wasted by waiting: sandbox tax registrations never carry to live anyway, and the app is fully env-driven, so switching accounts is 4 env values and ZERO code changes.
+  Built alongside: `web/scripts/setup-stripe.mjs` - idempotent Products/Prices creation (one Product per tier, EUR, tax_behavior=exclusive, tax_code txcd_10103001), refuses live keys without --live, dry-run by default, and REPORTS TAX STATE - warns loudly when there is no active registration. `/api/billing/status` + `components/BillingCard.tsx` on /crm: plan, status chip, renewal/expiry date, past_due warning, portal button. Polls for ~15s on ?checkout=success because Stripe redirects back before the webhook lands.
+- 2026-08-29: Stripe subscriptions built (Stripe Tax route). SDK 16 -> 22.6; API version PINNED to 2026-07-29.dahlia. New `scripts/one_time/create_billing_tables.py` -> billing_customers / billing_subscriptions / billing_events (NOT YET RUN). Postgres is the source of truth: getAuth() now reads `billing_subscriptions` via lib/billing.ts, Clerk publicMetadata is only a mirror. Routes: /api/billing/checkout (hosted Checkout, automatic_tax + tax_id_collection + customer_update.address=auto, no payment_method_types), /api/billing/portal, /api/billing/webhook (signature-verified, Node runtime, deliberately OUT of the Clerk matcher). GOTCHA FOUND: `current_period_end` lives on the subscription ITEM, not the Subscription, since API 2025-03-31 - reading the old path stores null. Webhook idempotency is claim-then-RELEASE: claiming without releasing on failure would make Stripe's retry a silent no-op and lose the event permanently. past_due still grants access (dunning); incomplete does not. Env: STRIPE_PRICE_MONTHLY -> STRIPE_PRICE_INDIVIDUAL_YEARLY + STRIPE_PRICE_AGENCY_MONTHLY.
+  BLOCKED ON (user): Greek VAT registration recorded in Stripe live mode BEFORE the first charge (automatic_tax silently collects EUR 0 with no registration, unfixable retroactively); create the two Products with tax_behavior=exclusive and tax code txcd_10103001 (confirm with accountant); webhook endpoint + signing secret; myDATA invoicing tool; confirm CONTACT_EMAIL mailbox exists.
+- 2026-08-29: Rebuilt `/pricing` from GREEKLEADS_PRICING.md - four tiers (Dorean / Individual 75eur-yr / Agency 100eur-mo featured / Enterprise contact-us). Killed the rejected pay-per-export tier. Every number on the page is derived from entitlements.ts + pricing.ts, so the copy can no longer contradict the code. Enterprise CTA is a mailto (CONTACT_EMAIL in pricing.ts - VERIFY THE MAILBOX EXISTS). Paid CTAs point at /sign-up?plan=<tier> so the post-signup checkout handoff has a hook. CSS: 4-col grid, 2-up below 1080, 1-up below 640; page max-width 900->1180. `npx next build` clean, /pricing still statically prerendered.
+- 2026-08-29: Auth/payments groundwork. Clerk moved to a PRODUCTION instance (clerk.greekleads.gr) - fixes the Googlebot 307 handshake at the root and lifts the 100-user dev cap. Rewrote `lib/entitlements.ts` for four tiers per GREEKLEADS_PRICING.md: added `anon` as a real plan key (a signed-in free user was previously treated exactly like a stranger, so signup bought nothing), replaced `canExportCsv:boolean` with `maxExportRows:number`, added `maxSearchPages`. Gate is now anon 2 pages -> signup wall, free 5 pages -> upgrade wall; /api/search returns `reason` so the client shows the right one. Removed three hard-coded limits that violated the single-source rule (SearchPage's duplicate FREE_PAGE_LIMIT, SaveToDialog's `plan==='paid' ? Infinity : 1`, CrmPage's literal '1 list / 50 contacts' and its now-false 'unlimited lists' promise). New `lib/pricing.ts` holds the public prices. Stripe still entirely unbuilt.
+- 2026-08-29: Designed Scout v2 - probed the KAD vocabulary (9.507 live codes, kad_2008/kad_2026 code collision, firms at every depth, division 45 absent, 12.598 dormant shells); agreed the `kad_vocab` schema, hybrid trigram+vector retrieval, Gemini 768-dim embeddings. Build script not yet written.
 - 2026-06-05: Built internal lead explorer (`tools/leads.py`) — Flask, filters, CSV export
 - 2026-06-05: Added DB indexes (GIN, trigram, B-tree)
 - 2026-06-05: Activity filter uses primary KAD only (type='Κύρια')

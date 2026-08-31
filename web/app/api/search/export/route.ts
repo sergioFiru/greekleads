@@ -15,16 +15,18 @@ import { buildWhere, hasActiveFilter, type SearchFilters } from '@/lib/searchQue
  * Body: { filters: SearchFilters, excluded?: string[] }
  *   excluded = rows the user unticked after hitting "select all".
  *
- * Capped by entitlements.maxBulkAdd — the same ceiling that governs bulk list
- * adds — because an unbounded SELECT over a 1.6M-row table is both slow and a
- * file nothing can open.
+ * Capped by entitlements.maxExportRows, because an unbounded SELECT over a
+ * 1.6M-row table is both slow and a file nothing can open. Export has its own
+ * cap rather than borrowing maxBulkAdd: a tier can reasonably be allowed to
+ * build large lists in-app while exporting little or nothing (Individual does
+ * exactly that).
  */
 export async function POST(req: NextRequest) {
   const user = await requireUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   const limits = limitsFor(user.plan)
-  if (!limits.canExportCsv) {
+  if (limits.maxExportRows <= 0) {
     return NextResponse.json({ error: 'not_entitled', plan: user.plan }, { status: 403 })
   }
 
@@ -46,9 +48,8 @@ export async function POST(req: NextRequest) {
     const exclIdx = params.length + 1
     const limIdx  = params.length + 2
 
-    // The bulk cap is a real number on every plan (never Infinity) — see the
-    // maxBulkAdd note in entitlements.ts.
-    const cap = limits.maxBulkAdd
+    // A real number on every plan (never Infinity) — see entitlements.ts.
+    const cap = limits.maxExportRows
 
     const rows = await queryNoParallel<{
       ar_gemi: string

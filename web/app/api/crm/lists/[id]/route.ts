@@ -109,7 +109,7 @@ export async function GET(
       limits: {
         maxMembersPerList: limitsFor(user.plan).maxMembersPerList,
         canBringAlive:     limitsFor(user.plan).canBringAlive,
-        canExportCsv:      limitsFor(user.plan).canExportCsv,
+        maxExportRows:     limitsFor(user.plan).maxExportRows,
         canIntegrate:      limitsFor(user.plan).canIntegrate,
       },
     })

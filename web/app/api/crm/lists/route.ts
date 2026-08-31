@@ -56,7 +56,20 @@ export async function GET() {
        ORDER BY l.updated_at DESC`,
       [user.userId]
     )
-    return NextResponse.json({ lists: rows, plan: user.plan })
+    // Caps travel with the payload so the client never re-derives a limit
+    // from the plan name — that inference is what entitlements.ts exists to
+    // prevent, and it silently broke when 'paid' became three tiers.
+    const limits = limitsFor(user.plan)
+    return NextResponse.json({
+      lists: rows,
+      plan: user.plan,
+      limits: {
+        maxLists:          limits.maxLists,
+        maxMembersPerList: limits.maxMembersPerList,
+        maxBulkAdd:        limits.maxBulkAdd,
+        canBringAlive:     limits.canBringAlive,
+      },
+    })
   } catch (err) {
     console.error('[/api/crm/lists GET]', err)
     return NextResponse.json({ error: String(err) }, { status: 500 })

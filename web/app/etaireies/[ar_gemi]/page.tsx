@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { query, queryOne, queryWithTimeout } from '@/lib/db'
 import { brandTitles } from '@/lib/brand'
+import { companyTitle, companyDescription } from '@/lib/companyName'
 import TopNav from '@/components/TopNav'
 import CompanyPage from '@/components/CompanyPage'
 import type { CompanyData, PersonRow, SimilarCompany, FinancialsData } from '@/components/CompanyPage'
@@ -18,7 +19,8 @@ async function getCompany(ar_gemi: string): Promise<CompanyData | null> {
       activities, capital,
       linkedin_url, instagram_url, facebook_url, twitter_url, tiktok_url, youtube_url,
       primary_kad,
-      EXISTS(SELECT 1 FROM company_favicons f WHERE f.ar_gemi = companies.ar_gemi AND f.status = 'ok') AS has_favicon
+      EXISTS(SELECT 1 FROM company_favicons f WHERE f.ar_gemi = companies.ar_gemi AND f.status = 'ok') AS has_favicon,
+      EXISTS(SELECT 1 FROM company_persons p WHERE p.ar_gemi = companies.ar_gemi::text) AS has_persons
     FROM companies WHERE ar_gemi = $1::bigint`,
     [ar_gemi]
   )
@@ -108,19 +110,22 @@ export async function generateMetadata({
   const company = await getCompany(ar_gemi)
   if (!company) return { title: 'Εταιρεία | GreekLeads' }
 
-  const name = company.co_name_el ?? `ΓΕΜΗ ${company.ar_gemi}`
-  const city = company.city ?? company.prefecture_descr ?? 'Ελλάδα'
-  const brand = brandTitles(company.co_titles_el, company.co_name_el)[0]
-  const titleName = brand ? `${name} (${brand})` : name
-  const desc =
-    company.objective?.slice(0, 155) ??
-    `Πληροφορίες για ${name}${brand ? ` (δ.τ. ${brand})` : ''} — ΓΕΜΗ ${company.ar_gemi}, ${city}. Στοιχεία επικοινωνίας, διοικητικό συμβούλιο και δραστηριότητες.`
+  const hasSocial = !!(
+    company.linkedin_url || company.instagram_url || company.facebook_url ||
+    company.twitter_url || company.tiktok_url || company.youtube_url
+  )
+
+  // Previously this preferred `company.objective` — the raw ΓΕΜΗ purpose
+  // statement. That is a legal blob, identical across thousands of companies,
+  // and Google was ignoring it and synthesising its own snippet instead.
+  const title = companyTitle(company)
+  const desc = companyDescription({ ...company, has_social: hasSocial })
 
   return {
-    title: `${titleName} | GreekLeads`,
+    title,
     description: desc,
     openGraph: {
-      title: titleName,
+      title,
       description: desc,
       type: 'website',
       locale: 'el_GR',
@@ -157,6 +162,14 @@ export default async function CompanyPageRoute({
     ...(company.co_names_en ?? []).map(s => (s ?? '').trim()).filter(Boolean),
   ]))
 
+  // Social profiles are the canonical `sameAs` signal — they tie this page to
+  // the entity's other web presences and are how Google reconciles a brand
+  // across sources. Website is `url`, not sameAs.
+  const sameAs = [
+    company.linkedin_url, company.instagram_url, company.facebook_url,
+    company.twitter_url, company.tiktok_url, company.youtube_url,
+  ].filter((u): u is string => !!u)
+
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Organization',
@@ -167,6 +180,8 @@ export default async function CompanyPageRoute({
       { '@type': 'PropertyValue', name: 'ΓΕΜΗ', value: company.ar_gemi },
       ...(company.afm ? [{ '@type': 'PropertyValue', name: 'ΑΦΜ', value: company.afm }] : []),
     ],
+    ...(company.afm ? { vatID: company.afm } : {}),
+    ...(sameAs.length ? { sameAs } : {}),
     ...(company.url ? { url: company.url } : company.discovered_url ? { url: company.discovered_url } : {}),
     ...(company.email ? { email: company.email } : {}),
     ...(company.phone ? { telephone: company.phone } : {}),

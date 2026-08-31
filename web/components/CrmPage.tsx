@@ -1,6 +1,8 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { type PlanName, formatLimit } from '@/lib/entitlements'
+import BillingCard from './BillingCard'
 import { useRouter } from 'next/navigation'
 import Icon from './Icon'
 import { STAGES } from '@/lib/crmColumns'
@@ -95,7 +97,8 @@ export default function CrmPage() {
   const [tab, setTab]         = useState<Tab>('lists')
   const [lists, setLists]     = useState<ListRow[]>([])
   const [searches, setSearches] = useState<SavedSearch[]>([])
-  const [plan, setPlan]       = useState<'free' | 'paid'>('free')
+  const [plan, setPlan]       = useState<PlanName>('free')
+  const [limits, setLimits]   = useState({ maxLists: 1, maxMembersPerList: 50 })
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState<string | null>(null)
   const [menuFor, setMenuFor] = useState<string | null>(null)
@@ -109,6 +112,10 @@ export default function CrmPage() {
       const sd = await sr.json()
       setLists(ld.lists ?? [])
       setPlan(ld.plan ?? 'free')
+      setLimits({
+        maxLists:          ld.limits?.maxLists ?? 1,
+        maxMembersPerList: ld.limits?.maxMembersPerList ?? 50,
+      })
       setSearches(sd.searches ?? [])
     } catch {
       setError('Δεν ήταν δυνατή η φόρτωση του πελατολογίου.')
@@ -166,6 +173,8 @@ export default function CrmPage() {
           Νέα αναζήτηση
         </Link>
       </div>
+
+      <BillingCard />
 
       <div className="crm-tabs">
         <button className={`crm-tab${tab === 'lists' ? ' on' : ''}`} onClick={() => setTab('lists')}>
@@ -309,8 +318,9 @@ export default function CrmPage() {
 
       {plan === 'free' && !loading && (
         <div className="crm-upsell">
-          Το δωρεάν πλάνο περιλαμβάνει 1 λίστα έως 50 επαφές.{' '}
-          <Link href="/pricing">Δείτε τα πλάνα</Link> για απεριόριστες λίστες,
+          Το δωρεάν πλάνο περιλαμβάνει {formatLimit(limits.maxLists)} λίστα έως{' '}
+          {formatLimit(limits.maxMembersPerList)} επαφές.{' '}
+          <Link href="/pricing">Δείτε τα πλάνα</Link> για περισσότερες λίστες,
           ζωντανές λίστες και εξαγωγές.
         </div>
       )}

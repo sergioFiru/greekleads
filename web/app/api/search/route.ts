@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { queryNoParallel } from '@/lib/db'
-import { getAuth, FREE_PAGE_LIMIT, PAGE_SIZE } from '@/lib/auth'
+import { getAuth, PAGE_SIZE } from '@/lib/auth'
+import { limitsFor, MIN_SEARCH_PAGES } from '@/lib/entitlements'
 import { buildWhere, hasActiveFilter, type SearchFilters } from '@/lib/searchQuery'
 
 export async function POST(req: NextRequest) {
@@ -14,11 +15,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ results: [], total: null, page, noFilter: true })
     }
 
-    // Gate check
+    // Gate check.
+    //
+    // The page allowance is per plan (entitlements.ts): anon 2, free 5, paid
+    // tiers far more. MIN_SEARCH_PAGES is the floor every visitor gets, so any
+    // page at or below it skips the auth lookup entirely and the common case
+    // stays fast.
     const gateDisabled = process.env.NEXT_PUBLIC_DISABLE_GATE === 'true'
-    if (!gateDisabled && page > FREE_PAGE_LIMIT) {
-      const { isPaid } = await getAuth()
-      if (!isPaid) return NextResponse.json({ gated: true }, { status: 403 })
+    if (!gateDisabled && page > MIN_SEARCH_PAGES) {
+      const { plan, isLoggedIn } = await getAuth()
+      const maxPages = limitsFor(plan).maxSearchPages
+      if (page > maxPages) {
+        // 'signup' and 'upgrade' are different walls with different copy and
+        // very different conversion rates — the client needs to know which.
+        return NextResponse.json(
+          { gated: true, reason: isLoggedIn ? 'upgrade' : 'signup', plan, maxPages },
+          { status: 403 }
+        )
+      }
     }
 
     const { sql: where, params } = buildWhere(filters)

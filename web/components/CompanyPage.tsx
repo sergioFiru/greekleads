@@ -61,6 +61,8 @@ export interface CompanyData {
   youtube_url: string | null
   primary_kad: string | null
   has_favicon: boolean
+  /** Used by generateMetadata to avoid promising people data we lack. */
+  has_persons?: boolean
 }
 
 export interface PersonRow {
@@ -971,9 +973,11 @@ export default function CompanyPage({
                 <span className="badge badge-gemi" style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
                   ΓΕΜΗ {company.ar_gemi}
                 </span>
-                {company.co_names_en?.length && (
+                {!!company.co_names_en?.length && (
                   <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                    {company.co_names_en.join(' · ')}
+                    {/* Leading separator is a real text node, not a CSS gap, so
+                        crawlers do not concatenate this onto the ΓΕΜΗ number. */}
+                    {` · ${company.co_names_en.join(' · ')}`}
                   </span>
                 )}
               </div>

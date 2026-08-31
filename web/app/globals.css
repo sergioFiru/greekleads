@@ -1003,18 +1003,35 @@ input, select, textarea { font-family: inherit; }
 
 /* ── Pricing page ────────────────────────────────────────── */
 .pricing-page {
-  max-width: 900px;
+  max-width: 1180px;
   margin: 0 auto;
   padding: 60px 24px;
 }
 .pricing-header { text-align: center; margin-bottom: 48px; }
 .pricing-h1 { font-size: 36px; margin-bottom: 10px; }
-.pricing-sub { font-size: 15px; color: var(--text-secondary); }
+.pricing-sub {
+  font-size: 15px;
+  color: var(--text-secondary);
+  max-width: 620px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+.pricing-foot {
+  margin-top: 28px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
 .pricing-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
 }
+.pricing-grid-4 { grid-template-columns: repeat(4, 1fr); }
+.pricing-grid-2 { grid-template-columns: repeat(2, 1fr); max-width: 720px; margin: 0 auto; }
+.pricing-grid-4 .plan-card { padding: 26px 20px; }
+.pricing-grid-4 .plan-price { font-size: 32px; }
+
 .plan-card {
   background: var(--card-bg);
   border: 1px solid var(--border-strong);
@@ -1104,11 +1121,19 @@ input, select, textarea { font-family: inherit; }
 .fadein { animation: fadein .25s ease-out; }
 
 /* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 1080px) {
+  .pricing-grid-4 { grid-template-columns: repeat(2, 1fr); }
+}
 @media (max-width: 900px) {
   .hero-grid { grid-template-columns: 1fr; }
   .hero-h1 { font-size: 40px; }
-  .pricing-grid { grid-template-columns: 1fr; }
+  /* :not() so the four-tier grid keeps its own 2-up step below — equal
+     specificity means this later rule would otherwise win and collapse it. */
+  .pricing-grid:not(.pricing-grid-4) { grid-template-columns: 1fr; }
   .stat-item { padding: 0 20px; }
+}
+@media (max-width: 640px) {
+  .pricing-grid-4, .pricing-grid-2 { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
   .hero { padding: 48px 20px 56px; }
@@ -3663,6 +3688,94 @@ input, select, textarea { font-family: inherit; }
 }
 .crm-member-contact a { color: var(--text-muted); display: inline-flex; }
 .crm-member-contact a:hover { color: var(--accent); }
+
+/* ── Billing panel on /crm ─────────────────────────────────── */
+.crm-billing {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  margin: 18px 0 4px; padding: 14px 18px;
+  border: 1px solid var(--border-strong); border-radius: 8px;
+  background: var(--card-bg);
+}
+.crm-billing-main { flex: 1; min-width: 220px; }
+.crm-billing-label {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.crm-billing-plan {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 17px; font-weight: 600; color: var(--text-primary); margin-top: 2px;
+}
+/* ── Contact dialog (pricing enquiry) ──────────────────────── */
+.ct-scrim {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(16,22,34,0.42);
+  backdrop-filter: blur(2px);
+}
+.ct-dialog {
+  position: fixed; z-index: 201;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px); overflow-y: auto;
+  background: var(--card-bg);
+  border: 1px solid var(--border-strong); border-radius: 12px;
+  box-shadow: 0 18px 48px rgba(16,22,34,0.22);
+  padding: 22px 24px;
+}
+.ct-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
+.ct-title { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+.ct-sub { font-size: 12.5px; color: var(--text-secondary); margin-top: 3px; line-height: 1.5; }
+.ct-close {
+  margin-left: auto; flex-shrink: 0;
+  background: none; border: none; cursor: pointer;
+  font-size: 22px; line-height: 1; color: var(--text-muted); padding: 0 2px;
+}
+.ct-close:hover { color: var(--text-primary); }
+
+.ct-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ct-field { display: flex; flex-direction: column; gap: 5px; }
+.ct-field-wide { grid-column: 1 / -1; }
+.ct-field span { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); }
+.ct-field input,
+.ct-field textarea {
+  font: inherit; font-size: 13.5px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong); border-radius: 6px;
+  background: var(--input-bg, transparent); color: var(--text-primary);
+  width: 100%;
+}
+.ct-field textarea { resize: vertical; min-height: 66px; }
+.ct-field input:focus,
+.ct-field textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+
+.ct-error { margin-top: 12px; font-size: 12.5px; color: #B0453A; }
+.ct-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+.ct-done { text-align: center; padding: 18px 4px 6px; }
+.ct-done-title { font-size: 19px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
+.ct-done p { font-size: 13.5px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 18px; }
+
+@media (max-width: 560px) {
+  .ct-fields { grid-template-columns: 1fr; }
+}
+
+.crm-billing-price {
+  font-size: 12.5px; font-weight: 500; color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.crm-billing-status {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em;
+  padding: 2px 8px; border-radius: 10px;
+  background: var(--chip-bg, rgba(0,0,0,0.05)); color: var(--text-secondary);
+}
+.crm-billing-status-active,
+.crm-billing-status-trialing { background: rgba(46,139,87,0.12); color: #2E8B57; }
+.crm-billing-status-past_due,
+.crm-billing-status-unpaid   { background: rgba(176,69,58,0.12); color: #B0453A; }
+.crm-billing-note {
+  font-size: 12px; color: var(--text-secondary); margin-top: 4px; line-height: 1.5;
+}
+.crm-billing-warn { color: #B0453A; }
+.crm-billing-actions { display: flex; gap: 8px; flex-shrink: 0; }
 
 .crm-upsell {
   margin-top: 26px; padding: 12px 16px;
