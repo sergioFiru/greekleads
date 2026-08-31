@@ -39,7 +39,7 @@ export const TIERS: Record<Exclude<PlanName, 'anon'>, Tier> = {
   },
   agency: {
     plan: 'agency',
-    amount: 100,
+    amount: 147,
     period: 'μήνα',
     stripePriceEnv: 'STRIPE_PRICE_AGENCY_MONTHLY',
   },

@@ -98,10 +98,10 @@ export const PLANS: Record<PlanName, PlanLimits> = {
   agency: {
     maxSearchPages:      200,
     maxLists:            25,
-    maxMembersPerList:   25_000,
+    maxMembersPerList:   5000,
     maxSavedSearches:    100,
-    maxBulkAdd:          10_000,
-    maxExportRows:       25_000,
+    maxBulkAdd:          5000,
+    maxExportRows:       5000,
     canBringAlive:       true,
     canIntegrate:        false,
   },
