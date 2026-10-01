@@ -41,18 +41,6 @@ function AuthArea() {
   return isSignedIn ? <UserButton /> : <SignedOutCtas />
 }
 
-function CrmLink({ active }: { active: boolean }) {
-  const { isLoaded, isSignedIn } = useAuth()
-  // Πελατολόγιο has nothing to show without an owner, so it stays hidden for
-  // visitors rather than bouncing them into a sign-in wall.
-  if (!isLoaded || !isSignedIn) return null
-  return (
-    <Link href="/crm" className="nav-link" data-active={active ? 'true' : 'false'}>
-      Πελατολόγιο
-    </Link>
-  )
-}
-
 export default function TopNav({ totalCompanies }: { totalCompanies?: number }) {
   const path = usePathname()
 
@@ -74,7 +62,6 @@ export default function TopNav({ totalCompanies }: { totalCompanies?: number }) 
             {l.label}
           </Link>
         ))}
-        {clerkConfigured && <CrmLink active={path.startsWith('/crm')} />}
       </div>
 
       <div className="nav-spacer" />

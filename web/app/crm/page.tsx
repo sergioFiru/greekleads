@@ -1,25 +1,17 @@
-import type { Metadata } from 'next'
-import { redirect } from 'next/navigation'
-import TopNav from '@/components/TopNav'
-import CrmPage from '@/components/CrmPage'
-import { getAuth } from '@/lib/auth'
+import { notFound } from 'next/navigation'
 
-export const metadata: Metadata = {
-  title: 'Πελατολόγιο | GreekLeads',
-  // Private, per-user data — never index it.
-  robots: { index: false, follow: false },
-}
-
-export default async function CrmRoute() {
-  const { isLoggedIn } = await getAuth()
-  if (!isLoggedIn) redirect('/sign-in')
-
-  // Lists are fetched client-side: this page changes on every add/remove, so
-  // server-rendering the rows would only mean a refresh to see your own edits.
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <TopNav />
-      <CrmPage />
-    </div>
-  )
+/**
+ * Πελατολόγιο is temporarily closed.
+ *
+ * The lists half of the CRM is not finished, so the whole section is off the
+ * site rather than half-shipped. Saved searches — the part that did work — moved
+ * to the topbar menu on /search, which is where they get used anyway.
+ *
+ * Nothing is deleted: crm_lists / crm_list_members / crm_saved_searches keep
+ * their rows, CrmPage and CrmListDetail stay in the repo, and the
+ * /api/crm/searches routes still serve the search page. Reopening this is
+ * restoring the body of this file.
+ */
+export default function CrmRoute() {
+  notFound()
 }

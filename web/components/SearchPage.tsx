@@ -7,6 +7,7 @@ import Paywall, { type GateReason } from './Paywall'
 import { ScoutPanel, ScoutSummaryBar, type ScoutRecipe } from './Scout'
 import CompanyPreviewPanel from './CompanyPreviewPanel'
 import SaveToDialog from './SaveToDialog'
+import SavedSearchMenu from './SavedSearchMenu'
 import CompanyFavicon from './CompanyFavicon'
 import FaviconPickerButton from './FaviconPickerButton'
 import { brandTitles } from '@/lib/brand'
@@ -332,8 +333,10 @@ export default function SearchPage() {
   const [scoutSummary, setScoutSummary] = useState<string | null>(null)
   const [resultsKey, setResultsKey]     = useState(0)
   const [previewArGemi, setPreviewArGemi] = useState<string | null>(null)
-  // Which tab the save dialog opens on; null = closed.
-  const [saveTab, setSaveTab] = useState<'search' | 'list' | null>(null)
+  // The save-search dialog. Lists went with Πελατολόγιο, so there are no tabs.
+  const [saveOpen, setSaveOpen] = useState(false)
+  // Bumped on every successful save so the topbar menu reloads its list.
+  const [savedToken, setSavedToken] = useState(0)
   const [viewMode, setViewMode]           = useState<'table' | 'card'>('table')
   const filterResetRef = useRef(false)
   // Dev-only: ar_gemi -> cache-busting version after a manual favicon save via
@@ -890,10 +893,16 @@ export default function SearchPage() {
                 onChange={e => setFilters(f => ({ ...f, name: e.target.value }))}
               />
             </div>
-            <button className="sp-btn sp-btn-secondary" onClick={() => setSaveTab('search')}>
-              <Icon name="bookmark" size={13} />
-              Αποθήκευση αναζήτησης
-            </button>
+            <SavedSearchMenu
+              onSave={() => setSaveOpen(true)}
+              onApply={f => {
+                // Merge onto EMPTY: a row saved before a filter existed would
+                // otherwise leave that field undefined and break the inputs.
+                setFilters({ ...EMPTY, ...(f as Partial<SearchState>) })
+                setPage(1)
+              }}
+              refreshToken={savedToken}
+            />
             {total != null && (
               <span className="sp-match-count">
                 <strong>{animatedTotal.toLocaleString('el-GR')}</strong>
@@ -1238,10 +1247,6 @@ export default function SearchPage() {
                       )}
                     </span>
                     <button className="sp-btn sp-btn-secondary sp-btn-sm" onClick={clearSelection}>Καθαρισμός</button>
-                    <button className="sp-btn sp-btn-secondary sp-btn-sm" onClick={() => setSaveTab('list')}>
-                      <Icon name="bookmark" size={12} />
-                      Αποθήκευση λίστας
-                    </button>
                   </>
                 ) : (
                   <span>
@@ -1311,16 +1316,13 @@ export default function SearchPage() {
       <CompanyPreviewPanel arGemi={previewArGemi} onClose={() => setPreviewArGemi(null)} />
 
       <SaveToDialog
-        open={saveTab !== null}
-        defaultTab={saveTab ?? 'search'}
-        onClose={() => setSaveTab(null)}
+        open={saveOpen}
+        onClose={() => setSaveOpen(false)}
         filters={filters}
         pills={pills}
-        selectedIds={Array.from(selected.keys())}
-        allMatching={allMatching}
-        excludedIds={Array.from(excluded)}
         totalResults={total}
         scoutBrief={scoutSummary}
+        onSaved={() => setSavedToken(t => t + 1)}
       />
 
       <ScoutPanel

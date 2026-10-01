@@ -5066,3 +5066,106 @@ input, select, textarea { font-family: inherit; }
      the nav is the only site-wide wayfinding a phone visitor gets. */
   .btn-cta { display: none !important; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   SAVED SEARCH MENU — split button in the /search topbar
+   The left half saves the current filters, the caret lists what you
+   already saved. This replaced the Πελατολόγιο tab while that section
+   is closed.
+   ══════════════════════════════════════════════════════════════ */
+
+.ssm { position: relative; display: inline-flex; }
+
+/* Joined halves: the two buttons read as one control, so only the outer
+   corners round and they share a single border between them. */
+.ssm-save {
+  border-top-right-radius: 0; border-bottom-right-radius: 0;
+  white-space: nowrap;
+}
+.ssm-caret {
+  border-top-left-radius: 0; border-bottom-left-radius: 0;
+  margin-left: -1px;
+  padding-left: 8px; padding-right: 8px;
+}
+.ssm-caret[data-on='true'] { background: var(--bg-subtle, #F1F4F9); }
+.ssm-caret svg { transition: transform 0.15s ease; }
+.ssm-caret[data-on='true'] svg { transform: rotate(180deg); }
+
+.ssm-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 60;
+  width: 300px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(16, 28, 51, 0.14);
+  overflow: hidden;
+}
+
+.ssm-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.ssm-count { font-weight: 500; letter-spacing: 0; text-transform: none; }
+
+.ssm-empty {
+  padding: 16px 12px;
+  font-size: 13px; line-height: 1.5;
+  color: var(--text-secondary);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+}
+.ssm-empty p { margin: 0; }
+
+/* Capped so a long list scrolls inside the menu rather than running off the
+   bottom of the viewport. */
+.ssm-list { max-height: 280px; overflow-y: auto; }
+
+.ssm-row {
+  display: flex; align-items: stretch;
+  border-bottom: 1px solid var(--border-subtle, #EEF1F6);
+}
+.ssm-row:last-child { border-bottom: none; }
+.ssm-row:hover { background: var(--bg-subtle, #F7F9FC); }
+
+.ssm-row-main {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 9px 12px;
+  background: none; border: none; cursor: pointer;
+  text-align: left; font: inherit;
+}
+.ssm-row-name {
+  font-size: 13.5px; font-weight: 500; color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ssm-row-brief {
+  font-size: 11.5px; color: var(--text-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ssm-row-x {
+  display: flex; align-items: center;
+  padding: 0 10px;
+  background: none; border: none; cursor: pointer;
+  color: var(--text-tertiary, #93A0B5);
+}
+.ssm-row-x:hover { color: #C0392B; }
+
+.ssm-cap {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-subtle, #F7F9FC);
+  font-size: 12px; line-height: 1.45; color: var(--text-secondary);
+}
+.ssm-cap a { color: var(--accent); font-weight: 500; }
+
+/* On a phone the split button already wraps to its own row; let the menu use
+   the width it has instead of overflowing the viewport. */
+@media (max-width: 560px) {
+  .ssm { width: 100%; }
+  .ssm-save { flex: 1; justify-content: center; }
+  .ssm-menu { width: 100%; right: auto; left: 0; }
+}
