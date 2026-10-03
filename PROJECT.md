@@ -755,7 +755,13 @@ are in the session scratchpad (`kad_vocab_probe{,2,3}.py`).
   `X-Robots-Tag: noindex` on EVERY preview deployment URL, so any discovered *.vercel.app lands in
   this bucket.
 
-  **Issue 2, "Blocked due to other 4xx" — COULD NOT REPRODUCE, and that is the finding.** Probed 17
+  **Issue 2, "Blocked due to other 4xx" — EXPLAINED 2026-10-03: the Vercel account went unpaid for
+  about two weeks and the site was down.** A suspended Vercel deployment serves 402 Payment Required,
+  which is exactly an "other 4xx" and NOT a 404. That fits every observation below. No code fix:
+  request validation / re-crawl in Search Console once billing is current.
+
+  Original investigation, kept because it rules things out:
+  **COULD NOT REPRODUCE, and that is the finding.** Probed 17
   live URLs as Googlebot AND as Chrome: byte-identical statuses, so it is NOT user-agent dependent
   and the Clerk handshake bug (d397dfc) really is fixed. Every 4xx produced was a clean 404
   (missing company, out-of-range sitemap chunk, unknown route). KEY POINT: GSC files 404 under
