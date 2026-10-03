@@ -344,6 +344,9 @@ export default function SearchPage() {
   // Bumped on every successful save so the topbar menu reloads its list.
   const [savedToken, setSavedToken] = useState(0)
   const [viewMode, setViewMode]           = useState<'table' | 'card'>('table')
+  // Mobile: the filter rail becomes a drawer, and the table becomes cards.
+  const [filtersOpen, setFiltersOpen]     = useState(false)
+  const [isNarrow, setIsNarrow]           = useState(false)
   const filterResetRef = useRef(false)
   // Dev-only: ar_gemi -> cache-busting version after a manual favicon save via
   // FaviconPickerButton, so the row/card picks it up without a full refetch.
@@ -413,6 +416,31 @@ export default function SearchPage() {
     if (filterResetRef.current) { filterResetRef.current = false; return }
     search(filters, page)
   }, [page])
+
+  // A 390px phone cannot show a table whose columns are 380/200/140px, and the
+  // card grid already exists. Decided in JS rather than CSS because the table's
+  // display is an INLINE style (which no media query can override) and the cards
+  // are conditionally rendered (CSS cannot reveal what is not in the DOM).
+  // Safe to do client-side: /search is Disallow-ed in robots.txt, so no crawler
+  // depends on the server-rendered variant.
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 720px)')
+    const apply = () => setIsNarrow(mq.matches)
+    apply()
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
+
+  // Close the drawer on Escape, and never leave it open when the viewport grows
+  // back past the breakpoint — otherwise it reappears as a stuck overlay.
+  useEffect(() => {
+    if (!filtersOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFiltersOpen(false) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [filtersOpen])
+
+  useEffect(() => { if (!isNarrow) setFiltersOpen(false) }, [isNarrow])
 
   // Sync filter state → URL (debounced for text input)
   const urlSyncRef = useRef<ReturnType<typeof setTimeout>>()
@@ -697,6 +725,9 @@ export default function SearchPage() {
   }
 
   const animatedTotal = useAnimatedCount(total)
+  // On a phone the toggle is hidden and cards always win.
+  const effectiveView = isNarrow ? 'card' : viewMode
+
   const startRow = total != null && total > 0 ? (page - 1) * 50 + 1 : 0
   const endRow   = total != null ? Math.min(page * 50, total) : 0
 
@@ -704,8 +735,19 @@ export default function SearchPage() {
     <>
     <div className="sp-layout">
 
-      {/* ── SIDEBAR ── */}
-      <div className="sp-sidebar-col">
+      {/* ── SIDEBAR ──
+          Below 720px this whole column becomes a slide-over drawer. Same
+          markup and the same filter state either way: only its position
+          changes, so there is no second implementation to keep in step. */}
+      {filtersOpen && <div className="sp-drawer-scrim" onClick={() => setFiltersOpen(false)} />}
+      <div className="sp-sidebar-col" data-open={filtersOpen ? 'true' : 'false'}>
+        <button
+          className="sp-drawer-close"
+          onClick={() => setFiltersOpen(false)}
+          aria-label="Κλείσιμο φίλτρων"
+        >
+          <Icon name="x" size={16} />
+        </button>
         <div className="sp-scout-glass-frame">
           <span className="sp-scout-blob sp-scout-blob-blue" />
           <span className="sp-scout-blob sp-scout-blob-amber" />
@@ -916,6 +958,18 @@ export default function SearchPage() {
                 onChange={e => setFilters(f => ({ ...f, name: e.target.value }))}
               />
             </div>
+            {/* Mobile only (CSS). The badge matters: with the rail hidden behind
+                a button, an active filter would otherwise be invisible and a
+                user would read a narrowed result set as the whole registry. */}
+            <button
+              className="sp-btn sp-btn-secondary sp-filters-btn"
+              onClick={() => setFiltersOpen(true)}
+              aria-expanded={filtersOpen}
+            >
+              <Icon name="filter" size={13} />
+              Φίλτρα
+              {pills.length > 0 && <span className="sp-filters-count">{pills.length}</span>}
+            </button>
             <SavedSearchMenu
               onSave={() => setSaveOpen(true)}
               onApply={f => {
@@ -965,26 +1019,29 @@ export default function SearchPage() {
                   <option value="-year_founded">Ίδρυση (νεότερα)</option>
                   <option value="year_founded">Ίδρυση (παλαιότερα)</option>
                 </select>
-                <span className="sp-v-divider" />
-                <button
-                  className={`sp-icon-btn ${viewMode === 'table' ? 'sp-icon-btn--active' : ''}`}
-                  title="Table view"
-                  onClick={() => setViewMode('table')}
-                >
-                  <Icon name="table" size={14} />
-                </button>
-                <button
-                  className={`sp-icon-btn ${viewMode === 'card' ? 'sp-icon-btn--active' : ''}`}
-                  title="Card view"
-                  onClick={() => setViewMode('card')}
-                >
-                  <Icon name="grid" size={14} />
-                </button>
+                {/* Hidden below 720px, where cards are forced anyway. */}
+                <span className="sp-viewtoggle">
+                  <span className="sp-v-divider" />
+                  <button
+                    className={`sp-icon-btn ${viewMode === 'table' ? 'sp-icon-btn--active' : ''}`}
+                    title="Table view"
+                    onClick={() => setViewMode('table')}
+                  >
+                    <Icon name="table" size={14} />
+                  </button>
+                  <button
+                    className={`sp-icon-btn ${viewMode === 'card' ? 'sp-icon-btn--active' : ''}`}
+                    title="Card view"
+                    onClick={() => setViewMode('card')}
+                  >
+                    <Icon name="grid" size={14} />
+                  </button>
+                </span>
               </div>
             </div>
 
             {/* Table */}
-            <div className="sp-table-scroll" style={{ display: viewMode === 'card' ? 'none' : undefined }}>
+            <div className="sp-table-scroll" style={{ display: effectiveView === 'card' ? 'none' : undefined }}>
               {gated && !GATE_DISABLED ? (
                 <div style={{ position: 'relative' }}>
                   <div style={{ filter: 'blur(3px)', pointerEvents: 'none', opacity: 0.4 }}>
@@ -1185,7 +1242,7 @@ export default function SearchPage() {
             </div>
 
             {/* Card grid */}
-            {viewMode === 'card' && (
+            {effectiveView === 'card' && (
               <div className="sp-cards-grid">
                 {loading && Array.from({ length: 9 }).map((_, i) => (
                   <div key={i} className="sp-card-item">

@@ -5239,3 +5239,138 @@ input, select, textarea { font-family: inherit; }
   .ps-dir-list { grid-template-columns: 1fr; }
   .ps-dir-link { padding: 10px 12px; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   /search — MOBILE
+   The product's main page had 138 .sp-* rules and ZERO media queries.
+   At 390px the layout grid (260px rail + 1fr) left about 110px for
+   results, and the table's own columns are 380/200/140px.
+   ══════════════════════════════════════════════════════════════ */
+
+/* The app shell. Was an inline height:100vh on the page, which no media
+   query could override — the reason this is a class now. */
+.sp-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sp-filters-btn,
+.sp-drawer-close,
+.sp-drawer-scrim { display: none; }
+
+@media (max-width: 720px) {
+  /* 100dvh, not 100vh: mobile browser chrome counts against vh, so the
+     pagination footer sat below the fold and could not be reached. */
+  .sp-shell { height: 100dvh; }
+
+  .sp-layout {
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding: 10px 12px;
+  }
+
+  /* ── Filter rail → slide-over drawer ──────────────────────────
+     Same markup, same state, only repositioned — there is no second
+     filter implementation to keep in step. */
+  .sp-sidebar-col {
+    position: fixed;
+    top: 0; bottom: 0; left: 0;
+    width: min(86vw, 330px);
+    z-index: 70;
+    padding: 12px;
+    background: var(--page-bg);
+    box-shadow: 2px 0 24px rgba(16, 28, 51, 0.16);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+  }
+  .sp-sidebar-col[data-open='true'] { transform: none; }
+
+  .sp-drawer-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 69;
+    background: rgba(16, 28, 51, 0.42);
+  }
+
+  .sp-drawer-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-end;
+    width: 32px; height: 32px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: #fff;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  .sp-filters-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .sp-filters-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px; height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 10.5px;
+    font-weight: 600;
+  }
+
+  /* ── Topbar ───────────────────────────────────────────────────
+     Was one non-wrapping row of search + save + count. */
+  .sp-topbar-row1 {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px;
+  }
+  .sp-search-wrap { flex: 1 1 100%; }
+  .sp-match-count { font-size: 12px; }
+
+  /* Cards are forced below this width (see effectiveView in SearchPage),
+     so the table/grid switch is dead weight. */
+  .sp-viewtoggle { display: none; }
+
+  /* One column: a 220px minmax still produced two cramped columns at 390px. */
+  .sp-cards-grid {
+    grid-template-columns: 1fr;
+    padding: 10px;
+    gap: 8px;
+  }
+
+  /* The company cell is capped at 380px, wider than the viewport itself. */
+  .sp-company-cell { max-width: 100%; }
+
+  /* ── Footer ───────────────────────────────────────────────────
+     Selection count, export and pagination cannot share one row. */
+  .sp-card-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px;
+  }
+  .sp-footer-left,
+  .sp-footer-right {
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .sp-pagination { justify-content: center; width: 100%; }
+}
+
+@media (max-width: 400px) {
+  .sp-layout { padding: 8px; }
+  .sp-sidebar-col { width: 92vw; }
+}

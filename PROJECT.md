@@ -744,6 +744,24 @@ are in the session scratchpad (`kad_vocab_probe{,2,3}.py`).
 ---
 
 ## Session Log
+- 2026-10-03: /search made mobile-friendly. It had 138 .sp-* rules and ZERO media queries — the
+  product's main page, never laid out for a phone. At 390px the layout grid (260px rail + 1fr) left
+  about 110px for results, and the table's own columns are 380/200/140px.
+  Filter rail -> slide-over drawer below 720px (same markup, same state, only repositioned, so there
+  is no second filter implementation to drift). «Φίλτρα» button carries a COUNT BADGE: with the rail
+  hidden, an active filter would otherwise be invisible and a narrowed result set would read as the
+  whole registry.
+  Table -> cards below 720px, and the view toggle is hidden. TWO THINGS FORCED THIS INTO JS rather
+  than CSS: the table's display is an INLINE style (no media query can override it) and the cards
+  were CONDITIONALLY RENDERED (CSS cannot reveal what is not in the DOM). Handled with a matchMedia
+  listener + `effectiveView`; safe because /search is Disallow-ed in robots.txt, so no crawler
+  depends on the server-rendered variant.
+  Shell height was an inline `height:100vh` on app/search/page.tsx — same unoverridable-inline
+  problem as the company page. Now `.sp-shell`, and 100dvh on mobile because browser chrome counts
+  against vh and put the pagination footer below the fold.
+  Audited the remaining 6 inline styles in SearchPage: all benign (percentage skeleton widths, a
+  0.5px divider, the JS-driven table display).
+  NOT yet verified on a real device — user tests manually (see [[feedback_browser_automation]]).
 - 2026-10-03: Google Search Console triage + the "indexed without content" fix. GSC itself was NOT
   accessible (no authenticated session), so no URL counts — everything below is from the code and
   from probing the LIVE site as Googlebot.
