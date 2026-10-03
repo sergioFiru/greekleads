@@ -2,6 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db'
 import { sectionOfKad, SECTIONS } from '@/lib/nace'
 
+/**
+ * The sector rollup's dim_value, widened to a full 8-digit ΚΑΔ so nace.ts can
+ * classify it.
+ *
+ * Tolerates BOTH widths on purpose. The rollup stored 2-digit divisions until
+ * 2026-10-03 and now stores 4-digit classes; until the builder is re-run the
+ * table may hold either, and a 2-digit value padded to 8 must still land on its
+ * division rather than being read as a class. Right-padding with zeros does
+ * exactly that: '95' → '95000000' (class 9500, no override → S) and
+ * '9531' → '95310000' (override → G).
+ */
+function sectionOfDim(dim: string): string {
+  return sectionOfKad(dim.padEnd(8, '0'))
+}
+
+
 // ΓΕΜΗ splits Attica into five prefecture values; lib/greecePrefectureShapes.json
 // (and therefore PrefectureMap) knows a single 'ΑΤΤΙΚΗ'. Collapsed here so the
 // map, the ranked list and the headline all agree. Mirrors /api/stats.
@@ -200,7 +216,7 @@ export async function GET(req: NextRequest) {
     const sectorNow   = new Map<string, number>()
     const sectorPrior = new Map<string, number>()
     for (const r of sectors) {
-      const sec = sectionOfKad(r.dim_value + '000000')
+      const sec = sectionOfDim(r.dim_value)
       if (inWindow(r.period)) sectorNow.set(sec, (sectorNow.get(sec) ?? 0) + r.value)
       else if (inPrior(r.period)) sectorPrior.set(sec, (sectorPrior.get(sec) ?? 0) + r.value)
     }
@@ -255,7 +271,7 @@ export async function GET(req: NextRequest) {
     const dig = new Map<string, { births: number; web: number; social: number }>()
     for (const r of digital) {
       if (!inWindow(r.period)) continue
-      const sec = sectionOfKad(r.dim_value + '000000')
+      const sec = sectionOfDim(r.dim_value)
       const e = dig.get(sec) ?? { births: 0, web: 0, social: 0 }
       if (r.metric === 'births') e.births += r.value
       else if (r.metric === 'with_website') e.web += r.value

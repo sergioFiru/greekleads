@@ -141,9 +141,18 @@ FROM agg,
 WHERE m.value > 0
 """
 
-# A 2-digit-division guard, kept as its own constant so the doubled braces
-# needed to survive .format() live in exactly one place.
-DIVISION_GUARD = "AND LEFT(a->'activity'->>'id', 2) ~ '^[0-9][0-9]$'"
+# A 4-digit-CLASS guard, kept as its own constant so the doubled braces needed
+# to survive .format() live in exactly one place.
+#
+# This was 2 digits (division) until 2026-10-03. It had to become 4 because
+# Greek KAD 2026 division 95 is MIXED: classes 9530-9532 are vehicle repair
+# (Emporio, 21.212 firms) while 9510/952x are software install and household
+# goods repair (Alles ypiresies, 9.500 firms). At division granularity every car
+# workshop in Greece reported as "other services" and no amount of frontend
+# mapping could separate them -- the information was gone before the API saw it.
+#
+# web/lib/nace.ts rolls 4 -> section via CLASS_OVERRIDES. Keep the two in step.
+CLASS_GUARD = "AND LEFT(a->'activity'->>'id', 4) ~ '^[0-9][0-9][0-9][0-9]$'"
 
 AGGREGATIONS = [
     (
@@ -166,14 +175,14 @@ AGGREGATIONS = [
         """
         WITH agg AS (
             SELECT date_trunc('{trunc}', c.incorporation_date)::date AS period,
-                   LEFT(a->'activity'->>'id', 2) AS dim_value,
+                   LEFT(a->'activity'->>'id', 4) AS dim_value,
                    """ + BIRTH_FLAGS + """
             FROM companies c,
                  LATERAL jsonb_array_elements(c.activities) a
             WHERE c.incorporation_date BETWEEN '{since}' AND CURRENT_DATE
               AND a->>'type' = 'Κύρια'
               AND a->>'dtTo' IS NULL
-              """ + DIVISION_GUARD + """
+              """ + CLASS_GUARD + """
             GROUP BY 1, 2
         )
         """ + UNPIVOT,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db'
+import { cleanCompanyRow } from '@/lib/registryText'
 
 export interface CompanyRow {
   ar_gemi: string
@@ -105,7 +106,9 @@ export async function GET(
     const profile: PersonProfile = {
       name,
       stats: { total: rows.length, active, stakes: stakeRows.length, largestStake },
-      companies: rows,
+      // PersonProfile prints `municipality_descr ?? prefecture_descr` per company,
+      // so an unscrubbed row shows 'Inadequate Info / Inadequate Info' as a place.
+      companies: rows.map(cleanCompanyRow),
       contacts,
     }
 

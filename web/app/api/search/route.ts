@@ -3,6 +3,7 @@ import { queryNoParallel } from '@/lib/db'
 import { getAuth, PAGE_SIZE } from '@/lib/auth'
 import { limitsFor, MIN_SEARCH_PAGES } from '@/lib/entitlements'
 import { buildWhere, hasActiveFilter, type SearchFilters } from '@/lib/searchQuery'
+import { cleanCompanyRow } from '@/lib/registryText'
 
 export async function POST(req: NextRequest) {
   try {
@@ -97,7 +98,10 @@ export async function POST(req: NextRequest) {
     ])
 
     const total = parseInt(countRow[0]?.cnt ?? '0', 10)
-    return NextResponse.json({ results: rows, total, page })
+    // Scrubbed here rather than in the table component so the CSV export —
+    // which is built from these same rows — cannot ship English filler to a
+    // customer's CRM.
+    return NextResponse.json({ results: rows.map(cleanCompanyRow), total, page })
   } catch (err) {
     console.error('[/api/search] Error:', err)
     return NextResponse.json({ error: String(err) }, { status: 500 })

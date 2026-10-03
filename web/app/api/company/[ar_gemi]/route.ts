@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { queryOne, query } from '@/lib/db'
+import { cleanCompanyRow } from '@/lib/registryText'
 
 export async function GET(
   _req: NextRequest,
@@ -30,7 +31,10 @@ export async function GET(
       ),
     ])
     if (!company) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    return NextResponse.json({ ...company, members })
+    // Scrub 'Inadequate Info' before it reaches the page: /etaireies/* is the
+    // SEO surface, and English filler on an indexed Greek page is worse than a
+    // blank row.
+    return NextResponse.json({ ...cleanCompanyRow(company), members })
   } catch (err) {
     console.error('[/api/company]', err)
     return NextResponse.json({ error: 'Failed' }, { status: 500 })

@@ -33,6 +33,19 @@ export interface SearchFilters {
   has_youtube?: boolean
   year_from?: string
   year_to?: string
+  /**
+   * Opt IN to registered-but-never-traded shells. Default (false/undefined)
+   * EXCLUDES them.
+   *
+   * Division 00 is «ΕΛΛΕΙΨΗ ΔΡΑΣΤΗΡΙΟΤΗΤΑΣ» — a firm that exists on paper and has
+   * declared no activity. Measured: 12.598 firms, 11.141 of them with
+   * status 'Ενεργή', and 00010000 alone is the 9th largest primary ΚΑΔ in Greece.
+   * They are legally active and so passed every filter we had, which meant we
+   * were selling 11k non-businesses as prospects. Excluded by default because a
+   * shell wastes a customer's outreach budget and costs us their trust; still
+   * reachable for anyone who genuinely wants them.
+   */
+  include_dormant?: boolean
 }
 
 
@@ -107,6 +120,12 @@ export function buildWhere(f: SearchFilters): { sql: string; params: unknown[] }
   if (f.has_twitter)    conds.push(`c.twitter_url   IS NOT NULL`)
   if (f.has_tiktok)     conds.push(`c.tiktok_url    IS NOT NULL`)
   if (f.has_youtube)    conds.push(`c.youtube_url   IS NOT NULL`)
+  if (!f.include_dormant) {
+    // NULL primary_kad_code means "we don't know", NOT dormant — those firms stay
+    // in. Written against LEFT(...,2) to use the existing functional index rather
+    // than a LIKE that would not.
+    conds.push(`(c.primary_kad_code IS NULL OR LEFT(c.primary_kad_code, 2) <> '00')`)
+  }
   if (f.year_from) {
     const yr = parseInt(f.year_from, 10)
     if (!isNaN(yr)) { conds.push(`EXTRACT(YEAR FROM c.incorporation_date) >= $${i++}`); params.push(yr) }

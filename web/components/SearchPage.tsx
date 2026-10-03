@@ -18,8 +18,9 @@ interface Company {
   co_name_el: string
   co_titles_el: string[] | null
   legal_type_descr: string
-  prefecture_descr: string
-  municipality_descr: string
+  // Nullable since the API scrubs ΓΕΜΗ's 'Inadequate Info' placeholder.
+  prefecture_descr: string | null
+  municipality_descr: string | null
   status_descr: string
   year_founded: number | null
   email: string | null
@@ -63,6 +64,8 @@ interface SearchState {
   has_youtube: boolean
   year_from: string
   year_to: string
+  /** Opt in to «ΕΛΛΕΙΨΗ ΔΡΑΣΤΗΡΙΟΤΗΤΑΣ» shells, which are hidden by default. */
+  include_dormant: boolean
 }
 
 const ATTICA = ['ΑΤΤΙΚΗΣ', 'ΑΘΗΝΩΝ', 'ΠΕΙΡΑΙΑ', 'ΑΝΑΤΟΛΙΚΗΣ ΑΤΤΙΚΗΣ', 'ΔΥΤΙΚΗΣ ΑΤΤΙΚΗΣ']
@@ -73,6 +76,7 @@ const EMPTY: SearchState = {
   has_email: false, has_phone: false, has_website: false, has_no_website: false,
   has_instagram: false, has_facebook: false, has_linkedin: false, has_twitter: false, has_tiktok: false, has_youtube: false,
   year_from: '', year_to: '',
+  include_dormant: false,
 }
 
 const GATE_DISABLED = process.env.NEXT_PUBLIC_DISABLE_GATE === 'true'
@@ -168,6 +172,7 @@ function parseParams(p: URLSearchParams): SearchState {
     has_youtube:    p.has('youtube'),
     year_from: p.get('year_from') ?? '',
     year_to:   p.get('year_to')   ?? '',
+    include_dormant: p.has('dormant'),
   }
 }
 
@@ -197,6 +202,7 @@ function buildParams(f: SearchState, page: number, sort: string): URLSearchParam
   if (f.has_twitter)    p.set('twitter',   '1')
   if (f.has_tiktok)     p.set('tiktok',    '1')
   if (f.has_youtube)    p.set('youtube',   '1')
+  if (f.include_dormant) p.set('dormant',  '1')
   if (f.year_from)      p.set('year_from', f.year_from)
   if (f.year_to)        p.set('year_to',   f.year_to)
   if (page > 1)         p.set('page', String(page))
@@ -600,7 +606,7 @@ export default function SearchPage() {
     // company that was not on the page you happened to be standing on.
     const rows = Array.from(selected.values()).slice(0, maxExportRows ?? 0)
     if (rows.length === 0) return
-    const esc = (v: string) => `"${(v ?? '').replace(/"/g, '""')}"`
+    const esc = (v: string | null | undefined) => `"${(v ?? '').replace(/"/g, '""')}"`
     const csv = [
       ['ΑΡΓΕΜΗ','Επωνυμία','Νομική Μορφή','Νομός','Δήμος','Κατάσταση','Έτος','Email','Τηλέφωνο','Website'].join(','),
       ...rows.map(r => [r.ar_gemi, esc(r.co_name_el), esc(r.legal_type_descr), esc(r.prefecture_descr), esc(r.municipality_descr), esc(r.status_descr), r.year_founded ?? '', r.email ?? '', r.phone ?? '', r.url ?? ''].join(','))
@@ -647,6 +653,7 @@ export default function SearchPage() {
     filters.has_twitter    ? { id: 'twitter',   key: 'Social', value: 'X / Twitter',    remove: () => setFilters(f => ({ ...f, has_twitter:    false })) } : null,
     filters.has_tiktok     ? { id: 'tiktok',    key: 'Social', value: 'TikTok',         remove: () => setFilters(f => ({ ...f, has_tiktok:     false })) } : null,
     filters.has_youtube    ? { id: 'youtube',   key: 'Social', value: 'YouTube',        remove: () => setFilters(f => ({ ...f, has_youtube:    false })) } : null,
+    filters.include_dormant ? { id: 'dormant', key: 'Περιλαμβάνει', value: 'αδρανείς εταιρείες', remove: () => setFilters(f => ({ ...f, include_dormant: false })) } : null,
     filters.municipality ? { id: 'mun', key: 'Δήμος', value: filters.municipality, remove: () => setFilters(f => ({ ...f, municipality: '' })) } : null,
     filters.year_from    ? { id: 'yf',  key: 'Από',   value: filters.year_from,    remove: () => setFilters(f => ({ ...f, year_from: '' })) } : null,
     filters.year_to      ? { id: 'yt',  key: 'Έως',   value: filters.year_to,      remove: () => setFilters(f => ({ ...f, year_to:   '' })) } : null,
@@ -831,6 +838,22 @@ export default function SearchPage() {
             value={filters.municipality}
             onChange={e => setFilters(f => ({ ...f, municipality: e.target.value }))}
           />
+        </FilterGroup>
+
+        {/* Last, and phrased as opting IN, because unlike every group above it
+            WIDENS the result set. 11.141 active firms have declared no activity
+            at all; they are hidden by default so a prospect list is made of real
+            businesses. */}
+        <FilterGroup title="Αδρανείς εταιρείες" defaultOpen={false} active={filters.include_dormant}>
+          <CheckRow
+            checked={filters.include_dormant}
+            onChange={() => setFilters(f => ({ ...f, include_dormant: !f.include_dormant }))}
+            label="Συμπερίληψη εταιρειών χωρίς δραστηριότητα"
+          />
+          <div className="sp-dormant-note">
+            ΚΑΔ «ΕΛΛΕΙΨΗ ΔΡΑΣΤΗΡΙΟΤΗΤΑΣ»: εγγεγραμμένες, χωρίς δηλωμένη
+            δραστηριότητα. Εξαιρούνται από προεπιλογή.
+          </div>
         </FilterGroup>
         </aside>
       </div>

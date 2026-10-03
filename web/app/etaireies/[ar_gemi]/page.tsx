@@ -5,6 +5,7 @@ import { brandTitles } from '@/lib/brand'
 import { companyTitle, companyDescription } from '@/lib/companyName'
 import TopNav from '@/components/TopNav'
 import CompanyPage from '@/components/CompanyPage'
+import { cleanCompanyRow } from '@/lib/registryText'
 import type { CompanyData, PersonRow, SimilarCompany, FinancialsData } from '@/components/CompanyPage'
 
 const FINANCIAL_FILER_TYPES = new Set(['ΑΕ', 'ΙΚΕ', 'ΕΠΕ'])
@@ -208,7 +209,7 @@ export default async function CompanyPageRoute({
       />
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <TopNav />
-        <CompanyPage company={company} persons={persons} similar={similar} financials={financials} />
+        <CompanyPage company={cleanCompanyRow(company)} persons={persons} similar={similar} financials={financials} />
       </div>
     </>
   )

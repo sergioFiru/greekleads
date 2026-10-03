@@ -93,7 +93,12 @@ function nameRankAndSelect(countHaving: string): string {
         )
         ORDER BY (m.dt_to IS NULL) DESC, m.dt_from DESC NULLS LAST
       )                                                                                  AS companies,
-      array_agg(DISTINCT m.prefecture_descr) FILTER (WHERE m.prefecture_descr IS NOT NULL) AS prefectures
+      array_agg(DISTINCT m.prefecture_descr) FILTER (
+        WHERE m.prefecture_descr IS NOT NULL
+          -- ΓΕΜΗ's placeholder for "unknown"; it would otherwise show up as a
+          -- location chip on the person card.
+          AND m.prefecture_descr NOT ILIKE '%Inadequate Info%'
+      ) AS prefectures
     FROM matched m
     JOIN ranked r ON r.person_name = m.person_name
     GROUP BY m.person_name, r.best_sim
@@ -298,7 +303,12 @@ async function searchByContact(q: string, area: string, statusFilter: string, co
         )
         ORDER BY (m.dt_to IS NULL) DESC, m.dt_from DESC NULLS LAST
       )                                                                                  AS companies,
-      array_agg(DISTINCT m.prefecture_descr) FILTER (WHERE m.prefecture_descr IS NOT NULL) AS prefectures
+      array_agg(DISTINCT m.prefecture_descr) FILTER (
+        WHERE m.prefecture_descr IS NOT NULL
+          -- ΓΕΜΗ's placeholder for "unknown"; it would otherwise show up as a
+          -- location chip on the person card.
+          AND m.prefecture_descr NOT ILIKE '%Inadequate Info%'
+      ) AS prefectures
     FROM matched m
     JOIN ranked r ON r.person_name = m.person_name
     GROUP BY m.person_name, r.cnt

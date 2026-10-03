@@ -3,6 +3,7 @@ import { queryNoParallel } from '@/lib/db'
 import { requireUser } from '@/lib/auth'
 import { limitsFor } from '@/lib/entitlements'
 import { buildWhere, hasActiveFilter, type SearchFilters } from '@/lib/searchQuery'
+import { cleanCompanyRow } from '@/lib/registryText'
 
 /**
  * POST /api/search/export
@@ -85,7 +86,9 @@ export async function POST(req: NextRequest) {
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
     const csv = [
       ['ΑΡΓΕΜΗ','Επωνυμία','Νομική Μορφή','Νομός','Δήμος','Κατάσταση','Έτος','Email','Τηλέφωνο','Website'].join(','),
-      ...rows.map(r => [
+      // Scrubbed: a paid export is the one place English registry filler would
+      // land directly in a customer's CRM.
+      ...rows.map(cleanCompanyRow).map(r => [
         r.ar_gemi,
         esc(r.co_name_el),
         esc(r.legal_type_descr),

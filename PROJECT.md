@@ -299,7 +299,7 @@ right rail with company count + active badge. Empty state explains the dataset
 - [ ] **Run `python tools/add_name_index.py`** — trigram index on `co_name_el`; takes name search / hero typeahead from ~2.2s to <200ms
 - [ ] Wire the hero "Νέες εγγραφές" card to the real watcher (websocket/SSE) — replaces `useFakeNewFirms()` only
 - [ ] **Gate hero Scout behind signup** — submitting a brief from the homepage will prompt account creation before the `/api/scout` call fires. This is the intended conversion trigger *and* the abuse control, so no separate rate limiting is planned. Currently **open/ungated** in dev.
-- [ ] Audit `'Inadequate Info'` leakage across all views (only `/api/suggest` handles it)
+- [x] Audit `'Inadequate Info'` leakage across all views — done 2026-10-03 via `web/lib/registryText.ts`; see the session log
 - [ ] Remove dead `HeroBackdrop` / `ParticlesBackdrop` / `CropMarks` from `page.tsx`
 - [ ] Speed up people search `count=4+` (~6.2s — HAVING over the full join)
 - [ ] Activate Clerk auth (replace placeholder keys with real ones)
@@ -744,6 +744,70 @@ are in the session scratchpad (`kad_vocab_probe{,2,3}.py`).
 ---
 
 ## Session Log
+- 2026-10-03: Backlog sweep. Every item below was MEASURED against the live DB first, and two of the
+  three "small" fixes turned out to be wrong as written in this file.
+
+  **'Inadequate Info' leakage — FIXED.** New `web/lib/registryText.ts`, applied at the company page
+  (the SEO surface), `/api/company/[ar_gemi]`, `/api/search` (table + client CSV),
+  `/api/search/export` (paid server CSV) and `/api/people/[slug]`; plus a SQL filter on BOTH
+  `array_agg` sites in `/api/people/search`. NOT just a NULLIF: `municipality_descr` is a combined
+  "ΔΗΜΟΣ / ΝΟΜΟΣ" string, so 'ΔΗΜΟΣ ΡΟΔΟΥ / Inadequate Info' is real and an exact match misses
+  it; `cleanMunicipality()` drops only the placeholder half. Scrubbed for DISPLAY on the company
+  page (after `getSimilar` and the FINANCIAL_FILER_TYPES check) so query results do not shift.
+
+  **Division 45 — this file's note was INCOMPLETE and the obvious fix would have been wrong.**
+  Measured: division 45 has 0 kad_2026 rows and 256.432 kad_2008 rows. Its firms split THREE ways:
+  45->95 19.751 firms, 45->47 8.157, 45->46 7.701. Sales went to 46/47, which were already Εμπόριο;
+  only REPAIR went to 95. Division 95 is therefore MIXED and must not be moved wholesale:
+    9531 20.110 firms vehicle repair      -> G
+    9532  1.096 firms motorcycle repair   -> G
+    9530      6 firms both                -> G
+    9510/952x 9.500 firms software install + household-goods repair -> S (already correct)
+  Fix: `CLASS_OVERRIDES` (4-digit) in `nace.ts`, checked before the division. 12 assertions pass,
+  including that a division-only caller ('95'+'000000' -> class 9500) is NOT reclassified.
+  Also dropped 45 from `divisionsOfSection` so the Εμπόριο search link stops carrying a prefix that
+  matches zero firms.
+  GOTCHA: `kad_prefix` is matched as EXACTLY two digits against an index on
+  `LEFT(primary_kad_code,2)`, so the Εμπόριο link still cannot include the 21.212 vehicle-repair
+  firms. That needs an index on LEFT(...,4) first. STILL OPEN.
+
+  **Sector rollup widened 2 -> 4 digits.** At division granularity the vehicle/household split was
+  gone before the API saw it, so no frontend mapping could fix /statistika. `build_stats_rollup.py`
+  now stores `LEFT(id,4)` (CLASS_GUARD, renamed from DIVISION_GUARD) and `/api/statistics` rolls it
+  up via a new `sectionOfDim()` that right-pads to 8 and so tolerates BOTH widths — necessary
+  because the table holds 2-digit rows until the builder is re-run. The nightly bot imports
+  AGGREGATIONS from the one-time builder and both DELETE the grain before inserting, so there is no
+  stale-row double-count. USER MUST RE-RUN `scripts/one_time/build_stats_rollup.py` (~20s measured);
+  expect roughly 4x more sector rows (770 classes vs 87 divisions).
+
+  **Dormant shells excluded from prospects.** Division 00 «ΕΛΛΕΙΨΗ ΔΡΑΣΤΗΡΙΟΤΗΤΑΣ» = 12.598 firms,
+  11.141 of them status 'Ενεργή', so they passed every filter we had and we were selling 11k
+  non-businesses as leads. `searchQuery.ts` now excludes them unless `include_dormant` is set, with
+  an opt-IN checkbox placed last in the filter rail (it WIDENS, unlike every group above it) and a
+  filter pill so an opted-in search looks different from a default one. Scout excludes them
+  UNCONDITIONALLY — it reports a prospect count and has no way to ask for them. Written as
+  `LEFT(primary_kad_code,2) <> '00'` to use the existing functional index, and NULL code means
+  "unknown" not "dormant", so those firms stay in.
+
+  **NEW BUG FOUND: `primary_kad` is wrong for 44,7% of codes.** 3.483 of 7.787 distinct
+  `primary_kad_code` values carry more than one description, because the 2008->2026 remap is
+  MANY-TO-ONE and each firm kept its old wording. `53200200` = 11.611 "DELIVERY" + 1.103 EMPTY
+  STRING + 31 "ΕΚΜΕΤΑΛΛΕΥΣΗ ΠΕΡΙΠΤΕΡΟΥ" + 30 "ΛΙΑΝΙΚΟ ΕΜΠΟΡΙΟ ΠΑΝΤΟΠΩΛΕΙΟΥ". This is why Scout's
+  description matching both misses firms and matches wrong ones. Wrote
+  `scripts/one_time/backfill_primary_kad_descr.py` (dry-run by default, --apply to write, --limit to
+  rehearse, progress bar, resumable since it only selects rows that still disagree). NOT RUN YET.
+
+  **Not broken after all:** sitemap `<lastmod>` is already implemented at
+  `app/sitemaps/[chunk]/route.ts:38` from `last_updated_at`. Removed from the backlog.
+
+  **Deferred by decision:** `BillingCard` is orphaned (it only ever rendered inside `CrmPage`), so
+  there is no route to «Το πλάνο μου» or the Stripe Customer Portal. Left until the entity question is
+  settled — see the billing-entity note. BLOCKER on going live, not on anything today.
+
+  **GOTCHA for next time:** `activities[].kadVersion` does NOT exist — it is nested at
+  `activities[].activity.kadVersion`. A probe filtering on the outer key silently returns ZERO rows
+  for every division, which reads exactly like "this division does not exist". Cost me two wrong
+  conclusions before I checked the JSONB shape.
 - 2026-10-01: Πελατολόγιο (/crm) TEMPORARILY CLOSED to the public. Lists were half-built, so the whole section is off the site rather than half-shipped.
   UI closed in three places: /crm and /crm/[id] page bodies replaced with notFound(); the CrmLink component deleted from TopNav; the «Αποθήκευση λίστας» button removed from the SearchPage results footer. Those were the only three entry points.
   Saved searches - the half that worked - moved to the search page, which is where they get used. New SavedSearchMenu.tsx is a split button in the /search topbar: left half saves, caret lists the saved ones (click applies, × deletes). Applying does NOT navigate; it hands the stored filter object back to SearchPage, merged onto EMPTY so a row saved before a filter existed cannot leave that field undefined and break the inputs. SaveToDialog lost 324 lines (tabs, list picker, Ζωντανή λίστα, addToList) and is now name + filter summary + cap.

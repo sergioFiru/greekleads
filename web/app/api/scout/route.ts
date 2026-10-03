@@ -149,6 +149,11 @@ function buildWhere(f: ScoutFilters): { sql: string; params: unknown[] } {
   if (f.has_website)    conds.push(`(c.url IS NOT NULL AND c.url != '')`)
   if (f.has_no_website) conds.push(`(c.url IS NULL OR c.url = '')`)
 
+  // Scout has no way to ask for dormant shells and no reason to count them: it
+  // reports a prospect total back to the user. Unconditional here, unlike
+  // searchQuery.ts where the user can opt in.
+  conds.push(`(c.primary_kad_code IS NULL OR LEFT(c.primary_kad_code, 2) <> '00')`)
+
   return {
     sql: conds.length ? `WHERE ${conds.join(' AND ')}` : '',
     params,

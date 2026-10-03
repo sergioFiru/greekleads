@@ -5169,3 +5169,13 @@ input, select, textarea { font-family: inherit; }
   .ssm-save { flex: 1; justify-content: center; }
   .ssm-menu { width: 100%; right: auto; left: 0; }
 }
+
+/* Explanatory note under an opt-in filter. Only the dormant-companies group
+   needs one: every other filter narrows, this one widens, so it has to say
+   what it lets back in. */
+.sp-dormant-note {
+  margin-top: 6px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
