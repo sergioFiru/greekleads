@@ -3,6 +3,7 @@ import Script from 'next/script'
 import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import { SITE_URL } from '@/lib/site'
+import PostHogProvider from './posthog-provider'
 import './globals.css'
 
 const clerkConfigured =
@@ -59,7 +60,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 })(window, document, "clarity", "script", "${clarityId}");`}
           </Script>
         )}
-        <MaybeClerk>{children}</MaybeClerk>
+        <MaybeClerk>
+          <PostHogProvider>{children}</PostHogProvider>
+        </MaybeClerk>
         <Analytics />
         <SpeedInsights />
       </body>
