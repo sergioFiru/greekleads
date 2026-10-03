@@ -744,6 +744,65 @@ are in the session scratchpad (`kad_vocab_probe{,2,3}.py`).
 ---
 
 ## Session Log
+- 2026-10-03: Google Search Console triage + the "indexed without content" fix. GSC itself was NOT
+  accessible (no authenticated session), so no URL counts — everything below is from the code and
+  from probing the LIVE site as Googlebot.
+
+  **Issue 1, "Excluded by noindex tag" — NOT the company or person pages.** Grepped every route,
+  next.config.mjs, and checked for vercel.json: the ONLY noindex in the app was `/crm` and
+  `/crm/[id]`, which is deliberate. Live probe confirms /etaireies/*, /people, /statistika, /pricing
+  and / all serve 200 with no robots meta. Remaining suspicion, unprovable from here: Vercel sets
+  `X-Robots-Tag: noindex` on EVERY preview deployment URL, so any discovered *.vercel.app lands in
+  this bucket.
+
+  **Issue 2, "Blocked due to other 4xx" — COULD NOT REPRODUCE, and that is the finding.** Probed 17
+  live URLs as Googlebot AND as Chrome: byte-identical statuses, so it is NOT user-agent dependent
+  and the Clerk handshake bug (d397dfc) really is fixed. Every 4xx produced was a clean 404
+  (missing company, out-of-range sitemap chunk, unknown route). KEY POINT: GSC files 404 under
+  "Not found (404)" — "other 4xx" means 401/403/410/429. Nothing in the code returns those to a
+  crawlable URL. Most likely Vercel Deployment Protection (401) on previews, or 429 rate limiting
+  during a crawl burst. NEEDS the GSC export to settle. Sitemap index checked and healthy: 3 chunks
+  advertised, all 3 return 200.
+
+  **Issue 3, "Page indexed without content" — CONFIRMED AND FIXED.** Measured raw HTML with JS never
+  executed:
+    /etaireies/[ar_gemi]  2.435 chars, real data        -> fine
+    /pricing              1.018 chars                   -> fine
+    /statistika           1.356 chars, ZERO data        -> BROKEN (sitemap priority 0.9)
+    /people                 712 chars, ZERO data        -> BROKEN (sitemap priority 0.7)
+  /statistika shipped em-dashes where every number belongs; probed for the sector names that are the
+  page's whole substance (Εμπόριο, Μεταποίηση, Τουρισμός) — all absent. /people's 712 chars were nav,
+  headline and three HARDCODED example names.
+
+  FIX /statistika: extracted the whole computation from app/api/statistics/route.ts into
+  `web/lib/statistics.ts` as `buildStatistics(period)`; the route is now a thin wrapper and the PAGE
+  imports it directly. Deliberately NOT an HTTP self-fetch — that is a second round trip from the
+  server to itself and needs an absolute URL that differs per environment. Page is `async` with
+  `revalidate = 3600`, still builds as ○ Static. Component takes `initial`/`initialPeriod` and a
+  seededRef so it does not refetch the period the server already computed.
+  RESULT, measured as Googlebot: 1.356 -> 3.805 chars, 52 formatted numbers, every sector,
+  prefecture and legal form present (ΑΤΤΙΚΗ 29.433 / 45,9%).
+
+  FIX /people: server-renders a DIRECTORY of the most-connected people in the otherwise-blank
+  results area, which disappears the moment a search starts.
+  ⚠ Ranking people by distinct company count measured **12,3s execution / 14,7s wall** (reads 595k
+  pages, spills 292k temp blocks) — far too slow for a page render even behind ISR; a Vercel function
+  would time out. So it reads a NEW `people_rollup` table, same rule /statistika follows. Built by
+  `scripts/one_time/build_people_rollup.py` (dry-run default, --apply, --top, progress bar,
+  delete+insert in ONE transaction so a reader never catches it half-built). NOT RUN YET — until it
+  is, getTopPeople() catches the missing table and returns [], so the page renders exactly as before
+  (verified: 200, 712 chars, no 500).
+  The rollup EXCLUDES the 115 names stored with stray whitespace: their slug does not round-trip
+  through encodeURIComponent -> exact match, so linking to one is a link to a 404.
+
+  **SEPARATE FINDING, still open: person profiles are undiscoverable by Google.** hubUrls() lists
+  only /, /statistika, /people, /pricing and chunks 1..N are companies, so /people/[slug] is in NO
+  sitemap — and the only other path to one was the client-rendered search box. The new directory is
+  the first real internal link into them. Whether to sitemap them properly is a strategy call
+  (~2M URLs; probably a tier, not all).
+  Also measured: a person page is ~890 KB of HTML (891.799 bytes for a 215-company person) and
+  /people/[slug] is force-dynamic, so every crawl is an uncached DB hit. Plausible contributor to a
+  429 if that is what "other 4xx" turns out to be.
 - 2026-10-03: Backlog sweep. Every item below was MEASURED against the live DB first, and two of the
   three "small" fixes turned out to be wrong as written in this file.
 

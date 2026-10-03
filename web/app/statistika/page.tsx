@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import TopNav from '@/components/TopNav'
 import Footer from '@/components/Footer'
 import StatisticsPage from '@/components/StatisticsPage'
+import { buildStatistics } from '@/lib/statistics'
 
 // This page is a top-of-funnel SEO asset: "πόσες επιχειρήσεις ιδρύθηκαν στην
 // Ελλάδα" and "νέες επιχειρήσεις [νομός]" are recurring Greek searches with no
@@ -19,12 +20,38 @@ export const metadata: Metadata = {
   },
 }
 
+/**
+ * Rebuilt hourly rather than per request.
+ *
+ * The underlying rollup is refreshed by a nightly bot, so a page regenerated
+ * every hour is never meaningfully stale, and ISR keeps this a static document
+ * that Googlebot gets instantly instead of a DB query on every crawl.
+ */
+export const revalidate = 3600
+
+// '12m' must match StatisticsPage's own default period, or the component would
+// immediately refetch and the server work would be wasted.
+const INITIAL_PERIOD = '12m'
+
 // Every page mounts its own TopNav -- there is no shared app layout.
-export default function Page() {
+export default async function Page() {
+  // Computed on the server so the FIRST paint carries the numbers. Search
+  // Console reported this page as "indexed without content" precisely because
+  // it used to ship em-dashes and fetch the real values after hydration.
+  // A failure here must not blank the page: the component falls back to
+  // fetching client-side exactly as it did before.
+  let initial = null
+  try {
+    const result = await buildStatistics(INITIAL_PERIOD)
+    if (result.ready) initial = result as never
+  } catch (err) {
+    console.error('[/statistika] server-side stats failed, falling back to client fetch', err)
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <TopNav />
-      <StatisticsPage />
+      <StatisticsPage initial={initial} initialPeriod={INITIAL_PERIOD} />
       <Footer />
     </div>
   )

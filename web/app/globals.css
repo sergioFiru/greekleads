@@ -5179,3 +5179,63 @@ input, select, textarea { font-family: inherit; }
   line-height: 1.45;
   color: var(--text-secondary);
 }
+
+/* ══════════════════════════════════════════════════════════════
+   /people — DIRECTORY
+   The most-connected people, server-rendered where the results area
+   would otherwise be blank. This is the page's indexable content and
+   its only internal links into /people/[slug]; it disappears the
+   moment a search starts.
+   ══════════════════════════════════════════════════════════════ */
+
+.ps-directory { padding-bottom: 28px; }
+
+.ps-dir-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(258px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ps-dir-item { background: #fff; }
+
+.ps-dir-link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 11px 13px;
+  text-decoration: none;
+  min-height: 100%;
+}
+.ps-dir-link:hover { background: var(--bg-subtle, #F7F9FC); }
+
+.ps-dir-name {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-primary);
+  /* Greek names are long single tokens; without this a card widens the grid. */
+  overflow-wrap: anywhere;
+}
+.ps-dir-meta {
+  font-size: 11.5px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.ps-dir-sample {
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .ps-dir-list { grid-template-columns: 1fr; }
+  .ps-dir-link { padding: 10px 12px; }
+}

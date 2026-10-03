@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import Icon from './Icon'
 import PrefectureMap from './PrefectureMap'
@@ -51,10 +51,27 @@ function SectionHead({ n, title, sub }: { n: string; title: string; sub?: string
   )
 }
 
-export default function StatisticsPage() {
-  const [period, setPeriod] = useState<string>('12m')
-  const [data, setData]     = useState<StatsPayload | null>(null)
-  const [loading, setLoading] = useState(true)
+/**
+ * `initial` is the payload the SERVER already computed for `initialPeriod`.
+ *
+ * Without it this component rendered a page of em-dashes until hydration
+ * finished, which is what Search Console reported as "Page indexed without
+ * content". Seeding state from it means the first paint — the one Googlebot
+ * reads — already carries every number.
+ */
+export default function StatisticsPage({
+  initial,
+  initialPeriod = '12m',
+}: {
+  initial?: StatsPayload | null
+  initialPeriod?: string
+} = {}) {
+  const [period, setPeriod] = useState<string>(initialPeriod)
+  const [data, setData]     = useState<StatsPayload | null>(initial ?? null)
+  const [loading, setLoading] = useState(!initial)
+  // The server already fetched the first period; refetching it on mount would
+  // be a wasted round trip and a visible flicker.
+  const seededRef = useRef<string | null>(initial ? initialPeriod : null)
 
   const load = useCallback(async (p: string) => {
     setLoading(true)
@@ -68,7 +85,10 @@ export default function StatisticsPage() {
     }
   }, [])
 
-  useEffect(() => { load(period) }, [period, load])
+  useEffect(() => {
+    if (seededRef.current === period) { seededRef.current = null; return }
+    load(period)
+  }, [period, load])
 
   // The rollup tables have not been built yet. Say so plainly rather than
   // rendering a page of zeroes that reads as "Greece stopped founding firms".

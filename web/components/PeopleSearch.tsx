@@ -70,14 +70,24 @@ function compactMillions(n: number): string {
   )
 }
 
+export interface TopPerson {
+  person_name: string
+  companies: number
+  active_companies: number
+  sample_company: string | null
+}
+
 export default function PeopleSearch({
   areas,
   totalCompanies,
   totalPersonRoles,
+  topPeople = [],
 }: {
   areas: string[]
   totalCompanies?: number
   totalPersonRoles?: number
+  /** Server-rendered, from the people_rollup table. See the directory below. */
+  topPeople?: TopPerson[]
 }) {
   const searchParams = useSearchParams()
   const router       = useRouter()
@@ -303,6 +313,48 @@ export default function PeopleSearch({
       {/* ── RESULTS ──────────────────────────────────────────── */}
       <div className="ps-results">
         <div className="ps-results-inner">
+
+          {/* ── Directory ─────────────────────────────────────────
+              Shown only before a search, where the results area would
+              otherwise be blank.
+
+              This is the page's indexable content. Search Console reported
+              /people as "Page indexed without content" because the
+              server-rendered HTML was 712 characters of nav and headline —
+              results exist only after someone types, and Googlebot does not
+              type. It also carries the first real internal links to
+              /people/[slug]: those profiles are in no sitemap, and the only
+              other route to them is this client-rendered search box, so until
+              now Google could not discover a single one. */}
+          {!hasQuery && topPeople.length > 0 && (
+            <section className="ps-directory">
+              <div className="ps-results-hd">
+                <span className="ps-results-count">
+                  Στελέχη με τις περισσότερες εταιρείες
+                </span>
+                <span className="ps-results-hint">Από το μητρώο ΓΕΜΗ</span>
+              </div>
+              <ul className="ps-dir-list">
+                {topPeople.map(p => (
+                  <li key={p.person_name} className="ps-dir-item">
+                    <Link
+                      href={`/people/${encodeURIComponent(p.person_name)}`}
+                      className="ps-dir-link"
+                    >
+                      <span className="ps-dir-name ph-no-capture">{p.person_name}</span>
+                      <span className="ps-dir-meta">
+                        {p.companies.toLocaleString('el-GR')} εταιρείες
+                        {p.active_companies > 0 && ` · ${p.active_companies.toLocaleString('el-GR')} ενεργές`}
+                      </span>
+                      {p.sample_company && (
+                        <span className="ps-dir-sample">{p.sample_company}</span>
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {hasQuery && loading && <SkeletonList />}
 
