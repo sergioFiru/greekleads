@@ -1122,14 +1122,14 @@ export default function SearchPage() {
                               </span>
                               <span className="sp-badge-slot">
                                 {c.email && (
-                                  <span className="sp-badge sp-badge-neutral" title={c.email}>
+                                  <span className="sp-badge sp-badge-neutral ph-no-capture" title={c.email}>
                                     <Icon name="mail" size={10} stroke={1.6} />
                                   </span>
                                 )}
                               </span>
                               <span className="sp-badge-slot">
                                 {c.phone && (
-                                  <span className="sp-badge sp-badge-neutral" title={c.phone}>
+                                  <span className="sp-badge sp-badge-neutral ph-no-capture" title={c.phone}>
                                     <Icon name="phone" size={10} stroke={1.6} />
                                   </span>
                                 )}
@@ -1239,8 +1239,8 @@ export default function SearchPage() {
                         <span className="sp-badge sp-badge-gemi" title="ΓΕΜΗ">
                           <Icon name="verified" size={10} stroke={1.6} />ΓΕΜΗ
                         </span>
-                        {c.email && <span className="sp-badge sp-badge-neutral" title={c.email}><Icon name="mail" size={9} stroke={1.6} /></span>}
-                        {c.phone && <span className="sp-badge sp-badge-neutral" title={c.phone}><Icon name="phone" size={9} stroke={1.6} /></span>}
+                        {c.email && <span className="sp-badge sp-badge-neutral ph-no-capture" title={c.email}><Icon name="mail" size={9} stroke={1.6} /></span>}
+                        {c.phone && <span className="sp-badge sp-badge-neutral ph-no-capture" title={c.phone}><Icon name="phone" size={9} stroke={1.6} /></span>}
                         {c.url && <span className="sp-badge sp-badge-neutral" title={c.url}><Icon name="globe" size={9} stroke={1.6} /></span>}
                         {!c.url && c.discovered_url && <span className="sp-badge sp-badge-found" title={`Ιστότοπος βρέθηκε από το GreekLeads: ${c.discovered_url}`} style={{ padding: '0 4px' }}><span className="gl-mark" style={{ width: 13, height: 13 }}>GL</span></span>}
                         {SOCIAL_PLATFORMS.map(p => c[p.key] ? (

@@ -441,7 +441,7 @@ export default function PersonProfileComponent({ profile }: { profile: PersonPro
         <svg width="11" height="11" viewBox="0 0 16 16" fill="none" style={{ color: 'var(--text-muted)', flexShrink: 0 }}>
           <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        <span style={{ color: 'var(--text-primary)' }}>{profile.name}</span>
+        <span className="ph-no-capture" style={{ color: 'var(--text-primary)' }}>{profile.name}</span>
         <div style={{ flex: 1 }} />
         <Link href="/people" style={{
           display: 'inline-flex', alignItems: 'center', gap: 5,
@@ -464,7 +464,7 @@ export default function PersonProfileComponent({ profile }: { profile: PersonPro
             <PersonAvatar name={profile.name} size={72} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
-                <h1 style={{ margin: 0, fontSize: 23, fontWeight: 600, letterSpacing: '-0.01em' }}>{profile.name}</h1>
+                <h1 className="ph-no-capture" style={{ margin: 0, fontSize: 23, fontWeight: 600, letterSpacing: '-0.01em' }}>{profile.name}</h1>
                 <span className="badge badge-gemi">ΓΕΜΗ</span>
                 {prefectures.slice(0, 3).map(p => (
                   <span key={p} className="badge badge-neutral" style={{ fontWeight: 400 }}>{p}</span>

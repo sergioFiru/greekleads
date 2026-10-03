@@ -448,7 +448,7 @@ function PersonResultCard({ person, index, searchTerm }: { person: PersonResult;
 
       <div className="ps-body">
         <div className="ps-name-row">
-          <span className="ps-name">{person.person_name}</span>
+          <span className="ps-name ph-no-capture">{person.person_name}</span>
           {person.prefectures?.length > 0 && (
             <span className="ps-region">{person.prefectures.slice(0, 2).join(' · ')}</span>
           )}
@@ -464,12 +464,12 @@ function PersonResultCard({ person, index, searchTerm }: { person: PersonResult;
           <p className="ps-matched">
             {matchedEmails.map(v => (
               <span key={v} className="ps-matched-item">
-                Email: <Highlighted value={v} needle={searchTerm} />
+                Email: <span className="ph-no-capture"><Highlighted value={v} needle={searchTerm} /></span>
               </span>
             ))}
             {matchedPhones.map(v => (
               <span key={v} className="ps-matched-item">
-                Τηλ.: <Highlighted value={v} needle={searchTerm} />
+                Τηλ.: <span className="ph-no-capture"><Highlighted value={v} needle={searchTerm} /></span>
               </span>
             ))}
           </p>

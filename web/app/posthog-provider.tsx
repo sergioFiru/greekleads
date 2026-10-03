@@ -63,6 +63,27 @@ export default function PostHogProvider({ children }: { children: React.ReactNod
       // still produce events but no profile — far less personal data held for
       // the ~99% of traffic that is a one-off organic visit.
       person_profiles: 'identified_only',
+
+      // ── Session replay masking ──────────────────────────────────────
+      // The usual replay privacy worry is the VISITOR's own data. Here the
+      // sharper risk points the other way: the page text IS third-party
+      // personal data. /etaireies/* and /people/* display real company
+      // directors' names, emails and phone numbers. Those people never visited
+      // the site and never consented, so a replay of one visitor browsing a
+      // profile would ship another person's contact details to PostHog.
+      //
+      // PostHog masks <input> values by default but NOT rendered page text, so
+      // the defaults are not enough here.
+      //
+      // Masked STRUCTURALLY by link type rather than by tagging each render
+      // site: `mailto:`/`tel:` is how a contact detail is always marked up, so
+      // this keeps working for code nobody has written yet. `.ph-no-capture` is
+      // PostHog's own convention and is added by hand to the person-name
+      // renders, which are plain text with no such structural signal.
+      session_recording: {
+        maskTextSelector: 'a[href^="mailto:"], a[href^="tel:"], .ph-no-capture',
+        maskAllInputs: true,
+      },
     })
   }, [])
 

@@ -423,7 +423,7 @@ function PeopleTable({ rows, title }: { rows: PersonRow[]; title: string }) {
                         {getInitials(p.person_name)}
                       </div>
                       <div>
-                        <span style={{ fontWeight: 500, color: 'var(--accent)' }}>{p.person_name}</span>
+                        <span className="ph-no-capture" style={{ fontWeight: 500, color: 'var(--accent)' }}>{p.person_name}</span>
                         {(p.is_rep_alone || p.is_rep_in_common) && (
                           <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 5px', borderRadius: 3, background: 'var(--accent-light)', color: 'var(--accent)' }}>
                             {p.is_rep_alone ? 'Μόνος' : 'Κοινά'}
