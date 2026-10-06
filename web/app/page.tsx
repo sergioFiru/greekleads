@@ -990,7 +990,7 @@ function PeopleSection({ onNavigate }: { onNavigate: (r: string) => void }) {
   return (
     <section className="home-screen" style={{ background: 'var(--page-bg)' }}>
       <div className="screen-inner">
-        <div style={{ display: 'grid', gridTemplateColumns: '1.08fr 0.92fr', gap: 56, alignItems: 'center' }}>
+        <div className="hm-split">
           <PeopleDemo onNavigate={onNavigate} />
           <div>
             <SectionHeader
@@ -1076,7 +1076,7 @@ function NetworkSection({ onNavigate }: { onNavigate: (r: string) => void }) {
   return (
     <section className="home-screen" style={{ background: 'var(--surface)' }}>
       <div className="screen-inner">
-        <div style={{ display: 'grid', gridTemplateColumns: '0.92fr 1.08fr', gap: 56, alignItems: 'center' }}>
+        <div className="hm-split hm-split-rev">
           <div>
             <SectionHeader
               index="03"
@@ -1119,7 +1119,7 @@ function ScoutSection({ onNavigate }: { onNavigate: (r: string) => void }) {
   return (
     <section className="home-screen" style={{ background: 'var(--page-bg)' }}>
       <div className="screen-inner">
-        <div style={{ display: 'grid', gridTemplateColumns: '0.92fr 1.08fr', gap: 56, alignItems: 'center' }}>
+        <div className="hm-split hm-split-rev">
           <div>
             <SectionHeader
               index="04"
@@ -1210,7 +1210,7 @@ function SocialSection({ onNavigate }: { onNavigate: (r: string) => void }) {
   return (
     <section className="home-screen" style={{ background: 'var(--surface)' }}>
       <div className="screen-inner">
-        <div style={{ display: 'grid', gridTemplateColumns: '1.08fr 0.92fr', gap: 56, alignItems: 'center' }}>
+        <div className="hm-split">
           <div className="card" style={{ padding: 0, overflow: 'hidden', boxShadow: '0 12px 36px rgba(26,35,50,0.06)' }}>
             <div style={{ padding: '11px 16px', borderBottom: '0.5px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 12, fontWeight: 600 }}>Social presence</span>
@@ -1287,7 +1287,7 @@ function ExportSection({ onNavigate }: { onNavigate: (r: string) => void }) {
             <Icon name="arrow-up-right" size={14} style={{ transform: 'rotate(45deg)' }} />
             <span style={{ width: 44, height: 1, background: 'var(--border-strong)', display: 'inline-block' }} />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+          <div className="hm-grid-3 hm-grid-3-tight">
             {tools.map(t => (
               <div key={t.name} className="card" style={{ padding: '11px 14px', display: 'flex', alignItems: 'center', gap: 9, minWidth: 134 }}>
                 <span style={{ width: 22, height: 22, borderRadius: 5, background: t.tint, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{t.name[0]}</span>
@@ -1340,7 +1340,7 @@ function UseCases() {
     <section className="home-screen" style={{ background: 'var(--surface)' }}>
       <div className="screen-inner">
         <SectionHeader index="07" center eyebrow="Για ποιους είναι" title="Μία πλατφόρμα. Τρεις ρόλοι." />
-        <div style={{ marginTop: 32, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+        <div className="hm-grid-3" style={{ marginTop: 32 }}>
           {cases.map((c, i) => (
             <div key={i} className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{c.who}</span>
@@ -1438,7 +1438,7 @@ function SourceCard({ tag, tagColor, title, desc, stats, icon }: {
         <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>{title}</div>
         <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55 }}>{desc}</div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderTop: '0.5px solid var(--row-divider)', paddingTop: 12 }}>
+      <div className="hm-grid-3 hm-grid-3-flush" style={{ borderTop: '0.5px solid var(--row-divider)', paddingTop: 12 }}>
         {stats.map((s, i) => (
           <div key={i} style={{ borderLeft: i === 0 ? 'none' : '0.5px solid var(--row-divider)', paddingLeft: i === 0 ? 0 : 12 }}>
             <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.k}</div>
@@ -1460,7 +1460,7 @@ function Foundation() {
           title="Αγκυρωμένο στο επίσημο μητρώο. Όχι εικασίες."
           body="Όλα ξεκινούν από το Γενικό Εμπορικό Μητρώο — την επίσημη πηγή αλήθειας για κάθε ελληνική επιχείρηση. Πάνω σε αυτή τη βάση προσθέτουμε κοινωνικά προφίλ και επαληθευμένες επαφές."
         />
-        <div style={{ marginTop: 32, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+        <div className="hm-grid-3" style={{ marginTop: 32 }}>
           <SourceCard
             tag="Πηγή αλήθειας" tagColor="gemi" title="Μητρώο ΓΕΜΗ" icon="verified"
             desc="Ημερήσιος συγχρονισμός με το ΓΕΜΗ: νομική κατάσταση, ίδρυση, καταχωρημένο κεφάλαιο, διεύθυνση, ΚΑΔ δραστηριότητες και κάθε διευθυντής ή μέτοχος."
@@ -1507,7 +1507,7 @@ function PricingTeaser({ onNavigate }: { onNavigate: (r: string) => void }) {
           title="Πληρώστε για πόντους, όχι για θέσεις που δεν χρησιμοποιείτε."
           body="Κάθε πλάνο περιλαμβάνει πλήρη πρόσβαση στο μητρώο. Τα επί πληρωμή επίπεδα προσθέτουν εμπλουτισμό και όγκο εξαγωγών."
         />
-        <div style={{ marginTop: 28, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+        <div className="hm-grid-3" style={{ marginTop: 28 }}>
           {plans.map(p => (
             <div key={p.name} className="card" style={{
               padding: 22, display: 'flex', flexDirection: 'column', gap: 12,
@@ -1551,7 +1551,7 @@ function PricingTeaser({ onNavigate }: { onNavigate: (r: string) => void }) {
 function BottomCTA({ onNavigate }: { onNavigate: (r: string) => void }) {
   return (
     <section className="home-screen" style={{ background: 'var(--page-bg)' }}>
-      <div className="screen-inner" style={{ maxWidth: 1080, position: 'relative', background: 'var(--nav-bg)', borderRadius: 12, padding: '56px 48px', overflow: 'hidden' }}>
+      <div className="screen-inner hm-cta-card" style={{ maxWidth: 1080, position: 'relative', background: 'var(--nav-bg)', borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ maxWidth: 560, position: 'relative', zIndex: 2 }}>
           <span style={{ fontSize: 11, color: 'var(--nav-text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Δωρεάν εγγραφή</span>
           <h2 style={{ margin: '10px 0 14px', fontSize: 32, fontWeight: 600, color: 'var(--nav-text-active)', letterSpacing: '-0.02em', lineHeight: 1.15 }}>
@@ -1604,9 +1604,9 @@ function FooterCol({ title, links, onNavigate }: { title: string; links: { l: st
 
 function HomeFooter({ onNavigate }: { onNavigate: (r: string) => void }) {
   return (
-    <footer style={{ padding: '40px 28px 32px', background: 'var(--app-bg)', borderTop: '0.5px solid var(--border)', color: 'var(--text-secondary)', fontSize: 12.5 }}>
+    <footer className="hm-footer" style={{ background: 'var(--app-bg)', borderTop: '0.5px solid var(--border)', color: 'var(--text-secondary)', fontSize: 12.5 }}>
       <div style={{ maxWidth: 1120, margin: '0 auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 1fr', gap: 24, paddingBottom: 28 }}>
+        <div className="hm-grid-5" style={{ paddingBottom: 28 }}>
           <div>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 12, color: 'var(--text-primary)' }}>
               <BrandMark size={20} />

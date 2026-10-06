@@ -744,6 +744,25 @@ are in the session scratchpad (`kad_vocab_probe{,2,3}.py`).
 ---
 
 ## Session Log
+- 2026-10-06: Homepage made mobile-friendly — the worst offender on the site: 250 inline styles,
+  130 of them layout. Same root cause as the company pages and /search: an INLINE style cannot be
+  overridden by a media query.
+  The 10 inline GRIDS were what actually broke a phone, and all 10 are now classes:
+    4x two-column splits  '1.08fr 0.92fr' / '0.92fr 1.08fr' with gap:56  -> .hm-split(.hm-split-rev)
+    5x 'repeat(3, 1fr)'                                                  -> .hm-grid-3 (+tight/flush)
+    1x '1.4fr 1fr 1fr 1fr 1fr'                                           -> .hm-grid-5
+  A 56px gap between two columns inside 390px leaves ~165px each; three columns leave ~110px, which
+  cannot hold Greek feature copy. Splits collapse at 960px, triplets at 720px; .hm-grid-5 goes to 2
+  columns with a full-width lead cell, then 1.
+  Also extracted: .hm-cta-card (inline padding '56px 48px' = 96px horizontal) and .hm-footer
+  ('40px 28px 32px'), plus a mobile override for .screen-inner, whose 28px-a-side gutter applies to
+  EVERY section.
+  CHECKED, not assumed: 0 inline gridTemplateColumns remain; the only inline width >=100px left is a
+  decorative SVG (width:380, opacity .18) whose parent has overflow:hidden, so it cannot overflow;
+  no inline fontSize >= 34px anywhere, so nothing needed fluid type.
+  NOT done: the hero-feed section's 16 remaining inline styles are padding/gap/fontSize only — they
+  degrade rather than break. /people/[slug] (97 inline, 34 layout) still untouched.
+  NOT verified on a real device — user tests manually.
 - 2026-10-03: /search made mobile-friendly. It had 138 .sp-* rules and ZERO media queries — the
   product's main page, never laid out for a phone. At 390px the layout grid (260px rail + 1fr) left
   about 110px for results, and the table's own columns are 380/200/140px.

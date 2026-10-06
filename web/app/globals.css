@@ -5374,3 +5374,70 @@ input, select, textarea { font-family: inherit; }
   .sp-layout { padding: 8px; }
   .sp-sidebar-col { width: 92vw; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   HOMEPAGE — layout primitives + mobile
+   app/page.tsx carried 250 inline styles, 130 of them layout, and the
+   ten grids below were the ones that actually broke a phone: a 56px
+   gap between two columns inside a 390px viewport leaves ~165px each.
+   Extracted here because an inline style cannot be overridden by a
+   media query — the same root cause as the company pages.
+   ══════════════════════════════════════════════════════════════ */
+
+/* Alternating text/visual rows down the page. */
+.hm-split {
+  display: grid;
+  grid-template-columns: 1.08fr 0.92fr;
+  gap: 56px;
+  align-items: center;
+}
+.hm-split-rev { grid-template-columns: 0.92fr 1.08fr; }
+
+/* Feature and stat triplets. */
+.hm-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.hm-grid-3-tight { gap: 10px; }
+.hm-grid-3-flush { gap: 0; }
+
+/* The footer-ish 5-column row. */
+.hm-grid-5 {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr;
+  gap: 24px;
+}
+
+/* ── Tablet ─────────────────────────────────────────────── */
+@media (max-width: 960px) {
+  .hm-split,
+  .hm-split-rev { grid-template-columns: 1fr; gap: 28px; }
+  /* The 5-column row keeps the lead column full-width and wraps the rest. */
+  .hm-grid-5 { grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  .hm-grid-5 > *:first-child { grid-column: 1 / -1; }
+}
+
+/* ── Phone ──────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  .hm-split,
+  .hm-split-rev { gap: 22px; }
+  /* Three columns of ~110px cannot hold Greek feature copy. */
+  .hm-grid-3 { grid-template-columns: 1fr; gap: 10px; }
+  .hm-grid-3-flush { gap: 0; }
+  .hm-grid-5 { grid-template-columns: 1fr; gap: 14px; }
+}
+
+/* The CTA card and the footer carried their padding inline — 96px and 56px of
+   horizontal padding respectively, which on a 390px phone is a quarter of the
+   screen spent on whitespace. */
+.hm-cta-card { padding: 56px 48px; }
+.hm-footer   { padding: 40px 28px 32px; }
+
+@media (max-width: 720px) {
+  /* .screen-inner is every section's gutter: 28px a side is fine on a laptop,
+     tight once the content inside also has padding. */
+  .screen-inner { padding: 44px 16px; }
+  .hm-cta-card  { padding: 30px 18px; }
+  .hm-footer    { padding: 28px 16px 24px; }
+}
