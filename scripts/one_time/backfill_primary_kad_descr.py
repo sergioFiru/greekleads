@@ -56,29 +56,50 @@ import sys
 import time
 
 import psycopg2
+from psycopg2.extras import execute_values
 from dotenv import load_dotenv
+
+# The Windows console defaults to cp1252, which cannot encode Greek. Without
+# this the script does all its work and then dies on the LAST print — the
+# summary of what it fixed — which reads as a failed run.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding='utf-8')
+    except (AttributeError, ValueError):
+        pass
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(HERE, '..', '.env'))
 
-BATCH = 20_000
+# Small enough that the bar moves every few seconds. The old 20.000 meant one
+# update of progress every ~13 minutes, which read as a hung script.
+BATCH = 2_000
 
 
-def bar(done, total, label='', width=38):
-    """Single-line progress bar. Every bulk script in this repo has one."""
+def bar(done, total, label='', t0=None, width=34):
+    """Progress bar with rate and ETA.
+
+    Called DURING a batch, not only after one. The previous version printed
+    nothing until a whole batch had been written, so a slow batch was
+    indistinguishable from a hung script.
+    """
     frac = 0.0 if not total else min(1.0, done / total)
     full = int(frac * width)
-    pct = frac * 100
+    tail = ''
+    if t0 and done:
+        el = time.time() - t0
+        rate = done / el if el else 0
+        if rate > 0:
+            eta = int((total - done) / rate)
+            tail = '  {:>5,.0f}/s  ETA {:02d}:{:02d}'.format(rate, eta // 60, eta % 60)
     sys.stdout.write(
-        "\r  [{}{}] {:5.1f}%  {:>9,}/{:<9,} {}".format(
-            '#' * full, '.' * (width - full), pct, done, total, label[:34]
+        "\r  [{}{}] {:5.1f}%  {:>7,}/{:<7,}{} {}".format(
+            '#' * full, '.' * (width - full), frac * 100, done, total, tail, label[:20]
         )
     )
     sys.stdout.flush()
 
 
-# The authoritative description for a firm's primary activity. LATERAL keeps it
-# to one JSONB scan per company row.
 SELECT_SQL = """
 SELECT c.ar_gemi,
        c.primary_kad            AS current_descr,
@@ -104,6 +125,37 @@ ORDER BY c.ar_gemi
 LIMIT %s
 """
 
+# Same predicate, counted. Measured at ~7s against the live DB — cheap enough to
+# run up front so the progress bar has a real denominator instead of counting
+# against all 1,68M companies and never passing 3%.
+COUNT_SQL = """
+SELECT count(*)
+FROM companies c
+CROSS JOIN LATERAL (
+    SELECT a->'activity'->>'descr' AS descr
+    FROM jsonb_array_elements(c.activities) a
+    WHERE a->>'type' = 'Κύρια'
+      AND a->>'dtTo' IS NULL
+      AND a->'activity'->>'kadVersion' = 'kad_2026'
+      AND a->'activity'->>'descr' IS NOT NULL
+      AND a->'activity'->>'descr' <> ''
+    LIMIT 1
+) act
+WHERE c.activities IS NOT NULL
+  AND jsonb_typeof(c.activities) = 'array'
+  AND (c.primary_kad IS DISTINCT FROM act.descr)
+"""
+
+# ONE round trip per batch instead of one per ROW. psycopg2's executemany sends
+# each UPDATE separately; over the Railway public proxy that was ~40ms x 20.000
+# = ~13 minutes of silence per batch, which is what made the script look hung.
+UPDATE_SQL = """
+UPDATE companies AS c
+   SET primary_kad = v.descr
+  FROM (VALUES %s) AS v(ar_gemi, descr)
+ WHERE c.ar_gemi = v.ar_gemi::bigint
+"""
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -122,21 +174,35 @@ def main():
     conn.autocommit = False
     cur = conn.cursor()
 
-    # Size the job so the bar means something. Counting the mismatches exactly
-    # costs a full JSONB scan, so estimate from the table instead and let the
-    # bar track rows examined.
-    cur.execute("SELECT count(*) FROM companies WHERE activities IS NOT NULL")
-    approx = cur.fetchone()[0]
-    total = min(approx, args.limit) if args.limit else approx
-
     mode = 'APPLY — rows will be written' if args.apply else 'DRY RUN — nothing will be written'
     print(f"\n{mode}")
-    print(f"Scanning up to {total:,} companies in batches of {BATCH:,}.\n")
+
+    # Count the ACTUAL work first (~7s measured) so the bar has a real
+    # denominator and can show an ETA. The old version counted against all
+    # 1,68M companies, so it never passed 3%. Printed before the query runs so
+    # there is never a silent gap.
+    sys.stdout.write('Counting mismatched rows (about 7s)... ')
+    sys.stdout.flush()
+    tc = time.time()
+    cur.execute(COUNT_SQL)
+    mismatched = cur.fetchone()[0]
+    print(f'{mismatched:,} found in {time.time() - tc:.0f}s')
+
+    if mismatched == 0:
+        print('\n  Nothing to do — primary_kad already agrees everywhere.')
+        conn.close()
+        return
+
+    total = min(mismatched, args.limit) if args.limit else mismatched
+    print(f"Writing in batches of {BATCH:,}.\n")
 
     last = 0
     seen = fixed = blanks = 0
     samples = []
     t0 = time.time()
+    # Draw it at 0% immediately: the first SELECT takes a few seconds, and an
+    # empty terminal during that is exactly what read as "stuck".
+    bar(0, total, 'starting')
 
     while True:
         take = BATCH if not args.limit else min(BATCH, args.limit - seen)
@@ -154,18 +220,22 @@ def main():
                 samples.append((ar_gemi, current, correct))
 
         if args.apply:
-            cur.executemany(
-                "UPDATE companies SET primary_kad = %s WHERE ar_gemi = %s",
-                [(correct, ar_gemi) for ar_gemi, _, correct in rows],
+            # execute_values sends ONE statement per batch. executemany sent one
+            # per ROW — 20.000 round trips over the Railway public proxy, about
+            # 13 minutes of silence per batch.
+            execute_values(
+                cur, UPDATE_SQL,
+                [(ar_gemi, correct) for ar_gemi, _, correct in rows],
+                page_size=len(rows),
             )
             conn.commit()
 
         fixed += len(rows)
         seen += len(rows)
         last = rows[-1][0]
-        bar(seen, total, f'last ar_gemi {last}')
+        bar(seen, total, 'ar_gemi {}'.format(last), t0)
 
-    bar(seen, total, 'done')
+    bar(seen, total, 'done', t0)
     dt = time.time() - t0
     print(f"\n\n  mismatched rows found : {fixed:,}")
     print(f"  ...of which were blank: {blanks:,}")
