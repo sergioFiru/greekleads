@@ -34,6 +34,30 @@ claude mcp add greekleads -- npx tsx /ABSOLUTE/PATH/greekleads/mcp/src/stdio.ts
 `DATABASE_URL` is read from `scripts/.env`, the same file every other service in
 this repo uses — there is no second copy to go stale.
 
+## Claude Desktop
+
+`%APPDATA%\Claude\claude_desktop_config.json`:
+
+```json
+"greekleads": {
+  "command": "node",
+  "args": [
+    "C:\\\\Users\\\\firul\\\\greekleads\\\\mcp\\\\node_modules\\\\tsx\\\\dist\\\\cli.mjs",
+    "C:\\\\Users\\\\firul\\\\greekleads\\\\mcp\\\\src\\\\stdio.ts"
+  ]
+}
+```
+
+`node` plus the local tsx CLI, **not** `npx tsx`. Desktop launches the server
+from a working directory of its own choosing, and npx may not find the locally
+installed tsx from there.
+
+For the same reason the imports from `web/lib` are RELATIVE rather than going
+through a `@/lib` tsconfig alias: tsx resolves tsconfig `paths` from the cwd, so
+an alias works when you run it from `mcp/` and dies with
+`Cannot find package '@/lib'` the moment Desktop launches it from anywhere else.
+Caught by launching it from an unrelated directory before shipping, not after.
+
 ## Running it hosted (HTTP, Railway)
 
 ```bash
