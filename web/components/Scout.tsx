@@ -166,6 +166,17 @@ export function ScoutPanel({
         body: JSON.stringify({ messages: conversationMessages }),
       })
       const data = await res.json()
+      // The wall arrives as a normal 403 body. Without this it falls into the
+      // catch below and reads as "something went wrong", which is both wrong
+      // and the worst possible copy at the moment we are asking for a signup.
+      if (data.gated) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: (data.message ?? 'Δημιουργήστε δωρεάν λογαριασμό για να συνεχίσετε.')
+            + '\n\nhttps://www.greekleads.gr/sign-up',
+        }])
+        return
+      }
       if (data.error) throw new Error(data.error)
 
       const recipe: ScoutRecipe = {

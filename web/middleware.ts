@@ -31,6 +31,7 @@ export default async function middleware(req: NextRequest) {
  *   /crm, /crm/[id]          — the CRM pages
  *   /api/crm/*               — list + saved-search routes
  *   /api/search, /api/search/export — plan gating and export caps
+ *   /api/scout               — anonymous free-run quota
  *   /sign-in, /sign-up       — Clerk's own flows
  *
  * TopNav calls useAuth(), but that is a CLIENT hook served by ClerkJS in the
@@ -49,6 +50,9 @@ export const config = {
     '/crm/:path*',
     '/api/crm/:path*',
     '/api/search/:path*',
+    // Calls getAuth() to decide whether the caller gets the anonymous free run.
+    // Without this entry Clerk throws "clerkMiddleware() was not run".
+    '/api/scout',
     '/sign-in/:path*',
     '/sign-up/:path*',
     // Billing: checkout and portal call requireUser() and so need auth(). The

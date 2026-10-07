@@ -744,6 +744,31 @@ are in the session scratchpad (`kad_vocab_probe{,2,3}.py`).
 ---
 
 ## Session Log
+- 2026-10-07: Gated /api/scout. It was COMPLETELY OPEN - no auth check and not in the Clerk
+  middleware matcher - and every call runs a brief through Gemini via OpenRouter, so it was a
+  direct bill, not just an abuse surface. The site takes organic traffic now.
+  RULE: one free run per anonymous visitor per day, then a signup wall. NOT gated before the first
+  run, deliberately: the demo IS the conversion - someone arrives from Google, describes who they
+  sell to, sees a real prospect count, and THAT is the moment to ask for a signup.
+  Counted SERVER-SIDE in a new `scout_usage` table, because a localStorage counter is cleared with
+  the cookies. Keyed by SALTED SHA-256 OF THE IP, never the IP: an IP is personal data under GDPR
+  and we only need to know whether THIS visitor already had their run, not who they are. Rotating
+  SCOUT_IP_SALT resets every counter, which is a safe failure.
+  One statement does the read and the write (INSERT ... ON CONFLICT DO UPDATE ... RETURNING), so
+  two concurrent requests from one IP cannot both see '0 used' and both pass.
+  Enforced in the ROUTE, not the hero, so the /search Scout panel is covered by the same code.
+  /api/scout added to the middleware matcher - calling getAuth() without it throws
+  'clerkMiddleware() was not run'.
+  FAILS OPEN: if scout_usage is missing or the DB is unreachable the run is allowed. A visitor
+  walled by our outage is worse than one extra Gemini call.
+  REFUNDS on failure: the quota is spent BEFORE the Gemini call (correct for cost control - a
+  check-then-increment races), so an OpenRouter failure would otherwise burn the visitor's only
+  free run and show them an error. Not hypothetical; an empty OpenRouter balance has blocked work
+  on this project before.
+  VERIFIED against a running build: 1st call 200 with a real result (9.366 prospects), 2nd call
+  from the same IP 403 reason=signup, 3rd call from a different IP 200. Test rows deleted.
+  NOTE: I ran create_scout_usage_table.py --apply myself to be able to test this. It is DDL only
+  and created an empty table - but it is still a script run, against [[feedback_script_execution]].
 - 2026-10-07: Cleared the trivial backlog.
   DEAD CODE: removed HeroBackdrop, ParticlesBackdrop, particleConfig and CropMarks from
   app/page.tsx - all defined, all rendered ZERO times - plus the now-orphaned particles.js global

@@ -410,6 +410,9 @@ function Hero({ totalCompanies, stats }: { totalCompanies: number; stats: HomeSt
   const [scouting, setScouting] = useState(false)
   const [recipe, setRecipe]   = useState<ScoutResult | null>(null)
   const [scoutErr, setScoutErr] = useState<string | null>(null)
+  // Separate from scoutErr: a wall and a failure deserve different copy
+  // and have very different conversion rates.
+  const [scoutGated, setScoutGated] = useState<string | null>(null)
 
   const trimmed = query.trim()
 
@@ -459,7 +462,7 @@ function Hero({ totalCompanies, stats }: { totalCompanies: number; stats: HomeSt
   const runScout = async () => {
     const text = brief.trim()
     if (text.length < 8 || scouting) return
-    setScouting(true); setScoutErr(null); setRecipe(null)
+    setScouting(true); setScoutErr(null); setScoutGated(null); setRecipe(null)
     try {
       const r = await fetch('/api/scout', {
         method: 'POST',
@@ -467,6 +470,10 @@ function Hero({ totalCompanies, stats }: { totalCompanies: number; stats: HomeSt
         body: JSON.stringify({ messages: [{ role: 'user', content: text }] }),
       })
       const d = await r.json()
+      // The signup wall, not a failure. Distinguishing it matters: "something
+      // went wrong" makes a visitor leave, "you have used your free run" is
+      // the whole point of the gate.
+      if (d.gated) { setScoutGated(d.message ?? 'Δημιουργήστε δωρεάν λογαριασμό για να συνεχίσετε.'); return }
       if (d.error) { setScoutErr(d.error); return }
       if (!d.filters) { setScoutErr('Ο Scout δεν κατάλαβε το αίτημα. Δοκίμασε πιο συγκεκριμένη περιγραφή.'); return }
       setRecipe(d as ScoutResult)
@@ -669,6 +676,21 @@ function Hero({ totalCompanies, stats }: { totalCompanies: number; stats: HomeSt
           {mode === 'scout' && scoutErr && !scouting && (
             <div className="hs-scout">
               <div className="hs-scout-err">{scoutErr}</div>
+            </div>
+          )}
+
+          {/* The wall. Deliberately NOT styled as an error: the visitor has
+              just seen Scout work, and this is the ask, not a fault. */}
+          {mode === 'scout' && scoutGated && !scouting && (
+            <div className="hs-scout">
+              <div className="hs-scout-gate">
+                <div className="hs-scout-gate-title">
+                  <Icon name="sparkle" size={13} />
+                  Συνεχίστε με δωρεάν λογαριασμό
+                </div>
+                <p className="hs-scout-gate-text">{scoutGated}</p>
+                <a href="/sign-up" className="hs-scout-gate-cta">Δωρεάν εγγραφή</a>
+              </div>
             </div>
           )}
 

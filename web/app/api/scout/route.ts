@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query, queryOne } from '@/lib/db'
+import { getAuth } from '@/lib/auth'
+import { consumeAnonScoutRun, refundAnonScoutRun, clientIp, ANON_SCOUT_RUNS } from '@/lib/scoutQuota'
 
 const PREFECTURES = [
   'ΑΘΗΝΩΝ', 'ΑΙΤΩΛΟΑΚΑΡΝΑΝΙΑΣ', 'ΑΝΑΤΟΛΙΚΗΣ ΑΤΤΙΚΗΣ', 'ΑΡΓΟΛΙΔΑΣ', 'ΑΡΚΑΔΙΑΣ',
@@ -161,10 +163,50 @@ function buildWhere(f: ScoutFilters): { sql: string; params: unknown[] } {
 }
 
 export async function POST(req: NextRequest) {
+  // Set once a free run has actually been spent, so the catch below can hand it
+  // back if the run never produced anything.
+  let consumedIp: string | null = null
   try {
     const { messages } = await req.json()
     if (!Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: 'messages required' }, { status: 400 })
+    }
+
+    // ── Gate ───────────────────────────────────────────────────────
+    //
+    // This route was completely open. Every call runs a brief through Gemini
+    // via OpenRouter, so an open endpoint is a direct bill, not just an abuse
+    // surface — and the site takes organic traffic now.
+    //
+    // One free run per anonymous visitor per day, then the wall. Gating BEFORE
+    // the first run would remove the thing that converts: someone arriving from
+    // Google describes who they sell to, sees a real prospect count, and that
+    // is the moment worth asking them to sign up.
+    //
+    // Counted server-side because a localStorage counter is cleared along with
+    // the cookies, and enforced HERE rather than in the hero so the /search
+    // Scout panel is covered by the same implementation.
+    const gateDisabled = process.env.NEXT_PUBLIC_DISABLE_GATE === 'true'
+    if (!gateDisabled) {
+      const { isLoggedIn } = await getAuth()
+      if (!isLoggedIn) {
+        consumedIp = clientIp(req.headers)
+        const quota = await consumeAnonScoutRun(consumedIp)
+        if (!quota.allowed) {
+          // Same shape /api/search uses for its paywall, so the client has one
+          // way of recognising a wall rather than two.
+          return NextResponse.json(
+            {
+              gated: true,
+              reason: 'signup',
+              used: quota.used,
+              limit: ANON_SCOUT_RUNS,
+              message: `Ο Scout είναι δωρεάν ${ANON_SCOUT_RUNS === 1 ? 'μία φορά' : `${ANON_SCOUT_RUNS} φορές`} την ημέρα. Δημιουργήστε δωρεάν λογαριασμό για να συνεχίσετε.`,
+            },
+            { status: 403 },
+          )
+        }
+      }
     }
 
     const apiKey = process.env.OPENROUTER_API_KEY
@@ -276,6 +318,9 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     console.error('[/api/scout]', err)
+    // The visitor got nothing, so they keep their free run. Without this an
+    // OpenRouter outage silently spends it and walls them on the retry.
+    if (consumedIp) await refundAnonScoutRun(consumedIp)
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
 }
