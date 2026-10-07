@@ -744,6 +744,27 @@ are in the session scratchpad (`kad_vocab_probe{,2,3}.py`).
 ---
 
 ## Session Log
+- 2026-10-07: Cleared the trivial backlog.
+  DEAD CODE: removed HeroBackdrop, ParticlesBackdrop, particleConfig and CropMarks from
+  app/page.tsx - all defined, all rendered ZERO times - plus the now-orphaned particles.js global
+  Window typings. 118 lines.
+  BUILD ARTIFACT: web/tsconfig.tsbuildinfo was TRACKED in git, so the tree was dirty after every
+  build and an ultrareview run ended up reviewing a one-line diff of it instead of the code.
+  git rm --cached + *.tsbuildinfo in web/.gitignore.
+  primary_kad DRIFT NOW SELF-HEALS: it was 44,7% wrong, the one_time backfill fixed it, and it was
+  back to 65 rows within a day because new firms arrive with whatever wording GEMI sent. Added
+  _topup_kad_descr() to scripts/bots/stats_rollup.py beside the existing _topup_kad_codes().
+  Unlike the code top-up it CANNOT filter on NULL - the drift is wrong values, not missing ones -
+  so it is bounded by LIMIT 20000 per night instead.
+  PERSON NAME WHITESPACE: wrote scripts/one_time/fix_person_name_whitespace.py (dry-run default).
+  115 names carry leading/trailing spaces; the slug encodes the space as %20, the route does an
+  exact match, and the profile 404s - unreachable by any route in the product. 7 of the 115 MERGE
+  onto an existing untrimmed name, which is correct: one human whose roles were split across two
+  spellings. NOT RUN YET.
+  FOUND WHILE MEASURING, NOT FIXED: 43.671 names contain INTERNAL double spaces
+  ('ΚΑΡΑΙΣΚΟΣ  ΝΙΚΟΛΑΟΣ'). btrim does not touch them and they still resolve, so nothing is
+  broken - but they can split one person across two entries. Collapsing internal whitespace would
+  change tens of thousands of slugs and merge names at scale: a product decision, not a cleanup.
 - 2026-10-07: Fixed the Google Translate crash, and added a favicon (there was none).
   SYMPTOM: translate the site in Chrome, click any nav link, and the whole app dies with
   `Uncaught NotFoundError: Failed to execute 'removeChild' on 'Node'`.

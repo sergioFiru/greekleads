@@ -82,12 +82,63 @@ def _topup_kad_codes(db):
         db.commit()
 
 
+def _topup_kad_descr(db):
+    """
+    Keep companies.primary_kad in step with primary_kad_code.
+
+    The two columns come from DIFFERENT ΚΑΔ vocabularies unless something keeps
+    them aligned: the code is kad_2026, while the description a newly ingested
+    firm arrives with is whatever ΓΕΜΗ sent. Because the 2008 -> 2026 remap is
+    many-to-one, several old activities collapse onto one new code and each firm
+    keeps its own old wording, so one code ends up carrying several unrelated
+    descriptions.
+
+    It was 44,7% of codes before backfill_primary_kad_descr.py fixed it on
+    2026-10-07, and it had already drifted back to 65 rows within a day. This
+    stops the one_time script needing to be re-run by hand forever.
+
+    Unlike the code top-up this cannot filter on NULL — the drift is WRONG
+    values, not missing ones — so it is bounded by LIMIT instead. A nightly
+    few-thousand-row ceiling is far more than the real trickle.
+    """
+    with db.cursor() as cur:
+        cur.execute("""
+            UPDATE companies c
+            SET primary_kad = sub.descr
+            FROM (
+                SELECT c2.ar_gemi, act.descr
+                FROM companies c2
+                CROSS JOIN LATERAL (
+                    SELECT a->'activity'->>'descr' AS descr
+                    FROM jsonb_array_elements(c2.activities) a
+                    WHERE a->>'type' = 'Κύρια'
+                      AND a->>'dtTo' IS NULL
+                      AND a->'activity'->>'kadVersion' = 'kad_2026'
+                      AND a->'activity'->>'descr' IS NOT NULL
+                      AND a->'activity'->>'descr' <> ''
+                    LIMIT 1
+                ) act
+                WHERE c2.activities IS NOT NULL
+                  AND jsonb_typeof(c2.activities) = 'array'
+                  AND c2.primary_kad IS DISTINCT FROM act.descr
+                LIMIT 20000
+            ) sub
+            WHERE c.ar_gemi = sub.ar_gemi
+        """)
+        if cur.rowcount:
+            log.info(f"[{NAME}] primary_kad realigned for {cur.rowcount:,} rows.")
+        db.commit()
+
+
 def run(db, gemi):
     builder = _load_builder()
 
     # Runs before the freshness guard: new firms need a ΚΑΔ code even on days
     # when the rollup itself is skipped.
     _topup_kad_codes(db)
+    # Must follow the code top-up: a row needs its code before the
+    # description can be checked against it.
+    _topup_kad_descr(db)
 
     with db.cursor() as cur:
         cur.execute("SELECT to_regclass('stats_meta')")

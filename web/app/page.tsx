@@ -7,14 +7,6 @@ import Icon from '@/components/Icon'
 import TopNav from '@/components/TopNav'
 import PrefectureMap from '@/components/PrefectureMap'
 
-// ── TypeScript globals ──────────────────────────────────────────────
-declare global {
-  interface Window {
-    particlesJS: (id: string, config: unknown) => void
-    pJSDom: Array<{ pJS: { fn: { vendors: { destroypJS: () => void } } } }>
-  }
-}
-
 // ── Static data ─────────────────────────────────────────────────────
 const LOGO_COLORS = [
   { bg: '#EEF4FF', fg: '#1A4A8A', border: '#C0D0E8' },
@@ -363,119 +355,6 @@ function LiveExhibit({ initialCount }: { initialCount: number }) {
   )
 }
 
-// ── HERO BACKDROP ────────────────────────────────────────────────────
-function HeroBackdrop() {
-  return (
-    <div style={{
-      position: 'absolute', inset: 0, pointerEvents: 'none',
-      backgroundImage: 'radial-gradient(circle, var(--hero-dot) 0.7px, transparent 0.7px)',
-      backgroundSize: '26px 26px', backgroundPosition: 'center top',
-      opacity: 'var(--hero-dot-opacity)' as unknown as number,
-      maskImage: 'linear-gradient(to bottom, #000 20%, transparent 92%)',
-      WebkitMaskImage: 'linear-gradient(to bottom, #000 20%, transparent 92%)',
-    }} />
-  )
-}
-
-// ── PARTICLES BACKDROP ───────────────────────────────────────────────
-const particleConfig = (dot: string, line: string, dotOp = 0.6, lineOp = 0.5) => ({
-  particles: {
-    number: { value: 72, density: { enable: true, value_area: 900 } },
-    color: { value: dot },
-    shape: { type: 'circle' },
-    opacity: { value: dotOp, random: true, anim: { enable: true, speed: 0.5, opacity_min: dotOp * 0.3, sync: false } },
-    size: { value: 2.6, random: true },
-    line_linked: { enable: true, distance: 138, color: line, opacity: lineOp, width: 1 },
-    move: { enable: true, speed: 0.9, direction: 'none', random: true, straight: false, out_mode: 'out', bounce: false },
-  },
-  interactivity: {
-    detect_on: 'window',
-    events: { onhover: { enable: true, mode: 'grab' }, onclick: { enable: false }, resize: true },
-    modes: { grab: { distance: 170, line_linked: { opacity: 0.6 } } },
-  },
-  retina_detect: true,
-})
-
-function ParticlesBackdrop() {
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    if (reduce) return
-    let cancelled = false, tries = 0
-    const destroy = () => {
-      if (window.pJSDom?.length) {
-        try { window.pJSDom.forEach(d => d.pJS.fn.vendors.destroypJS()) } catch {}
-        window.pJSDom = []
-      }
-    }
-    const build = () => {
-      const el = document.getElementById('agora-particles')
-      if (cancelled || !window.particlesJS || !el) return
-      destroy()
-      const dark = document.documentElement.getAttribute('data-theme') === 'dark'
-      window.particlesJS('agora-particles', dark
-        ? particleConfig('#6BA6EE', '#5B93DE', 0.6, 0.5)
-        : particleConfig('#3E7DC4', '#6B98D0', 0.42, 0.32))
-      requestAnimationFrame(() => { try { window.dispatchEvent(new Event('resize')) } catch {} })
-    }
-    const tick = () => {
-      const el = document.getElementById('agora-particles')
-      if ((window.particlesJS as unknown) && el && el.clientHeight > 0) build()
-      else if (tries++ < 120) setTimeout(tick, 50)
-    }
-    tick()
-    const obs = new MutationObserver(() => build())
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
-    let ro: ResizeObserver | null = null
-    const roEl = document.getElementById('agora-particles')
-    if (window.ResizeObserver && roEl) {
-      let last = 0
-      ro = new ResizeObserver(() => {
-        const h = roEl.clientHeight
-        if (h > 0 && Math.abs(h - last) > 4) {
-          last = h
-          if (window.pJSDom?.length) {
-            try { window.dispatchEvent(new Event('resize')) } catch {}
-          } else build()
-        }
-      })
-      ro.observe(roEl)
-    }
-    return () => { cancelled = true; obs.disconnect(); if (ro) ro.disconnect(); destroy() }
-  }, [])
-
-  return (
-    <div id="agora-particles" aria-hidden style={{
-      position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none',
-      maskImage: 'linear-gradient(to bottom, #000 38%, transparent 92%)',
-      WebkitMaskImage: 'linear-gradient(to bottom, #000 38%, transparent 92%)',
-    }} />
-  )
-}
-
-// ── CROP MARKS ───────────────────────────────────────────────────────
-function CropMarks() {
-  return (
-    <div style={{ position: 'absolute', inset: -18, pointerEvents: 'none' }} aria-hidden>
-      {([
-        { top: 0,        left: 0,        sides: ['t','l'] },
-        { top: 0,        right: 0,       sides: ['t','r'] },
-        { bottom: 0,     left: 0,        sides: ['b','l'] },
-        { bottom: 0,     right: 0,       sides: ['b','r'] },
-      ] as Array<{ top?: number; right?: number; bottom?: number; left?: number; sides: string[] }>).map((c, i) => (
-        <span key={i} style={{
-          position: 'absolute',
-          top: c.top, left: c.left, right: c.right, bottom: c.bottom,
-          width: 14, height: 14,
-          borderTop:    c.sides.includes('t') ? '0.5px solid var(--border-strong)' : 'none',
-          borderBottom: c.sides.includes('b') ? '0.5px solid var(--border-strong)' : 'none',
-          borderLeft:   c.sides.includes('l') ? '0.5px solid var(--border-strong)' : 'none',
-          borderRight:  c.sides.includes('r') ? '0.5px solid var(--border-strong)' : 'none',
-        }} />
-      ))}
-    </div>
-  )
-}
 
 // ── HERO ─────────────────────────────────────────────────────────────
 

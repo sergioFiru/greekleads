@@ -3,3 +3,8 @@
 .next/
 node_modules/
 out/
+
+# TypeScript incremental build cache — regenerated on every build.
+# Was tracked until 2026-10-07, which dirtied the tree after each build and
+# polluted a code-review scope with a one-line diff of it.
+*.tsbuildinfo
