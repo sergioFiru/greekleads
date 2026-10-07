@@ -744,6 +744,26 @@ are in the session scratchpad (`kad_vocab_probe{,2,3}.py`).
 ---
 
 ## Session Log
+- 2026-10-07: Backspacing a search was firing one query per keystroke. User spotted it.
+  THE KEY FACT: pg_trgm CANNOT use an index for a pattern shorter than 3 CHARACTERS. So a 1- or
+  2-char query is a SEQUENTIAL SCAN of 1,69M rows - and they are the slowest queries in the whole
+  product, on the hottest path:
+    ORIGAMI (7) 0,61s      19 rows   index
+    ORI     (3) 0,32s  10.484 rows   index
+    OR      (2) 1,33s  85.386 rows   SEQ SCAN
+    O       (1) 1,14s 710.809 rows   SEQ SCAN
+    (empty)     0,94s   1,06M rows   full count
+  Deleting "ORIGAMI" = 7 queries, 5,2s of database work, the last three the most expensive.
+  THREE COMPOUNDING CAUSES, all fixed:
+   1. Debounce was 200ms when a name was present. Manual backspacing is SLOWER than 200ms per key,
+      so every keystroke outran it. Now 350ms.
+   2. NO request cancellation. All seven ran to completion and the LAST TO RESPOND won, not the
+      last sent - a slow 1-char query could land after the query that replaced it and overwrite
+      correct results. AbortController now; an AbortError returns early and deliberately leaves
+      `loading` true, because the spinner belongs to the request that superseded it.
+   3. No minimum length. Below 3 characters the name filter is now dropped entirely - other
+      filters still apply, so the user sees a real result set instead of a spinner, and neither
+      seq scan ever runs.
 - 2026-10-07: The /search sort - made it REAL and made it indexable.
   FOUND FIRST: the sort dropdown was COSMETIC. It sorted CLIENT-SIDE over the 50 rows already on
   screen, so picking «Όνομα (A → Ω)» on 354.218 results alphabetised whatever the social sort had

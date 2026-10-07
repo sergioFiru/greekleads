@@ -351,6 +351,20 @@ export default function SearchPage() {
   const [filtersOpen, setFiltersOpen]     = useState(false)
   const [isNarrow, setIsNarrow]           = useState(false)
   const filterResetRef = useRef(false)
+  const abortRef = useRef<AbortController | null>(null)
+
+  // pg_trgm cannot use an index for a pattern shorter than 3 characters, so a
+  // 1- or 2-character query is a SEQUENTIAL SCAN of 1,69M rows — measured 1,14s
+  // for "O" and 1,33s for "OR", the two slowest queries in the product. They are
+  // also useless: "O" matches 710.809 companies.
+  //
+  // Below 3 characters we behave as if no text had been typed. Every other
+  // filter still applies, so the user sees a real result set instead of a
+  // spinner, and the two seq scans never happen.
+  const effectiveFilters = useMemo(
+    () => (filters.name.trim().length < 3 ? { ...filters, name: '' } : filters),
+    [filters],
+  )
   // Dev-only: ar_gemi -> cache-busting version after a manual favicon save via
   // FaviconPickerButton, so the row/card picks it up without a full refetch.
   const [faviconOverrides, setFaviconOverrides] = useState<Record<string, number>>({})
@@ -374,12 +388,20 @@ export default function SearchPage() {
   }, [])
 
   const search = useCallback(async (f: SearchState, p: number, sort: string) => {
+    // Cancel whatever is still in flight. Without this every keystroke's
+    // request runs to completion and the LAST ONE TO RESPOND wins rather than
+    // the last one sent — so a slow 1-character query can land after the
+    // query that replaced it and overwrite correct results with stale ones.
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
     setLoading(true); setGated(null)
     try {
       const res = await fetch('/api/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filters: f, page: p, sort }),
+        signal: ac.signal,
       })
       if (res.status === 403) {
         // The server decides which wall: 'signup' for anonymous, 'upgrade' for
@@ -395,6 +417,10 @@ export default function SearchPage() {
       setTotal(data.total ?? null)
       setResultsKey(k => k + 1)
     } catch (err) {
+      // A superseded request is the normal case while typing, not a failure:
+      // returning here also leaves `loading` true, so the spinner belongs to
+      // the request that replaced this one.
+      if ((err as Error)?.name === 'AbortError') return
       console.error('[SearchPage] Fetch error:', err)
     }
     setLoading(false)
@@ -409,15 +435,18 @@ export default function SearchPage() {
     setAllMatching(false)
     setExcluded(new Set())
     setLoading(true)
-    const delay = filters.name ? 200 : 400
-    const id = setTimeout(() => { filterResetRef.current = false; search(filters, 1, sortBy) }, delay)
+    // 350ms, not 200ms: manual backspacing is slower than 200ms per key, so
+    // every keystroke used to fire its own search — deleting "ORIGAMI" sent
+    // seven, worth 5,2s of database work.
+    const delay = effectiveFilters.name ? 350 : 400
+    const id = setTimeout(() => { filterResetRef.current = false; search(effectiveFilters, 1, sortBy) }, delay)
     return () => { clearTimeout(id); filterResetRef.current = false }
-  }, [filters, search, sortBy])
+  }, [effectiveFilters, search, sortBy])
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (filterResetRef.current) { filterResetRef.current = false; return }
-    search(filters, page, sortBy)
+    search(effectiveFilters, page, sortBy)
   }, [page, sortBy])
 
   // A 390px phone cannot show a table whose columns are 380/200/140px, and the
