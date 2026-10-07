@@ -209,7 +209,12 @@ const searchPeople: Tool = {
               count(DISTINCT cp.ar_gemi) FILTER (WHERE c.status_descr = 'Ενεργή')::int AS active_companies,
               (array_agg(c.co_name_el ORDER BY (c.status_descr = 'Ενεργή') DESC, c.co_name_el))[1] AS sample_company
          FROM company_persons cp
-         JOIN companies c ON c.ar_gemi::text = cp.ar_gemi
+         -- The cast goes on company_persons, NOT on companies. Casting
+         -- c.ar_gemi::text makes the companies PRIMARY KEY unusable and the
+         -- planner falls back to a parallel seq scan over 703.399 rows:
+         -- measured 1,97s versus 0,39s, a 5x penalty for nothing. Verified all
+         -- 2,1M company_persons.ar_gemi values are plain digits <= 12 chars.
+         JOIN companies c ON c.ar_gemi = cp.ar_gemi::bigint
         WHERE cp.person_name ILIKE $1
         GROUP BY cp.person_name
         ORDER BY companies DESC

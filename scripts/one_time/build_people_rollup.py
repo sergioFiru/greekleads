@@ -79,7 +79,14 @@ SELECT cp.person_name,
        (array_agg(c.co_name_el ORDER BY (c.status_descr = 'Ενεργή') DESC,
                                         c.co_name_el))[1]                     AS sample_company
 FROM company_persons cp
-JOIN companies c ON c.ar_gemi::text = cp.ar_gemi
+-- The cast goes on company_persons, NOT on companies. Casting
+-- c.ar_gemi::text makes the companies PRIMARY KEY unusable and the planner
+-- falls back to a parallel seq scan over 703.399 rows (measured 1,97s vs
+-- 0,39s on a single surname). Fixing it here took the run from ~14,7s to ~10s
+-- -- worth having, but NOT the bulk of the cost: this query groups over all
+-- 2,1M rows, and that GROUP BY and sort is what dominates. The rollup table
+-- earns its place either way.
+JOIN companies c ON c.ar_gemi = cp.ar_gemi::bigint
 WHERE cp.person_name IS NOT NULL
   AND cp.person_name <> ''
   AND cp.person_name = btrim(cp.person_name)

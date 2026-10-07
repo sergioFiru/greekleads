@@ -53,7 +53,7 @@ Phase 1: validated data access — search, filter, export. Phase 2+: enrichment
 | Unfiltered `COUNT(*)` (all companies) | ~2.3s |
 | Company name `ILIKE` (no trigram index) | ~2.2s |
 | Any filtered segment (νομός / ΚΑΔ / μορφή) | 0.3–0.9s |
-| People search `count=4+` (HAVING on join) | ~6.2s |
+| People search `count=4+` (HAVING on join) | ~0.9s (was ~6.2s; a trigram GIN on `company_persons.person_name` fixed it — re-measured 2026-10-07) |
 
 ### Key Fields Per Company
 `ar_gemi`, `afm`, `co_name_el`, `co_names_en`, `co_titles_el/en`, `objective`, `municipality_descr`, `prefecture_descr`, `city`, `street`, `zip_code`, `email`, `phone`, `fax`, `url`, `legal_type_descr`, `status_descr`, `is_branch`, `incorporation_date`, `last_status_change`, `activities` (JSONB — KAD codes), `persons` (JSONB — directors), `capital`, `gemi_fetched_at`, social columns (`instagram_url`, `facebook_url`, `linkedin_url`, `twitter_url`, `tiktok_url`, `youtube_url`, `website_scanned_at`)
@@ -301,7 +301,7 @@ right rail with company count + active badge. Empty state explains the dataset
 - [ ] **Gate hero Scout behind signup** — submitting a brief from the homepage will prompt account creation before the `/api/scout` call fires. This is the intended conversion trigger *and* the abuse control, so no separate rate limiting is planned. Currently **open/ungated** in dev.
 - [x] Audit `'Inadequate Info'` leakage across all views — done 2026-10-03 via `web/lib/registryText.ts`; see the session log
 - [ ] Remove dead `HeroBackdrop` / `ParticlesBackdrop` / `CropMarks` from `page.tsx`
-- [ ] Speed up people search `count=4+` (~6.2s — HAVING over the full join)
+- [x] Speed up people search `count=4+` — ALREADY FIXED. Re-measured 2026-10-07 at 0.36–1.09s warm across six query shapes. The HAVING was never the problem: WITH it 0.48s, WITHOUT it 1.21s.
 - [ ] Activate Clerk auth (replace placeholder keys with real ones)
 - [ ] Activate Stripe payments (replace placeholder keys, wire up export flow)
 - [ ] Email provider (Resend / SendGrid) for auth emails
@@ -744,6 +744,25 @@ are in the session scratchpad (`kad_vocab_probe{,2,3}.py`).
 ---
 
 ## Session Log
+- 2026-10-07: Went to fix the 6,2s people search. IT WAS ALREADY FIXED - but the investigation
+  found a real 5x bug I had written myself a day earlier.
+  THE PREMISE WAS STALE. Re-measured the live endpoint: 0,36-1,09s warm across six query shapes.
+  A trigram GIN index on company_persons.person_name already exists, so the ILIKE is index-backed
+  (0,51s). And this file's diagnosis - 'HAVING over the full join' - was WRONG in both directions:
+  WITH the HAVING 0,48s, WITHOUT it 1,21s. The HAVING makes it FASTER, because fewer rows come out.
+  THE REAL BUG, in code I wrote this week: joining `c.ar_gemi::text = cp.ar_gemi` casts the
+  COMPANIES side, which makes companies_pkey unusable. The planner falls back to a PARALLEL SEQ
+  SCAN over 703.399 rows. Measured on one surname: 1,97s with the cast on companies vs 0,39s with
+  it on company_persons - 5x, for nothing. The web app had it right in all five of its join sites;
+  only my two new files had it backwards.
+    mcp/src/tools.ts search_people       : 2.009-4.823ms -> 773ms
+    build_people_rollup.py               : ~14,7s -> ~10s
+  The rollup gained less because it GROUPS OVER ALL 2,1M ROWS - the group-by and sort dominate, not
+  the join. The rollup table still earns its place.
+  Checked before flipping the cast: all 2,1M company_persons.ar_gemi values are plain digits, max
+  12 chars, so ::bigint cannot throw on a full scan.
+  LESSON: a performance note in this file is a measurement with a date on it, not a standing fact.
+  This one was ~7x out and pointed at the wrong clause.
 - 2026-10-07: Gated /api/scout. It was COMPLETELY OPEN - no auth check and not in the Clerk
   middleware matcher - and every call runs a brief through Gemini via OpenRouter, so it was a
   direct bill, not just an abuse surface. The site takes organic traffic now.
