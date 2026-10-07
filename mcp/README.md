@@ -73,6 +73,40 @@ it to whoever finds the URL.
 
 ### Railway setup
 
+1. New service from this repo.
+2. **Settings → Root Directory: the repository root** (leave it empty / `/`).
+   NOT `mcp/`. The image copies `web/lib` too, and a context of `mcp/` cannot
+   see it.
+3. **Settings → Build → Dockerfile Path: `mcp/Dockerfile`**
+4. **Variables:**
+   - `DATABASE_URL` — the same Postgres the other services use. Inside Railway
+     prefer the internal host; it is faster and does not leave the network.
+   - `MCP_API_KEY` — any long random string. The server refuses to start
+     without it.
+   `PORT` is injected by Railway; do not set it.
+5. **Settings → Healthcheck Path: `/health`** (already in `railway.json`, but
+   Railway only reads that file if the service's config path points at it).
+
+Connect a client to `https://<service>.up.railway.app/mcp` with
+`Authorization: Bearer $MCP_API_KEY`. For Claude Desktop, which speaks stdio:
+
+```json
+"greekleads-remote": {
+  "command": "npx",
+  "args": ["mcp-remote", "https://<service>.up.railway.app/mcp",
+           "--header", "Authorization: Bearer <key>"]
+}
+```
+
+### Verified before deploying
+
+The container's exact file layout was reproduced locally and started with
+`DATABASE_URL` from the environment rather than `scripts/.env` — proving the
+image copies everything the server needs and does not depend on a file that
+only exists on a laptop.
+
+### Old notes
+
 Set the service root to the **repository root**, not `mcp/`. The Dockerfile
 copies `web/lib` as well as `mcp/`, because the server imports the website's own
 query builders. Variables needed: `DATABASE_URL`, `MCP_API_KEY`.

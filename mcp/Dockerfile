@@ -1,25 +1,36 @@
-# Railway build. Deliberately copies BOTH mcp/ and web/lib/ — the server imports
-# the website's own query builders (see tsconfig paths), so a build context of
-# just mcp/ would fail to resolve @/lib/searchQuery.
+# Railway build for the GreekLeads MCP server.
 #
-# Set the Railway service root to the REPOSITORY root, not mcp/.
+# ⚠️ BUILD CONTEXT MUST BE THE REPOSITORY ROOT, not mcp/.
+# The server imports three modules from web/lib — the same query builders the
+# website uses, so the two cannot drift — and a context of just mcp/ cannot see
+# them. In Railway: Root Directory = the repo root, Dockerfile Path =
+# mcp/Dockerfile.
+#
+# There is no compile step: tsx runs the TypeScript directly. That is why tsx
+# is a runtime dependency rather than a dev one — `npm ci --omit=dev` would
+# otherwise drop the thing that actually starts the server.
+
 FROM node:22-alpine
 
 WORKDIR /app
 
-COPY mcp/package.json mcp/package-lock.json* ./mcp/
-RUN cd mcp && npm ci --omit=dev || npm install --omit=dev
+# Dependencies first, so a code change does not re-run the install layer.
+COPY mcp/package.json mcp/package-lock.json ./mcp/
+RUN cd mcp && npm ci --omit=dev
 
-# The shared, dependency-free modules the MCP reuses.
-COPY web/lib ./web/lib
-COPY mcp ./mcp
+# The shared modules. Copied before the app so that editing the server does not
+# invalidate this layer either.
+COPY web/lib/searchQuery.ts web/lib/nace.ts web/lib/registryText.ts ./web/lib/
+
+COPY mcp/src ./mcp/src
+COPY mcp/tsconfig.json ./mcp/
 
 WORKDIR /app/mcp
 
-# tsx runs the TypeScript directly. No build step, which keeps the shared
-# web/lib imports working without wrestling a second tsconfig rootDir.
-RUN npm install tsx
-
 ENV NODE_ENV=production
+# Railway injects PORT; 8080 is only the local default.
 EXPOSE 8080
-CMD ["npx", "tsx", "src/http.ts"]
+
+# node + the tsx CLI rather than `npx tsx`: npx would consult the registry on a
+# cache miss, which is not something a container start should depend on.
+CMD ["node", "node_modules/tsx/dist/cli.mjs", "src/http.ts"]
