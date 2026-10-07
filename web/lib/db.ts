@@ -2,17 +2,52 @@ import { Pool } from 'pg'
 
 let pool: Pool | null = null
 
+const POOL_BASE = {
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 5,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+}
+
 function getPool(): Pool {
-  if (!pool) {
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-      max: 5,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
+  if (!pool) pool = new Pool({ ...POOL_BASE })
+  return pool
+}
+
+/** The timeout baked into the no-parallel pool's startup options. */
+const NO_PARALLEL_TIMEOUT_MS = 15_000
+
+let noParallelPool: Pool | null = null
+
+/**
+ * A SECOND pool whose connections are born with parallelism already disabled.
+ *
+ * queryNoParallel used to issue SET, SET, query, RESET, SET — five round trips
+ * where one would do. Postgres applies `options` from the connection STARTUP
+ * PACKET, so the same two settings cost nothing per query when they are part of
+ * how the connection is created.
+ *
+ * Measured against this database: one round trip is ~171ms, so the four extra
+ * ones were ~686ms per query — and /api/search runs TWO queries, so roughly
+ * 1,4s of a search was spent saying "SET" and "RESET".
+ *
+ * A separate pool rather than putting this on the shared one, because `query()`
+ * and `queryWithTimeout()` legitimately want parallelism. Connections are cheap
+ * here: max_connections is 500 with 481 free, against max 5 per pool.
+ *
+ * Verified before relying on it: the options really do apply at startup, the
+ * plan really is serial, and RESET restores to the startup value rather than to
+ * the server default — which is what makes the custom-timeout path below safe.
+ */
+function getNoParallelPool(): Pool {
+  if (!noParallelPool) {
+    noParallelPool = new Pool({
+      ...POOL_BASE,
+      options: `-c max_parallel_workers_per_gather=0 -c statement_timeout=${NO_PARALLEL_TIMEOUT_MS}`,
     })
   }
-  return pool
+  return noParallelPool
 }
 
 export async function query<T = Record<string, unknown>>(
@@ -109,17 +144,18 @@ export async function queryNoParallel<T = Record<string, unknown>>(
   params?: unknown[],
   timeoutMs = 15000
 ): Promise<T[]> {
-  const client = await getPool().connect()
+  const client = await getNoParallelPool().connect()
+  // Both settings already came in with the connection, so the common path is a
+  // single round trip. Only a caller asking for something other than the pool
+  // default pays for a SET — and RESET is safe because it restores the startup
+  // value, not the server default (verified, not assumed).
+  const custom = timeoutMs !== NO_PARALLEL_TIMEOUT_MS
   try {
-    await client.query(`SET max_parallel_workers_per_gather = 0`)
-    await client.query(`SET statement_timeout = ${timeoutMs}`)
+    if (custom) await client.query(`SET statement_timeout = ${timeoutMs}`)
     const result = await client.query(sql, params)
     return result.rows as T[]
   } finally {
-    // Pooled connections are reused, so both GUCs must be reset even on error —
-    // otherwise every later query on this connection inherits them.
-    await client.query('RESET max_parallel_workers_per_gather').catch(() => {})
-    await client.query('SET statement_timeout = 0').catch(() => {})
+    if (custom) await client.query('RESET statement_timeout').catch(() => {})
     client.release()
   }
 }

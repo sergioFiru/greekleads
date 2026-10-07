@@ -744,6 +744,34 @@ are in the session scratchpad (`kad_vocab_probe{,2,3}.py`).
 ---
 
 ## Session Log
+- 2026-10-07: queryNoParallel - removed 4 of its 5 round trips, WITHOUT touching the reason it
+  exists.
+  READ THE COMMENT FIRST, and it changed the plan. Disabling parallelism is NOT a performance
+  oversight: a parallel plan puts the combined ~3,1M-pointer bitmap in shared memory, which is
+  /dev/shm at 64MB in a container, and under concurrency Postgres throws 'could not resize shared
+  memory segment ... No space left on device'. That stays. My earlier framing of it as '+97% cost,
+  reconsider' was wrong.
+  THE ACTUAL WASTE was the delivery: SET, SET, query, RESET, SET = FIVE round trips per query, and
+  /api/search runs TWO queries. At ~171ms per round trip that is ~1,4s per search spent saying SET.
+  FIX: a SECOND pool whose connections are BORN with the settings, via the connection startup
+  packet (`options: '-c max_parallel_workers_per_gather=0 -c statement_timeout=15000'`). Common
+  path is now ONE round trip. A caller passing a non-default timeout still pays a SET+RESET.
+  A separate pool because query() and queryWithTimeout() legitimately WANT parallelism. Checked the
+  budget first: max_connections 500, 481 free, 5 per pool.
+  VERIFIED BEFORE RELYING ON ANY OF IT: options really do apply at startup; the plan really is
+  serial (so the crash protection survives); and RESET restores to the STARTUP value, not the
+  server default - which is what makes the custom-timeout path safe.
+  MEASURED, local endpoint vs the earlier production baseline:
+    active only              3,81s -> 3,00s
+    + Αττική                 2,83s -> 1,69s
+    + Αττική + ΙΚΕ + email    1,77s -> 0,89s
+    name ORIGAMI             4,61s -> 0,20s   (mostly the trade-name index)
+    ΓΕΜΗ number             0 results -> 0,20s
+  NOT apples to apples - production is Vercel->Railway, these are laptop->Railway. Re-measure
+  production after deploy.
+  STILL SLOW: the broad 'active only' search at 3,0s. That is the untouched lever - the page query
+  ORDERs BY a COMPUTED social score no index can serve (0,36s vs 1,61s), plus COUNT(*) over 1,05M
+  rows. Both are product decisions, not bugs.
 - 2026-10-07: Diagnosed why company search feels slow, and fixed the search BAR half of it.
   THE SEARCH BAR matches ONE input against SIX columns with OR: co_name_el, co_titles_el::text,
   email, phone, url, afm. Five have trigram indexes. co_titles_el::text has NONE, and Postgres can
