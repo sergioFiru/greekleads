@@ -744,6 +744,27 @@ are in the session scratchpad (`kad_vocab_probe{,2,3}.py`).
 ---
 
 ## Session Log
+- 2026-10-07: Fixed the Google Translate crash, and added a favicon (there was none).
+  SYMPTOM: translate the site in Chrome, click any nav link, and the whole app dies with
+  `Uncaught NotFoundError: Failed to execute 'removeChild' on 'Node'`.
+  CAUSE: Google Translate rewrites the DOM in place, replacing a text node with a <font> element.
+  React still holds the ORIGINAL text node, so unmounting that subtree asks a parent to remove a
+  child that is no longer there. facebook/react#11538, open since 2017. It fires on any bare text
+  node React owns, i.e. every `{cond ? 'A' : 'B'}` - about twenty components here.
+  FIX: `components/TranslateGuard.tsx` guards Node.prototype.removeChild/insertBefore - if the node
+  has been reparented, return it instead of throwing. Chosen over wrapping every ternary in a <span>
+  (nothing stops the next ternary reintroducing it) and over <meta name="google" content="notranslate">
+  (the company pages are a public registry people outside Greece look up; breaking translation to
+  dodge a React bug is the wrong trade). Patched at MODULE scope so it lands before hydration
+  commits, with a window flag so strict-mode double-mount and HMR cannot chain wrappers.
+  FAVICON: there was none at all - /favicon.ico 404'd. Derived from components/BrandMark.tsx but
+  altered for 16px: the in-app mark's #E8EDF5 stroke is invisible on a white tab strip and the whole
+  thing vanishes on a dark one, so it sits on the brand navy. app/icon.svg + a multi-resolution
+  app/favicon.ico (16-256, rasterised at 256 and downsampled via PIL) + app/apple-icon.png (180,
+  which must be PNG - Next does not accept SVG there). All three verified serving with correct
+  content types and all three <link> tags emitted.
+  NOT a bug, for the record: the `/api/billing/status 401` in the console is correct - SearchPage
+  calls it for the export gate even when signed out.
 - 2026-10-06: Homepage made mobile-friendly — the worst offender on the site: 250 inline styles,
   130 of them layout. Same root cause as the company pages and /search: an INLINE style cannot be
   overridden by a media query.

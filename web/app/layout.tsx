@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import { SITE_URL } from '@/lib/site'
 import PostHogProvider from './posthog-provider'
+import TranslateGuard from '@/components/TranslateGuard'
 import './globals.css'
 
 const clerkConfigured =
@@ -49,6 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
       </head>
       <body>
+        <TranslateGuard />
         {clarityId && (
           // afterInteractive, not beforeInteractive: analytics must never sit on the
           // critical path of a page whose whole pitch is a fast search.

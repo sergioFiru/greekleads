@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Favicon, derived from components/BrandMark.tsx.
+
+       Two deliberate changes from the in-app mark, both for legibility at 16px:
+       the outlined square's #E8EDF5 stroke is invisible against a white tab
+       strip, and an unfilled mark disappears entirely on a dark one. So the
+       mark sits on the brand navy, and the outline is drawn in a light tone
+       that holds against it. -->
+  <rect width="32" height="32" rx="6" fill="#16233B"/>
+  <rect x="6.5" y="6.5" width="13" height="13" fill="none" stroke="#E8EDF5" stroke-width="2"/>
+  <rect x="14" y="14" width="13" height="13" fill="#2563A8"/>
+</svg>
