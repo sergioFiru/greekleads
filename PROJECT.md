@@ -744,6 +744,28 @@ are in the session scratchpad (`kad_vocab_probe{,2,3}.py`).
 ---
 
 ## Session Log
+- 2026-10-07: The /search sort - made it REAL and made it indexable.
+  FOUND FIRST: the sort dropdown was COSMETIC. It sorted CLIENT-SIDE over the 50 rows already on
+  screen, so picking «Όνομα (A → Ω)» on 354.218 results alphabetised whatever the social sort had
+  already chosen. It looks like a global sort and is not - which quietly misleads anyone building a
+  list. Its default was also '-name', matching NO column, so the client sort was a no-op anyway.
+  SERVER-SIDE NOW, from a LOOKUP TABLE - never interpolation, since ORDER BY cannot be
+  parameterised and the value comes from the client. An unknown value falls back to the default
+  instead of reaching SQL (verified: 'garbage-value' returns the default order).
+  EVERY order ends with c.ar_gemi. Without a unique tie-breaker, equal-comparing rows can shift
+  position between queries, so a row appears on two pages or none - a paginated export would
+  silently duplicate and drop companies.
+  NULLS LAST on both date directions: a company with no founding date is missing data, not the
+  oldest or newest company in Greece.
+  INDEXES (tools/add_sort_indexes.py, NOT RUN YET): the default order is a COMPUTED social score,
+  which no ordinary index can serve - 0,36s for ORDER BY ar_gemi vs 1,61s for the score. Proved on
+  a 50.000-row sample FIRST, inside a rolled-back transaction: Postgres accepts an index on that
+  exact expression, the planner uses it, and the Sort step disappears entirely.
+  Also adds a BTREE on co_name_el - the two GIN trigram indexes there serve ILIKE and CANNOT serve
+  ORDER BY.
+  NOTICED, not fixed: FOUR redundant indexes. idx_companies_incorporation and
+  idx_companies_incorporation_date are identical; idx_companies_co_name_el_trgm and
+  idx_companies_co_name_trgm are identical. One of each pair is pure disk and write cost.
 - 2026-10-07: queryNoParallel - removed 4 of its 5 round trips, WITHOUT touching the reason it
   exists.
   READ THE COMMENT FIRST, and it changed the plan. Disabling parallelism is NOT a performance

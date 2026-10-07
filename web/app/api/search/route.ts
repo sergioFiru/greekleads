@@ -5,11 +5,48 @@ import { limitsFor, MIN_SEARCH_PAGES } from '@/lib/entitlements'
 import { buildWhere, hasActiveFilter, type SearchFilters } from '@/lib/searchQuery'
 import { cleanCompanyRow } from '@/lib/registryText'
 
+// ── Sort orders ────────────────────────────────────────────────────────
+//
+// A LOOKUP, never interpolation. The value arrives from the client, and
+// ORDER BY cannot be parameterised — so anything not in this map is ignored
+// rather than reaching SQL.
+//
+// Until 2026-10-07 the ORDER BY was hardcoded to the social score and the
+// dropdown sorted CLIENT-SIDE, over only the 50 rows already on screen. Picking
+// «Όνομα (A → Ω)» on 354.218 results alphabetised whatever the social sort had
+// chosen, which looks like a global sort and is not.
+//
+// Every order ends with c.ar_gemi. Without a unique tie-breaker, rows that
+// compare equal can land in a different position on each query, so a row can
+// appear on two pages or on none — a paginated export would silently duplicate
+// and drop companies.
+const SOCIAL_SCORE = `(
+           (c.instagram_url IS NOT NULL)::int +
+           (c.facebook_url  IS NOT NULL)::int +
+           (c.linkedin_url  IS NOT NULL)::int +
+           (c.twitter_url   IS NOT NULL)::int +
+           (c.tiktok_url    IS NOT NULL)::int +
+           (c.youtube_url   IS NOT NULL)::int
+         )`
+
+const SORT_ORDERS: Record<string, string> = {
+  // The default: most online presence first, as the best proxy we have for
+  // "most worth contacting". Backed by an expression index matching it exactly.
+  social:          `${SOCIAL_SCORE} DESC, c.ar_gemi`,
+  'co_name_el':    'c.co_name_el ASC, c.ar_gemi',
+  '-co_name_el':   'c.co_name_el DESC, c.ar_gemi',
+  // NULLS LAST both ways: a company with no founding date is missing data, not
+  // the oldest or the newest company in Greece.
+  'year_founded':  'c.incorporation_date ASC NULLS LAST, c.ar_gemi',
+  '-year_founded': 'c.incorporation_date DESC NULLS LAST, c.ar_gemi',
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const filters: SearchFilters = body.filters ?? {}
     const page: number = Math.max(1, parseInt(String(body.page ?? '1'), 10))
+    const orderBy = SORT_ORDERS[String(body.sort ?? 'social')] ?? SORT_ORDERS.social
 
     // Require at least one filter (match leads.py behaviour)
     if (!hasActiveFilter(filters)) {
@@ -80,14 +117,7 @@ export async function POST(req: NextRequest) {
          FROM companies c
          LEFT JOIN company_favicons fv ON fv.ar_gemi = c.ar_gemi AND fv.status = 'ok'
          ${where}
-         ORDER BY (
-           (c.instagram_url IS NOT NULL)::int +
-           (c.facebook_url  IS NOT NULL)::int +
-           (c.linkedin_url  IS NOT NULL)::int +
-           (c.twitter_url   IS NOT NULL)::int +
-           (c.tiktok_url    IS NOT NULL)::int +
-           (c.youtube_url   IS NOT NULL)::int
-         ) DESC, c.ar_gemi
+         ORDER BY ${orderBy}
          LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
         params
       ),

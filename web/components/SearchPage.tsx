@@ -334,7 +334,10 @@ export default function SearchPage() {
   // The server enforces this too (/api/search/export) — this is the UI half, so
   // the button explains the gate instead of silently producing a file.
   const [maxExportRows, setMaxExportRows] = useState<number | null>(null)
-  const [sortBy, setSortBy]     = useState(() => searchParams.get('sort') ?? '-name')
+  // 'social' = most online presence first, the server's default order. The old
+  // default was '-name', which matches no column at all, so the client-side
+  // sort it drove silently did nothing.
+  const [sortBy, setSortBy]     = useState(() => searchParams.get('sort') ?? 'social')
   const [scoutOpen, setScoutOpen]       = useState(false)
   const [scoutSummary, setScoutSummary] = useState<string | null>(null)
   const [resultsKey, setResultsKey]     = useState(0)
@@ -370,13 +373,13 @@ export default function SearchPage() {
     return () => { cancelled = true }
   }, [])
 
-  const search = useCallback(async (f: SearchState, p: number) => {
+  const search = useCallback(async (f: SearchState, p: number, sort: string) => {
     setLoading(true); setGated(null)
     try {
       const res = await fetch('/api/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filters: f, page: p }),
+        body: JSON.stringify({ filters: f, page: p, sort }),
       })
       if (res.status === 403) {
         // The server decides which wall: 'signup' for anonymous, 'upgrade' for
@@ -407,15 +410,15 @@ export default function SearchPage() {
     setExcluded(new Set())
     setLoading(true)
     const delay = filters.name ? 200 : 400
-    const id = setTimeout(() => { filterResetRef.current = false; search(filters, 1) }, delay)
+    const id = setTimeout(() => { filterResetRef.current = false; search(filters, 1, sortBy) }, delay)
     return () => { clearTimeout(id); filterResetRef.current = false }
-  }, [filters, search])
+  }, [filters, search, sortBy])
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (filterResetRef.current) { filterResetRef.current = false; return }
-    search(filters, page)
-  }, [page])
+    search(filters, page, sortBy)
+  }, [page, sortBy])
 
   // A 390px phone cannot show a table whose columns are 380/200/140px, and the
   // card grid already exists. Decided in JS rather than CSS because the table's
@@ -642,17 +645,10 @@ export default function SearchPage() {
     download(csv)
   }
 
-  // Sort results client-side
-  const sortedRows = useMemo(() => {
-    const desc = sortBy.startsWith('-')
-    const key  = desc ? sortBy.slice(1) : sortBy
-    return [...results].sort((a, b) => {
-      const av = (a as any)[key], bv = (b as any)[key]
-      if (av == null) return 1; if (bv == null) return -1
-      if (typeof av === 'string') return desc ? bv.localeCompare(av) : av.localeCompare(bv)
-      return desc ? bv - av : av - bv
-    })
-  }, [results, sortBy])
+  // The server orders the WHOLE result set and returns the right 50 rows, so
+  // there is nothing left to sort here. Re-sorting the page locally is what made
+  // the dropdown lie: it reordered the 50 rows the server had already chosen.
+  const sortedRows = results
 
   // Build pills for active filters
   const pills = [
@@ -1012,8 +1008,9 @@ export default function SearchPage() {
                 <select
                   className="sp-sort-select"
                   value={sortBy}
-                  onChange={e => setSortBy(e.target.value)}
+                  onChange={e => { setSortBy(e.target.value); setPage(1) }}
                 >
+                  <option value="social">Προτεινόμενα</option>
                   <option value="co_name_el">Όνομα (A → Ω)</option>
                   <option value="-co_name_el">Όνομα (Ω → A)</option>
                   <option value="-year_founded">Ίδρυση (νεότερα)</option>
