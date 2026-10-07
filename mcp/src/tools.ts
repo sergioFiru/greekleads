@@ -1,8 +1,13 @@
+// The three web/lib imports below are RELATIVE on purpose, not aliased.
+// tsx resolves tsconfig `paths` from the CURRENT WORKING DIRECTORY, so an
+// @/lib alias works when launched from mcp/ and fails with
+// "Cannot find package '@/lib'" when Claude Desktop launches the server from
+// somewhere else. A relative specifier has no such dependency.
 import { z } from 'zod'
 import { query, queryOne } from './db.js'
-import { buildWhere, type SearchFilters } from '@/lib/searchQuery'
-import { sectionOfKad, sectionLabel } from '@/lib/nace'
-import { cleanCompanyRow } from '@/lib/registryText'
+import { buildWhere, type SearchFilters } from '../../web/lib/searchQuery.js'
+import { sectionOfKad, sectionLabel } from '../../web/lib/nace.js'
+import { cleanCompanyRow } from '../../web/lib/registryText.js'
 import { FULL_CONTEXT, DATASET_OVERVIEW, CRITICAL_CAVEATS, FIELD_GUIDE } from './context.js'
 
 // ── Tool definitions ───────────────────────────────────────────────────

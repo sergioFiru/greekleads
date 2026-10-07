@@ -9,21 +9,15 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "types": ["node"],
-    "paths": {
-      // The point of this alias: the MCP reuses the SAME query builders the
-      // website uses, instead of reimplementing them. web/lib/searchQuery.ts
-      // says it outright — "Both callers MUST use the same builder — if they
-      // drift, a list built from 'add all' would silently contain different
-      // companies than the search that produced it." A third implementation
-      // here would guarantee exactly that drift between the MCP and /search.
-      //
-      // Only the dependency-free modules are shared (searchQuery, nace,
-      // registryText, entitlements, companyName). This package supplies its own
-      // @/lib/db, because the Next one is built around Next's env handling.
-      "@/lib/db": ["./src/db.ts"],
-      "@/lib/*": ["../web/lib/*"]
-    }
+    "types": ["node"]
   },
-  "include": ["src/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    // Only the three dependency-free modules the server actually imports.
+    // Globbing all of web/lib would pull in sitemapScope.ts and statistics.ts,
+    // which resolve Next's @/ alias and cannot typecheck from here.
+    "../web/lib/searchQuery.ts",
+    "../web/lib/nace.ts",
+    "../web/lib/registryText.ts"
+  ]
 }
