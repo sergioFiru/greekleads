@@ -57,15 +57,29 @@ export function buildWhere(f: SearchFilters): { sql: string; params: unknown[] }
   if (f.name?.trim()) {
     const name  = f.name.trim()
     const words = name.split(/\s+/).filter(Boolean)
+
+    // ΓΕΜΗ numbers were NOT searchable until 2026-10-07, despite the search
+    // box promising «αριθμός ΓΕΜΗ». ar_gemi was simply not among the columns
+    // this clause looked at: pasting a real ΓΕΜΗ number returned zero results.
+    //
+    // Matched EXACTLY against the bigint primary key rather than with ILIKE —
+    // a cast to text would make the PK index unusable, which is the same
+    // mistake that costs this query a full table scan elsewhere.
+    //
+    // Length-capped at 18 digits: ar_gemi values are 12, and a longer run of
+    // digits would overflow bigint and throw rather than simply not match.
+    const gemiMatch = /^[0-9]{1,18}$/.test(name)
+    const gemiCond = gemiMatch ? ` OR c.ar_gemi = $${i}::bigint` : ''
+    if (gemiMatch) { params.push(name); i++ }
     if (words.length > 1) {
       // All words must appear in co_name_el (any order), or exact phrase in other fields
       const wordConds = words.map(() => `c.co_name_el ILIKE $${i++}`).join(' AND ')
       words.forEach(w => params.push(`%${w}%`))
       const exactIdx = i++
       params.push(`%${name}%`)
-      conds.push(`((${wordConds}) OR c.co_titles_el::text ILIKE $${exactIdx} OR c.email ILIKE $${exactIdx} OR c.phone ILIKE $${exactIdx} OR c.url ILIKE $${exactIdx} OR c.afm ILIKE $${exactIdx})`)
+      conds.push(`((${wordConds}) OR c.co_titles_el::text ILIKE $${exactIdx} OR c.email ILIKE $${exactIdx} OR c.phone ILIKE $${exactIdx} OR c.url ILIKE $${exactIdx} OR c.afm ILIKE $${exactIdx}${gemiCond})`)
     } else {
-      conds.push(`(c.co_name_el ILIKE $${i} OR c.co_titles_el::text ILIKE $${i} OR c.email ILIKE $${i} OR c.phone ILIKE $${i} OR c.url ILIKE $${i} OR c.afm ILIKE $${i})`)
+      conds.push(`(c.co_name_el ILIKE $${i} OR c.co_titles_el::text ILIKE $${i} OR c.email ILIKE $${i} OR c.phone ILIKE $${i} OR c.url ILIKE $${i} OR c.afm ILIKE $${i}${gemiCond})`)
       i++
       params.push(`%${name}%`)
     }

@@ -744,6 +744,33 @@ are in the session scratchpad (`kad_vocab_probe{,2,3}.py`).
 ---
 
 ## Session Log
+- 2026-10-07: Diagnosed why company search feels slow, and fixed the search BAR half of it.
+  THE SEARCH BAR matches ONE input against SIX columns with OR: co_name_el, co_titles_el::text,
+  email, phone, url, afm. Five have trigram indexes. co_titles_el::text has NONE, and Postgres can
+  only combine OR branches with a BitmapOr when EVERY branch is indexable - so one unindexed branch
+  poisons all six and the planner sequentially scans all 1,69M companies on every search.
+  MEASURED searching 'ORIGAMI':
+    each indexed branch alone      0,18s
+    co_titles_el::text alone       0,99s
+    all six OR'd                   1,73s   reads 461.445 blocks
+    same minus co_titles_el        0,19s   reads       166 blocks   <- 2.781x fewer
+  That one branch costs 1,55s and contributes 5 rows. It is why 'ORIGAMI' - NINETEEN results - took
+  4,61s in production: it read the whole table to find them.
+  FIX: tools/add_trade_name_index.py - GIN trigram on the IMMUTABLE expression (co_titles_el::text).
+  co_titles_el is JSONB, not text[] (it looks like an array and is not), and jsonb_out is IMMUTABLE
+  - checked in pg_proc, not assumed - so the expression is indexable as written, with no query
+  change. NOT RUN YET; it is a CONCURRENTLY build on 1,69M rows.
+  ALSO FIXED: TYPING A ΓΕΜΗ NUMBER FOUND NOTHING. The box promises «αριθμός ΓΕΜΗ» but ar_gemi was
+  not among the six columns - verified, a real ΓΕΜΗ returned 0 results while its ΑΦΜ returned 1.
+  Now matched EXACTLY against the bigint primary key (never ILIKE on a cast, which is what makes
+  the other branch unindexable), guarded to <=18 digits so a longer run cannot overflow bigint and
+  throw. Placeholder/param alignment asserted across five input shapes.
+  THE OTHER HALF, not yet addressed: the page query ORDERs BY a COMPUTED social score over six
+  nullable columns, which no index can serve - ORDER BY ar_gemi 0,36s vs ORDER BY social 1,61s.
+  And queryNoParallel issues FIVE round trips per query (SET, SET, query, RESET, SET) and disables
+  parallelism, which costs +97% on the COUNT and +71% on the page query. Production end-to-end is
+  1,7-4,9s. Multi-word behaviour is also inconsistent: all words must appear in co_name_el, but the
+  other five fields only match the exact phrase. To plan.
 - 2026-10-07: Went to fix the 6,2s people search. IT WAS ALREADY FIXED - but the investigation
   found a real 5x bug I had written myself a day earlier.
   THE PREMISE WAS STALE. Re-measured the live endpoint: 0,36-1,09s warm across six query shapes.
