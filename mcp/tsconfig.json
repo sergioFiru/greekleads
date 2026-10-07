@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "paths": {
+      // The point of this alias: the MCP reuses the SAME query builders the
+      // website uses, instead of reimplementing them. web/lib/searchQuery.ts
+      // says it outright — "Both callers MUST use the same builder — if they
+      // drift, a list built from 'add all' would silently contain different
+      // companies than the search that produced it." A third implementation
+      // here would guarantee exactly that drift between the MCP and /search.
+      //
+      // Only the dependency-free modules are shared (searchQuery, nace,
+      // registryText, entitlements, companyName). This package supplies its own
+      // @/lib/db, because the Next one is built around Next's env handling.
+      "@/lib/db": ["./src/db.ts"],
+      "@/lib/*": ["../web/lib/*"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}
