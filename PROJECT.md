@@ -744,6 +744,26 @@ are in the session scratchpad (`kad_vocab_probe{,2,3}.py`).
 ---
 
 ## Session Log
+- 2026-10-08: Made the MCP shareable with another person, safely.
+  THE TRAP: the stdio MCP needs DATABASE_URL, and the one in scripts/.env connects as `postgres` -
+  a SUPERUSER. Handing that to someone is handing them write access to production; they could DROP
+  TABLE companies and the website goes with it.
+  scripts/one_time/create_readonly_role.py creates `greekleads_readonly`: CONNECT + USAGE + SELECT,
+  nothing else. Includes ALTER DEFAULT PRIVILEGES so tables created LATER are also readable -
+  without it the role silently loses access to anything added afterwards and the MCP starts failing
+  months later for no visible reason. Prints the connection string ONCE and verifies with
+  has_table_privilege that INSERT/UPDATE/DELETE really are denied, rather than trusting the GRANTs.
+  `--rotate` is the revoke button: new password, old copies stop working.
+  mcp/package-for-sharing.py builds a self-contained folder - NOT the repo, which carries live
+  Stripe, Clerk, OpenRouter and superuser Postgres credentials in scripts/.env. Copies only src,
+  the three shared web/lib modules, the manifests and a written SETUP.md, PRESERVING the relative
+  layout because tools.ts imports '../../web/lib/...'. Refuses to finish if any .env reaches the
+  output. node_modules deliberately excluded: large, platform-specific, and npm install is more
+  correct on their machine.
+  VERIFIED, not assumed: built the package, ran npm install in it, and ran the smoke test from the
+  packaged copy with DATABASE_URL from the ENVIRONMENT. All 8 checks passed. 15 files, 170 KB.
+  The HTTP/Railway route stays the right answer for anyone who is not a trusted friend - one shared
+  MCP_API_KEY means no per-person revocation, and there is still no rate limiting.
 - 2026-10-07: Backspacing a search was firing one query per keystroke. User spotted it.
   THE KEY FACT: pg_trgm CANNOT use an index for a pattern shorter than 3 CHARACTERS. So a 1- or
   2-char query is a SEQUENTIAL SCAN of 1,69M rows - and they are the slowest queries in the whole
