@@ -744,6 +744,24 @@ are in the session scratchpad (`kad_vocab_probe{,2,3}.py`).
 ---
 
 ## Session Log
+- 2026-10-08: Sort indexes RUN and verified. Both valid: idx_companies_social_sort 51 MB,
+  idx_companies_co_name_sort 157 MB.
+    social (default)   1,61s -> 0,19s   index order
+    name A-Z                   0,19s    index order
+    name Z-A                   0,19s    (sorts, but a cheap top-N)
+    newest first               1,06s    STILL SORTING  <- not fixed
+  WHY THE DATE ORDER WAS MISSED: companies already has TWO indexes on incorporation_date
+  (idx_companies_incorporation and idx_companies_incorporation_date) and NEITHER helps. They are
+  identical to each other, so one is pure waste - and more importantly a plain btree is ASC NULLS
+  LAST, so reading it backwards gives DESC NULLS *FIRST*, which is not what the query asks for.
+  Neither carries ar_gemi as the tie-breaker either, which is why even the ASC direction sorts.
+  tools/add_date_sort_index.py adds (incorporation_date DESC NULLS LAST, ar_gemi). Proved on a
+  50.000-row sample inside a rolled-back transaction first: the Sort step disappears. NOT RUN YET.
+  It also offers --drop-duplicates for the two exact duplicates (idx_companies_incorporation and
+  idx_companies_co_name_el_trgm), OFF by default since dropping an index on a live DB is
+  destructive; DROP INDEX CONCURRENTLY, so nothing waits on a lock.
+  NOTE: «Ίδρυση (νεότερα)» is arguably the most useful sort in a prospecting tool - new companies
+  are new prospects - so it is the wrong one to leave slow.
 - 2026-10-08: Made the MCP shareable with another person, safely.
   THE TRAP: the stdio MCP needs DATABASE_URL, and the one in scripts/.env connects as `postgres` -
   a SUPERUSER. Handing that to someone is handing them write access to production; they could DROP
